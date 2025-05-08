@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create New Semester</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 900px;
+            margin: auto;
+            padding: 2rem;
+        }
+        .container-box-bou {
+            max-width: 800px;
+            margin-top: 3rem;
+            background: #fff;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">BOU Routine Generator</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Routine Entry</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/generate/">Generate Routine</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{% url 'create-semester' %}">Create Semester</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    <div class="container container-box-bou">
+        <h1>Create New Semester</h1>
+        <form method="POST" action="{% url 'create-semester' %}">
+            {% csrf_token %}
+            
+            <div class="mb-3">
+                <label for="semester_name" class="form-label">Semester Name</label>
+                <input type="text" class="form-control" id="semester_name" name="semester_name" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="courseRepeater" class="form-label">Select Courses</label>
+                <div id="courseRepeater">
+                    <div class="course-row row mb-3">
+                        <div class="col-md-8">
+                            <select name="courses[]" class="form-select" required>
+                                <option value="">Select Course</option>
+                                {% for course in courses %}
+                                <option value="{{ course.id }}">{{ course.code }} - {{ course.name }} ({{ course.teacher.name }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <button type="button" class="btn btn-danger remove-course">Remove</button>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-secondary mb-3" id="addCourse">+ Add Another Course</button>
+            </div>
+
+            <div class="d-grid">
+                <button type="submit" class="btn btn-success">Create Semester</button>
+            </div>
+        </form>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        $(function() {
+            $('#addCourse').click(function () {
+                const newRow = $('.course-row:first').clone();
+                newRow.find('input').val('');
+                newRow.find('select').val('');
+                $('#courseRepeater').append(newRow);
+            });
+
+            $(document).on('click', '.remove-course', function () {
+                if ($('.course-row').length > 1) {
+                    $(this).closest('.course-row').remove();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect
-from .models import CurrentRoutine, Teacher, TimeSlot, Semester, Course, NewRoutine
+from .models import CurrentRoutine, Teacher, TimeSlot, Semester, Course, NewRoutine, SemesterCourse
 from .forms import RoutineForm
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -41,4 +41,34 @@ def generate_routine(request):
         "courses": courses,
         "teachers": teachers,
         "generated_routines": generated_routines
+    })
+
+def create_semester(request):
+    if request.method == "POST":
+        semester_name = request.POST.get("semester_name")
+        selected_courses = request.POST.getlist("courses")
+        selected_teachers = request.POST.getlist("teachers")
+
+        # Create semester
+        semester = Semester.objects.create(name=semester_name)
+
+        # Create semester courses
+        for course_id, teacher_id in zip(selected_courses, selected_teachers):
+            course = Course.objects.get(id=course_id)
+            teacher = Teacher.objects.get(id=teacher_id)
+            SemesterCourse.objects.create(
+                semester=semester,
+                course=course,
+                teacher=teacher
+            )
+
+        return redirect('create_semester')
+
+    semesters = Semester.objects.all()
+    courses = Course.objects.all()
+    teachers = Teacher.objects.all()
+    return render(request, "bou_routines_app/create_semester.html", {
+        "semesters": semesters,
+        "courses": courses,
+        "teachers": teachers
     })

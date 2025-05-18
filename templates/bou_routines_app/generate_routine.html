@@ -55,6 +55,13 @@
             50% { transform: scale(1.02); }
             100% { transform: scale(1); }
         }
+        /* Fix for daterangepicker z-index */
+        .daterangepicker {
+            z-index: 999999 !important;
+        }
+        .form-control.mdtimepicker {
+            background: #ccc;
+        }
     </style>
 </head>
 <body>

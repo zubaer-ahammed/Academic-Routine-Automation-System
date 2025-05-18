@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,6 +7,12 @@
     <title>Generate New Routine</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery-timepicker/1.13.18/jquery.timepicker.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jquery-timepicker@1.13.18/jquery.timepicker.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jquery-timerangepicker@0.1.1/jquery.timerangepicker.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/dmuy/MDTimePicker@v1.0.2-rc2/mdtimepicker.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <style>
         body {
             background-color: #f8f9fa;
@@ -16,7 +23,7 @@
             padding: 2rem;
         }
         .container-box-bou {
-            max-width: 800px;
+            max-width: 80%;
             margin-top: 3rem;
             background: #fff;
             padding: 2rem;
@@ -26,6 +33,27 @@
         h1 {
             text-align: center;
             margin-bottom: 2rem;
+        }
+        .overlap-feedback {
+            font-size: 0.85rem;
+            padding: 0.5rem;
+            margin-top: 0.25rem;
+            border-radius: 4px;
+            background-color: rgba(255, 0, 0, 0.1);
+        }
+        .course-row.has-overlap {
+            padding: 0.5rem;
+            background-color: rgba(255, 0, 0, 0.05);
+            border-radius: 8px;
+            border-left: 3px solid #dc3545;
+        }
+        #overlapWarning {
+            animation: attention 1s ease-in-out infinite;
+        }
+        @keyframes attention {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
         }
     </style>
 </head>
@@ -45,7 +73,7 @@
                         <a class="nav-link active" href="/generate/">Generate Routine</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/create-semester/">Create Semester</a>
+                        <a class="nav-link" href="/semester-courses/">Semester Courses</a>
                     </li>
                 </ul>
             </div>
@@ -53,39 +81,93 @@
     </nav>
     <div class="container container-box-bou">
         <h1>Generate Routine</h1>
+        
+        {% if messages %}
+        <div class="messages mb-4">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        
+        <!-- Real-time overlap warning alert -->
+        <div id="overlapWarning" class="alert alert-danger mb-4" style="display: none;">
+            <strong>Warning: Time Overlaps Detected!</strong>
+            <p>Please resolve the following overlaps before submitting:</p>
+            <ul id="overlapList"></ul>
+        </div>
+        
         <form method="post">
             {% csrf_token %}
             <div class="mb-3">
                 <label for="semester" class="form-label">Semester</label>
                 <select name="semester" id="semester" class="form-control">
+                    <option value="">Select Semester</option>
                     {% for semester in semesters %}
-                    <option value="{{ semester.id }}">{{ semester.name }}</option>
+                    <option value="{{ semester.id }}" {% if selected_semester_id == semester.id|stringformat:"s" %}selected{% endif %}>{{ semester.name }}</option>
                     {% endfor %}
                 </select>
+                <div id="lunchBreakInfo" class="alert alert-info mt-2" style="display: none;"></div>
             </div>
             <div class="mb-3">
                 <label for="date_range" class="form-label">Date Range</label>
                 <input type="text" name="date_range" id="date_range" class="form-control" placeholder="Select date range">
             </div>
+            
+            <div class="mb-3" id="lunchBreakSection">
+                <label class="form-label">Lunch Break</label>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <span class="input-group-text">Start</span>
+                            <input type="text" class="form-control mdtimepicker" id="lunchBreakStart" name="lunch_break_start" placeholder="Start time" autocomplete="off">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <span class="input-group-text">End</span>
+                            <input type="text" class="form-control mdtimepicker" id="lunchBreakEnd" name="lunch_break_end" placeholder="End time" autocomplete="off">
+                        </div>
+                    </div>
+                </div>
+                <small class="text-muted mt-2 d-block">Lunch break will be enforced and times will update the semester.</small>
+                <!-- Hidden inputs for always enforcing lunch break and updating semester -->
+                <input type="hidden" name="enforce_lunch_break" value="1">
+                <input type="hidden" name="update_semester_lunch_break" value="1">
+            </div>
+
+            <h5 class="mt-4 mb-3">Course Schedule</h5>
 
             <div id="courseRepeater">
                 <div class="course-row row mb-3">
                     <div class="col">
-                        <select name="course_code[]" class="form-control">
+                        <select name="course_code[]" class="form-control course-select">
+                            <option value="">Select Course</option>
                             {% for course in courses %}
-                            <option value="{{ course.id }}">{{ course.code }} - {{ course.name }}</option>
+                            <option value="{{ course.id }}" data-teacher-id="{{ course.teacher.id }}">{{ course.code }} - {{ course.name }} ({{ course.teacher.name }})</option>
                             {% endfor %}
                         </select>
                     </div>
                     <div class="col">
-                        <select name="teacher[]" class="form-control">
-                            {% for teacher in teachers %}
-                            <option value="{{ teacher.id }}">{{ teacher.name }}</option>
-                            {% endfor %}
+                        <select name="day[]" class="form-control" required>
+                            <option value="">Select Day</option>
+                            <option value="Friday">Friday</option>
+                            <option value="Saturday">Saturday</option>
                         </select>
                     </div>
                     <div class="col">
-                        <input type="number" name="duration[]" class="form-control" placeholder="Duration (min)" value="90">
+                        <div class="input-group">
+                            <input type="text" name="start_time[]" class="form-control mdtimepicker time-input" placeholder="Start time" required autocomplete="off">
+                            <span class="input-group-text">to</span>
+                            <input type="text" name="end_time[]" class="form-control mdtimepicker time-input" placeholder="End time" required autocomplete="off">
+                        </div>
+                        <div class="overlap-feedback text-danger mt-1" style="display: none;"></div>
+                        <div class="checking-feedback text-muted mt-1" style="display: none;">
+                            <small><i>Checking for time overlaps...</i></small>
+                        </div>
                     </div>
                     <div class="col-auto">
                         <button type="button" class="btn btn-danger remove-course">Remove</button>
@@ -94,39 +176,68 @@
             </div>
             <button type="button" class="btn btn-secondary mb-3" id="addCourse">+ Add Another Course</button>
 
-            <div class="d-grid">
-                <button type="submit" class="btn btn-success">Generate Routine</button>
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-success btn-lg">Generate Routine</button>
+                <small class="text-muted text-center mt-2">All time overlaps must be resolved before generating the routine</small>
             </div>
         </form>
 
         {% if generated_routines %}
-        <h2 class="mt-5 text-center">Generated Routine</h2>
-        <table class="table table-bordered mt-3">
-            <thead class="table-dark">
-                <tr>
-                    <th>Date</th>
-                    <th>08:30 – 10:00</th>
-                    <th>10:00 – 11:30</th>
-                    <th>11:30 – 01:00</th>
-                    <th>01:10 – 02:00</th>
-                    <th>02:00 – 04:00</th>
-                    <th>04:00 – 05:30</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for day in generated_routines %}
-                <tr>
-                    <td>{{ day.date }}</td>
-                    <td>{{ day.slots.slot1|default:'' }}</td>
-                    <td>{{ day.slots.slot2|default:'' }}</td>
-                    <td>{{ day.slots.slot3|default:'' }}</td>
-                    <td>{{ day.slots.slot4|default:'' }}</td>
-                    <td>{{ day.slots.slot5|default:'' }}</td>
-                    <td>{{ day.slots.slot6|default:'' }}</td>
-                </tr>
+        <div class="mt-5">
+            <h2 class="text-center mb-4">Generated Routine</h2>
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Date</th>
+                            <th>Day</th>
+                            <th>Course Code</th>
+                            <th>Course Name</th>
+                            <th>Teacher</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for routine in generated_routines %}
+                        <tr>
+                            <td>{{ routine.date|date:"M d, Y" }}</td>
+                            <td>{{ routine.day }}</td>
+                            <td>{{ routine.course_code }}</td>
+                            <td>{{ routine.course_name }}</td>
+                            <td>{{ routine.teacher }}</td>
+                            <td>{{ routine.start_time }} - {{ routine.end_time }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="d-grid gap-2 mt-3">
+                <button type="button" class="btn btn-primary" onclick="window.print()">Print Routine</button>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if error %}
+        <div class="alert alert-danger mt-4">
+            <h4 class="alert-heading">Error!</h4>
+            <p>{{ error }}</p>
+        </div>
+        {% endif %}
+
+        {% if overlap_conflicts %}
+        <div class="alert alert-danger mt-4">
+            <h4 class="alert-heading">Time Conflict Detected!</h4>
+            <p>The following routines have overlapping time slots for the same teacher:</p>
+            <ul class="list-group mb-3">
+                {% for conflict in overlap_conflicts %}
+                <li class="list-group-item list-group-item-danger">
+                    <strong>{{ conflict.day }}:</strong> {{ conflict.course }} ({{ conflict.teacher }}) <span class="badge bg-warning text-dark">{{ conflict.start }} - {{ conflict.end }}</span>
+                </li>
                 {% endfor %}
-            </tbody>
-        </table>
+            </ul>
+            <hr>
+            <p class="mb-0">Please adjust the time slots to prevent overlaps before generating the routine.</p>
+        </div>
         {% endif %}
     </div>
 
@@ -134,16 +245,527 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/dmuy/MDTimePicker@v1.0.2-rc2/mdtimepicker.min.js"></script>
+    <script src="{% static 'bou_routines_app/time_picker_fix.js' %}"></script>
     <script>
         $(function() {
+            // Helper function to parse time string (HH:MM) into a Date object
+            function parseTimeString(timeStr) {
+                const [hours, minutes] = timeStr.split(':').map(Number);
+                const date = new Date();
+                date.setHours(hours, minutes, 0, 0);
+                return date;
+            }
+            
+            // Helper function to check if two time ranges overlap
+            // Two time ranges overlap if:
+            // 1. The start time of range1 is before the end time of range2 AND
+            // 2. The start time of range2 is before the end time of range1
+            function doTimesOverlap(start1, end1, start2, end2) {
+                return start1 < end2 && start2 < end1;
+            }
+            
             $('#date_range').daterangepicker({
-                opens: 'right'
+                opens: 'right',
+                autoUpdateInput: false // Prevent auto-filling with current date
+            });
+            
+            // Initialize the date picker when a value is available
+            $('#date_range').on('apply.daterangepicker', function(ev, picker) {
+                $(this).val(picker.startDate.format('MM/DD/YYYY') + ' - ' + picker.endDate.format('MM/DD/YYYY'));
+            });
+            
+            // Clear the date range value when canceled
+            $('#date_range').on('cancel.daterangepicker', function(ev, picker) {
+                $(this).val('');
+            });
+
+            // Initialize mdtimepicker for each time input
+            function initMDTimePickers() {
+                $('.mdtimepicker').each(function() {
+                    // First destroy any existing timepicker instance to avoid conflicts
+                    if ($(this).data('mdtimepicker')) {
+                        $(this).mdtimepicker('destroy');
+                    }
+                    
+                    // Then initialize a new instance
+                    $(this).mdtimepicker({
+                        format: 'hh:mm',
+                        theme: 'blue',
+                        hourPadding: true
+                    }).data('mdtimepicker-initialized', true);
+                });
+            }
+            initMDTimePickers();
+
+            // Form submission validation
+            $('form').on('submit', function(e) {
+                // Check all rows one more time for overlaps
+                let hasOverlap = false;
+                let hasEmptyFields = false;
+                
+                // Check for empty required fields
+                if (!$('#semester').val()) {
+                    alert('Please select a semester');
+                    e.preventDefault();
+                    return false;
+                }
+                
+                if (!$('#date_range').val()) {
+                    alert('Please select a date range');
+                    e.preventDefault();
+                    return false;
+                }
+                
+                // Check all course rows
+                $('.course-row').each(function() {
+                    // Check for overlaps
+                    if ($(this).find('.overlap-feedback').is(':visible')) {
+                        hasOverlap = true;
+                    }
+                    
+                    // Check for empty fields
+                    const courseCode = $(this).find('select[name="course_code[]"]').val();
+                    const day = $(this).find('select[name="day[]"]').val();
+                    const startTime = $(this).find('input[name="start_time[]"]').val();
+                    const endTime = $(this).find('input[name="end_time[]"]').val();
+                    
+                    if (!courseCode || !day || !startTime || !endTime) {
+                        hasEmptyFields = true;
+                    }
+                });
+                
+                if (hasEmptyFields) {
+                    alert('Please fill in all course details (course, day, start time, end time)');
+                    e.preventDefault();
+                    return false;
+                }
+                
+                if (hasOverlap) {
+                    e.preventDefault();
+                    // Scroll to the warning
+                    $('#overlapWarning')[0].scrollIntoView({ behavior: 'smooth' });
+                    // Flash the warning for attention
+                    $('#overlapWarning').fadeOut(100).fadeIn(100).fadeOut(100).fadeIn(100);
+                    return false;
+                }
+                
+                return true;
+            });
+
+            // Load semester courses function
+            function loadSemesterCourses(semesterId) {
+                if (semesterId) {
+                    // Clear existing course options
+                    $('.course-select').each(function() {
+                        const select = $(this);
+                        // Save the first option (Select Course)
+                        const firstOption = select.find('option:first').clone();
+                        select.empty().append(firstOption);
+                    });
+                    
+                    // Fetch courses for the selected semester
+                    $.ajax({
+                        url: "{% url 'get-semester-courses' %}",
+                        data: {
+                            'semester_id': semesterId
+                        },
+                        dataType: 'json',
+                        success: function(data) {
+                            if (data.courses && data.courses.length > 0) {
+                                // Create options for each course
+                                const options = data.courses.map(course => 
+                                    `<option value="${course.id}" data-teacher-id="${course.teacher_id}">${course.code} - ${course.name} (${course.teacher_name})</option>`
+                                );
+                                
+                                // Add options to each course select
+                                $('.course-select').each(function() {
+                                    $(this).append(options.join(''));
+                                });
+                            } else {
+                                // Show a warning if no courses are available
+                                alert('No courses found for this semester. Please add courses to this semester before generating a routine.');
+                            }
+                            
+                            // Store lunch break information if available
+                            if (data.lunch_break) {
+                                // Store lunch break data as a data attribute on the semester select
+                                $('#semester').data('lunch-break', data.lunch_break);
+                                
+                                // Show lunch break information
+                                $('#lunchBreakInfo').text(`Lunch Break: ${data.lunch_break.start} - ${data.lunch_break.end}`).show();
+                                
+                                // Show lunch break section and populate time fields
+                                $('#lunchBreakSection').show();
+                                $('#lunchBreakStart').val(data.lunch_break.start);
+                                $('#lunchBreakEnd').val(data.lunch_break.end);
+                                
+                                // Initialize the time pickers for the lunch break fields
+                                setTimeout(function() {
+                                    $('#lunchBreakStart, #lunchBreakEnd').each(function() {
+                                        // First destroy any existing instance
+                                        if ($(this).data('mdtimepicker')) {
+                                            $(this).mdtimepicker('destroy');
+                                        }
+                                        
+                                        // Create a new instance
+                                        $(this).mdtimepicker({
+                                            format: 'hh:mm',
+                                            theme: 'blue',
+                                            hourPadding: true
+                                        });
+                                    });
+                                }, 50);
+                            } else {
+                                $('#semester').removeData('lunch-break');
+                                $('#lunchBreakInfo').hide();
+                                $('#lunchBreakSection').show(); // Still show section but with empty values
+                                $('#lunchBreakStart').val('');
+                                $('#lunchBreakEnd').val('');
+                                
+                                // Initialize the time pickers for the lunch break fields
+                                setTimeout(function() {
+                                    $('#lunchBreakStart, #lunchBreakEnd').each(function() {
+                                        // First destroy any existing instance
+                                        if ($(this).data('mdtimepicker')) {
+                                            $(this).mdtimepicker('destroy');
+                                        }
+                                        // Create a new instance
+                                        $(this).mdtimepicker({
+                                            format: 'hh:mm',
+                                            theme: 'blue',
+                                            hourPadding: true
+                                        });
+                                    });
+                                }, 50);
+                            }
+                            
+                            // Populate date range if available
+                            if (data.date_range) {
+                                // Store date range data as a data attribute on the semester select
+                                $('#semester').data('date-range', data.date_range);
+                                
+                                // Set the date range input value
+                                const dateRangeStr = `${data.date_range.start_date} - ${data.date_range.end_date}`;
+                                $('#date_range').val(dateRangeStr);
+                                
+                                // Also update the daterangepicker with these dates
+                                if ($('#date_range').data('daterangepicker')) {
+                                    const startDate = moment(data.date_range.start_date, 'MM/DD/YYYY');
+                                    const endDate = moment(data.date_range.end_date, 'MM/DD/YYYY');
+                                    $('#date_range').data('daterangepicker').setStartDate(startDate);
+                                    $('#date_range').data('daterangepicker').setEndDate(endDate);
+                                }
+                            } else {
+                                // Clear the date range if no dates are stored
+                                $('#semester').removeData('date-range');
+                                $('#date_range').val('');
+                            }
+                            
+                            // Fetch and display existing routines for this semester
+                            if (semesterId) {
+                                $.ajax({
+                                    url: "{% url 'check-time-overlap' %}",
+                                    data: {
+                                        'get_semester_routines': '1',
+                                        'semester_id': semesterId
+                                    },
+                                    dataType: 'json',
+                                    success: function(routineData) {
+                                        // Clear existing course rows except the first one
+                                        const firstRow = $('.course-row:first').clone();
+                                        $('#courseRepeater').empty().append(firstRow);
+                                        
+                                        // Reset the first row
+                                        firstRow.find('input').val('');
+                                        firstRow.find('select').val('');
+                                        firstRow.find('.overlap-feedback').hide().empty();
+                                        
+                                        // Populate the form with existing routines
+                                        if (routineData.routines && routineData.routines.length > 0) {
+                                            // Skip the first row as we've already added it
+                                            let isFirstRow = true;
+                                            
+                                            routineData.routines.forEach(routine => {
+                                                let row;
+                                                if (isFirstRow) {
+                                                    row = firstRow;
+                                                    isFirstRow = false;
+                                                } else {
+                                                    // Clone the first row for additional routines
+                                                    row = firstRow.clone();
+                                                    $('#courseRepeater').append(row);
+                                                }
+                                                
+                                                // Set the course
+                                                row.find('select[name="course_code[]"]').val(routine.course_id);
+                                                
+                                                // Set the day
+                                                row.find('select[name="day[]"]').val(routine.day);
+                                                
+                                                // Set the times
+                                                row.find('input[name="start_time[]"]').val(routine.start_time);
+                                                row.find('input[name="end_time[]"]').val(routine.end_time);
+                                            });
+                                            
+                                            // Re-initialize time pickers after a short delay to ensure DOM is ready
+                                            setTimeout(function() {
+                                                // First destroy all timepickers to avoid duplicate initialization
+                                                $('.mdtimepicker').each(function() {
+                                                    if ($(this).data('mdtimepicker')) {
+                                                        $(this).mdtimepicker('destroy');
+                                                    }
+                                                });
+                                                
+                                                // Initialize them again
+                                                initMDTimePickers();
+                                                
+                                                // Re-check all time slots for overlaps
+                                                $('.course-row').each(function() {
+                                                    checkTimeOverlap($(this));
+                                                });
+                                            }, 100);
+                                            
+                                            // Add informational message
+                                            const semesterName = $('#semester option:selected').text();
+                                            const warningHtml = `
+                                                <div class="alert alert-info mt-3 mb-3">
+                                                    <h5><i class="bi bi-info-circle-fill"></i> Current Routine Loaded</h5>
+                                                    <p class="mb-0">Current routine for <strong>${semesterName}</strong> has been loaded with ${routineData.routines.length} course(s).</p>
+                                                    <p class="mb-0">You can modify times or add/remove courses as needed. All changes will update both the current routine and generate new schedule entries.</p>
+                                                </div>
+                                            `;
+                                            
+                                            // Add the warning before the course repeater
+                                            if ($('#currentRoutineInfo').length) {
+                                                $('#currentRoutineInfo').html(warningHtml);
+                                            } else {
+                                                $('#courseRepeater').before('<div id="currentRoutineInfo">' + warningHtml + '</div>');
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+                        }
+                    });
+                }
+            }
+
+            // Handle semester change
+            $('#semester').change(function() {
+                const semesterId = $(this).val();
+                
+                // Clear the current routine info when semester changes
+                if ($('#currentRoutineInfo').length) {
+                    $('#currentRoutineInfo').remove();
+                }
+                
+                loadSemesterCourses(semesterId);
+            });
+            
+            // Load courses for the initially selected semester, if any
+            const initialSemester = $('#semester').val();
+            if (initialSemester) {
+                loadSemesterCourses(initialSemester);
+            }
+
+            // Function to check for time overlaps
+            function checkTimeOverlap(row) {
+                const courseSelect = $(row).find('select[name="course_code[]"]');
+                const courseId = courseSelect.val();
+                const daySelect = $(row).find('select[name="day[]"]');
+                const day = daySelect.val();
+                const startTime = $(row).find('input[name="start_time[]"]').val();
+                const endTime = $(row).find('input[name="end_time[]"]').val();
+                const feedbackDiv = $(row).find('.overlap-feedback');
+                const checkingDiv = $(row).find('.checking-feedback');
+                
+                // Reset feedback and styles
+                feedbackDiv.hide().empty();
+                checkingDiv.hide();
+                $(row).find('.time-input').removeClass('is-invalid');
+                
+                // Only check if all fields are filled
+                if (!courseId || !day || !startTime || !endTime) {
+                    $(row).removeClass('has-overlap');
+                    return;
+                }
+                
+                // Get teacher ID from the selected course
+                const courseOption = courseSelect.find('option:selected');
+                const courseName = courseOption.text();
+                // Extract teacher ID from the data attribute
+                const teacherId = courseOption.data('teacher-id');
+                
+                if (!teacherId) {
+                    console.error('Teacher ID not found for selected course');
+                    return;
+                }
+                
+                // Get semester ID and lunch break info
+                const semesterId = $('#semester').val();
+                const lunchBreakStart = $('#lunchBreakStart').val();
+                const lunchBreakEnd = $('#lunchBreakEnd').val();
+                
+                // Check for lunch break overlap (always enforced)
+                if (lunchBreakStart && lunchBreakEnd) {
+                    // Convert time strings to Date objects for easier comparison
+                    const startDate = parseTimeString(startTime);
+                    const endDate = parseTimeString(endTime);
+                    const lunchStartDate = parseTimeString(lunchBreakStart);
+                    const lunchEndDate = parseTimeString(lunchBreakEnd);
+                    
+                    // Check if time slot overlaps with lunch break
+                    if (doTimesOverlap(startDate, endDate, lunchStartDate, lunchEndDate)) {
+                        feedbackDiv.html(`Overlaps with lunch break (${lunchBreakStart} - ${lunchBreakEnd})`).show();
+                        $(row).find('.time-input').addClass('is-invalid');
+                        $(row).addClass('has-overlap');
+                        
+                        // Disable submit button due to lunch break overlap
+                        $('button[type="submit"]').prop('disabled', true);
+                        return;
+                    }
+                }
+                
+                // Show checking indicator
+                checkingDiv.show();
+                
+                // Check for overlaps via AJAX
+                $.ajax({
+                    url: "{% url 'check-time-overlap' %}",
+                    data: {
+                        'day': day,
+                        'start_time': startTime,
+                        'end_time': endTime,
+                        'teacher_id': teacherId,
+                        'course_id': courseId,  // Pass the course ID to exclude it from the check
+                        'semester_id': semesterId, // Pass semester ID to check for lunch break
+                        'enforce_lunch_break': "1", // Always enforce lunch break
+                        'lunch_break_start': lunchBreakStart,
+                        'lunch_break_end': lunchBreakEnd
+                    },
+                    dataType: 'json',
+                    success: function(data) {
+                        // Hide checking indicator
+                        checkingDiv.hide();
+                        
+                        if (data.overlaps && data.overlaps.length > 0) {
+                            // Show overlap warning
+                            const messages = data.overlaps.map(overlap => 
+                                `Overlaps with: ${overlap.course} - ${overlap.course_name} (${overlap.teacher}) ${overlap.start} - ${overlap.end}`
+                            );
+                            
+                            feedbackDiv.html(messages.join('<br>')).show();
+                            $(row).find('.time-input').addClass('is-invalid');
+                            $(row).addClass('has-overlap');
+                            
+                            // Disable submit button if there are overlaps
+                            $('button[type="submit"]').prop('disabled', true);
+                        } else {
+                            // No overlaps for this row
+                            $(row).removeClass('has-overlap');
+                            
+                            // Re-enable submit button if no overlaps on this row
+                            // Need to check other rows too
+                            checkAllRows();
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        // Hide checking indicator
+                        checkingDiv.hide();
+                        console.error('Error checking time overlap:', error);
+                    }
+                });
+            }
+            
+            // Check all rows for any overlap
+            function checkAllRows() {
+                let hasOverlap = false;
+                let allOverlaps = [];
+                
+                $('.course-row').each(function() {
+                    const feedbackDiv = $(this).find('.overlap-feedback');
+                    if (feedbackDiv.is(':visible')) {
+                        hasOverlap = true;
+                        const courseSelect = $(this).find('select[name="course_code[]"]');
+                        const courseName = courseSelect.find('option:selected').text();
+                        const day = $(this).find('select[name="day[]"] option:selected').text();
+                        const startTime = $(this).find('input[name="start_time[]"]').val();
+                        const endTime = $(this).find('input[name="end_time[]"]').val();
+                        
+                        // Add to all overlaps list
+                        const overlapText = `${courseName} on ${day} (${startTime} - ${endTime})`;
+                        allOverlaps.push(overlapText);
+                    }
+                });
+                
+                // Update global overlap warning
+                if (hasOverlap) {
+                    const overlapList = $('#overlapList');
+                    overlapList.empty();
+                    allOverlaps.forEach(overlap => {
+                        overlapList.append(`<li>${overlap}</li>`);
+                    });
+                    $('#overlapWarning').show();
+                } else {
+                    $('#overlapWarning').hide();
+                }
+                
+                // Enable/disable submit button based on overlaps
+                $('button[type="submit"]').prop('disabled', hasOverlap);
+            }
+            
+            // Event listeners for time inputs and related selects
+            $(document).on('change', 'select[name="course_code[]"], select[name="day[]"], input[name="start_time[]"], input[name="end_time[]"]', function() {
+                const row = $(this).closest('.course-row');
+                checkTimeOverlap(row);
+            });
+            
+            // Event listener for lunch break time changes
+            $('#lunchBreakStart, #lunchBreakEnd').on('change', function() {
+                const startTime = $('#lunchBreakStart').val();
+                const endTime = $('#lunchBreakEnd').val();
+                
+                // Update the lunch break info display
+                if (startTime && endTime) {
+                    $('#lunchBreakInfo').text(`Lunch Break: ${startTime} - ${endTime}`).show();
+                    
+                    // Update the data attribute with new values
+                    $('#semester').data('lunch-break', {
+                        start: startTime,
+                        end: endTime
+                    });
+                    
+                    // Recheck all rows for overlaps
+                    $('.course-row').each(function() {
+                        checkTimeOverlap($(this));
+                    });
+                } else {
+                    $('#lunchBreakInfo').hide();
+                }
+            });
+            
+            // Also check after the time picker is closed
+            $(document).on('mdtimepicker:close', '.time-input', function() {
+                const row = $(this).closest('.course-row');
+                checkTimeOverlap(row);
             });
 
             $('#addCourse').click(function () {
                 const newRow = $('.course-row:first').clone();
                 newRow.find('input').val('');
+                newRow.find('select').val('');
+                newRow.find('.overlap-feedback').hide().empty();
+                newRow.find('.time-input').removeClass('is-invalid');
                 $('#courseRepeater').append(newRow);
+                initMDTimePickers();
+                
+                // If a semester is selected, apply the same courses to the new row
+                const semesterId = $('#semester').val();
+                if (semesterId) {
+                    const options = $('.course-select:first').html();
+                    newRow.find('.course-select').html(options);
+                }
             });
 
             $(document).on('click', '.remove-course', function () {

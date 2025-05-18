@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Routine Entry</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/dmuy/MDTimePicker@v1.0.2-rc2/mdtimepicker.min.css">
     <style>
         body {
             background-color: #f8f9fa;
@@ -14,7 +15,7 @@
             margin-bottom: 1rem;
         }
         .container {
-            max-width: 900px;
+            max-width: 80%;
             margin: auto;
             padding: 2rem;
         }
@@ -45,7 +46,7 @@
                         <a class="nav-link" href="/generate/">Generate Routine</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/create-semester/">Create Semester</a>
+                        <a class="nav-link" href="/semester-courses/">Semester Courses</a>
                     </li>
                 </ul>
             </div>
@@ -53,28 +54,69 @@
     </nav>
 
     <div class="container">
-        <h1 class="text-center">Current Semester Routine Entry</h1>
+        <h1 class="text-center">Routine Entry (Existing Semesters)</h1>
+        
+        {% if messages %}
+        <div class="mb-3">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        
         <div class="form-section">
             <form method="post">
                 {% csrf_token %}
-                {% for field in form %}
-                    <div class="mb-3">
-                        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
-                        {% with widget=field.field.widget %}{{ field }}{% endwith %}
+                <div class="row mb-3">
+                    <div class="col">
+                        <label class="form-label" for="id_semester">Semester</label>
+                        <select name="semester" id="id_semester" class="form-control" required>
+                            <option value="">Select Semester</option>
+                            {% for semester in form.fields.semester.queryset %}
+                            <option value="{{ semester.id }}">{{ semester.name }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
-                {% endfor %}
+                    <div class="col">
+                        <label class="form-label" for="id_course">Course</label>
+                        <select name="course" id="id_course" class="form-control" required>
+                            <option value="">Select Course</option>
+                            {% for course in form.fields.course.queryset %}
+                            <option value="{{ course.id }}">{{ course.code }} - {{ course.name }} ({{ course.teacher.name }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col">
+                        <label class="form-label" for="id_day">Day</label>
+                        <select name="day" id="id_day" class="form-control" required>
+                            <option value="">Select Day</option>
+                            <option value="Friday">Friday</option>
+                            <option value="Saturday">Saturday</option>
+                        </select>
+                    </div>
+                    <div class="col">
+                        <label class="form-label">Time Slot</label>
+                        <div class="input-group">
+                            <input type="text" name="start_time" class="form-control mdtimepicker" placeholder="Start time" required autocomplete="off">
+                            <span class="input-group-text">to</span>
+                            <input type="text" name="end_time" class="form-control mdtimepicker" placeholder="End time" required autocomplete="off">
+                        </div>
+                    </div>
+                </div>
                 <div class="d-grid gap-2">
                     <button type="submit" class="btn btn-primary">Save</button>
                 </div>
             </form>
         </div>
 
-        <h2 class="text-center">Saved Routines</h2>
+        <h2 class="text-center">Saved Routine Data</h2>
         <table class="table table-bordered table-striped">
             <thead class="table-dark">
                 <tr>
                     <th>Course</th>
-                    <th>Teacher</th>
                     <th>Day</th>
                     <th>Time</th>
                 </tr>
@@ -82,14 +124,13 @@
             <tbody>
                 {% for routine in routines %}
                 <tr>
-                    <td>{{ routine.course.code }}</td>
-                    <td>{{ routine.teacher.name }}</td>
+                    <td>{{ routine.course.code }} - {{ routine.course.name }} ({{ routine.teacher.name }})</td>
                     <td>{{ routine.day }}</td>
-                    <td>{{ routine.time_slot.start_time }} - {{ routine.time_slot.end_time }}</td>
+                    <td>{{ routine.start_time }} - {{ routine.end_time }}</td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="4" class="text-center">No routines found.</td>
+                    <td colspan="3" class="text-center">No routines found.</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -97,5 +138,61 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/dmuy/MDTimePicker@v1.0.2-rc2/mdtimepicker.min.js"></script>
+    <script>
+        $(function() {
+            function initMDTimePickers() {
+                $('.mdtimepicker').mdtimepicker({
+                    format: 'hh:mm',
+                    theme: 'blue',
+                    hourPadding: true
+                });
+            }
+            initMDTimePickers();
+            
+            // Function to load courses based on selected semester
+            function loadSemesterCourses(semesterId) {
+                if (semesterId) {
+                    // Clear existing course options
+                    const courseSelect = $('#id_course');
+                    // Save the first option (Select Course)
+                    const firstOption = courseSelect.find('option:first').clone();
+                    courseSelect.empty().append(firstOption);
+                    
+                    // Fetch courses for the selected semester
+                    $.ajax({
+                        url: "{% url 'get-semester-courses' %}",
+                        data: {
+                            'semester_id': semesterId
+                        },
+                        dataType: 'json',
+                        success: function(data) {
+                            if (data.courses && data.courses.length > 0) {
+                                // Add courses to the dropdown
+                                data.courses.forEach(function(course) {
+                                    courseSelect.append(
+                                        `<option value="${course.id}">${course.code} - ${course.name} (${course.teacher_name})</option>`
+                                    );
+                                });
+                            }
+                        }
+                    });
+                }
+            }
+            
+            // Handle semester change
+            $('#id_semester').change(function() {
+                const semesterId = $(this).val();
+                loadSemesterCourses(semesterId);
+            });
+            
+            // Load courses for the initially selected semester, if any
+            const initialSemester = $('#id_semester').val();
+            if (initialSemester) {
+                loadSemesterCourses(initialSemester);
+            }
+        });
+    </script>
 </body>
 </html>

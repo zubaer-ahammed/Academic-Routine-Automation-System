@@ -4,4 +4,4 @@ from .models import CurrentRoutine
 class RoutineForm(forms.ModelForm):
     class Meta:
         model = CurrentRoutine
-        fields = '__all__'
+        fields = ['semester', 'course', 'start_time', 'end_time', 'day']

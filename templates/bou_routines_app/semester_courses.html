@@ -160,7 +160,21 @@
             if (initialSemesterId) {
                 loadSemesterCourses(initialSemesterId);
             }
+
+            // Set the current year in the footer
+            document.getElementById('currentYear').textContent = new Date().getFullYear();
         });
     </script>
+
+    <!-- Copyright Footer -->
+    <footer class="bg-dark text-white text-center py-3 mt-5">
+        <div class="container">
+            <p class="mb-0">
+                © <span id="currentYear"></span> BOU Routine Generator. Developed by
+                <a href="https://github.com/zubaer-ahammed/" target="_blank" class="text-info">Md. Zubaer Ahammed</a> and
+                <a href="https://github.com/Mojahidul21" target="_blank" class="text-info">Mojahidul Alam</a>
+            </p>
+        </div>
+    </footer>
 </body>
 </html>

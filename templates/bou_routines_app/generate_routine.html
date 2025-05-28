@@ -262,6 +262,17 @@
         {% endif %}
     </div>
 
+    <!-- Copyright Footer -->
+    <footer class="bg-dark text-white text-center py-3 mt-5">
+        <div class="container">
+            <p class="mb-0">
+                © <span id="currentYear"></span> BOU Routine Generator. Developed by
+                <a href="https://github.com/zubaer-ahammed/" target="_blank" class="text-info">Md. Zubaer Ahammed</a> and
+                <a href="https://github.com/Mojahidul21" target="_blank" class="text-info">Mojahidul Alam</a>
+            </p>
+        </div>
+    </footer>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
@@ -272,6 +283,9 @@
     <script src="{% static 'bou_routines_app/time_picker_fix.js' %}"></script>
     <script>
         $(function() {
+            // Set the current year in the footer
+            document.getElementById('currentYear').textContent = new Date().getFullYear();
+
             // Helper function to parse time string (HH:MM) into a Date object
             function parseTimeString(timeStr) {
                 const [hours, minutes] = timeStr.split(':').map(Number);
@@ -324,35 +338,68 @@
                             day: 'numeric',
                             year: 'numeric'
                         });
-                        const badge = $(`<span class="badge bg-info me-1 mb-1">${formattedDate} <i class="bi bi-x-circle"></i></span>`);
+                        const badge = $(`<span class="badge bg-info me-1 mb-1" data-date="${date}">${formattedDate} <i class="bi bi-x-circle" style="cursor: pointer;"></i></span>`);
                         $('#selectedHolidays').append(badge);
                     });
                 }
             });
 
-            // Allow removing individual holidays by clicking on badges
-            $(document).on('click', '#selectedHolidays .badge', function() {
-                const holidayText = $(this).text().trim();
+            // Allow removing individual holidays by clicking on the x icon
+            $(document).on('click', '#selectedHolidays .badge .bi-x-circle', function(e) {
+                e.stopPropagation(); // Prevent event bubbling
+                const badge = $(this).parent();
+                const dateStr = badge.data('date');
                 const picker = $('#govt_holidays')[0]._flatpickr;
-                const currentDates = picker.selectedDates;
 
-                // Find the date to remove
-                const dateToRemove = currentDates.find(date => {
-                    const dateStr = new Date(date).toLocaleDateString('en-US', {
+                if (picker) {
+                    // First, remove the visual badge
+                    badge.remove();
+
+                    // Create a JavaScript Date object from the date string
+                    const dateToRemove = new Date(dateStr);
+
+                    // Get all current selected dates from the picker
+                    const currentDates = picker.selectedDates;
+
+                    // Find and remove the matching date
+                    const filteredDates = currentDates.filter(date => {
+                        // Compare dates by converting to the same format
+                        return picker.formatDate(date, 'Y-m-d') !== dateStr;
+                    });
+
+                    // Clear the picker completely
+                    picker.clear();
+
+                    // Set the remaining dates back
+                    if (filteredDates.length > 0) {
+                        picker.setDate(filteredDates, false); // false = don't trigger onChange
+                    }
+
+                    // Update the hidden input manually since we disabled the onChange trigger
+                    const formattedDates = filteredDates.map(date => {
+                        return picker.formatDate(date, 'Y-m-d');
+                    });
+                    $('#govt_holiday_dates').val(formattedDates.join(','));
+
+                    // Update the display of selected dates (in case anything was missed)
+                    updateHolidayBadges(filteredDates, picker);
+                }
+            });
+
+            // Helper function to update the holiday badges display
+            function updateHolidayBadges(dates, picker) {
+                $('#selectedHolidays').empty();
+                dates.forEach(date => {
+                    const formattedDate = new Date(date).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
                         year: 'numeric'
                     });
-                    return dateStr.trim() === holidayText.replace(' ×', '');
+                    const dateStr = picker.formatDate(date, 'Y-m-d');
+                    const badge = $(`<span class="badge bg-info me-1 mb-1" data-date="${dateStr}">${formattedDate} <i class="bi bi-x-circle" style="cursor: pointer;"></i></span>`);
+                    $('#selectedHolidays').append(badge);
                 });
-
-                // Remove the date from the picker
-                if (dateToRemove) {
-                    picker.removeDate(dateToRemove);
-                }
-
-                $(this).remove();
-            });
+            }
 
             // Initialize mdtimepicker for each time input
             function initMDTimePickers() {

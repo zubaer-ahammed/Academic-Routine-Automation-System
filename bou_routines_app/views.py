@@ -94,6 +94,12 @@ def generate_routine(request):
                     except Exception as e:
                         messages.error(request, f"Error parsing date range: {str(e)}")
                 
+                # Process and save government holidays
+                govt_holidays = request.POST.get('govt_holiday_dates')
+                if govt_holidays:
+                    # Save comma-separated list of holiday dates directly
+                    selected_semester.holidays = govt_holidays
+
                 selected_semester.save()
                 #messages.success(request, f"Updated lunch break for {selected_semester.name} to {lunch_break_start} - {lunch_break_end}")
             except Exception as e:
@@ -241,7 +247,8 @@ def generate_routine(request):
             # Add debugging logs to identify potential issues
             processed_days = []
             matched_days = []
-            
+            skipped_holidays = []
+
             # Check if we have at least one Friday and one Saturday in the form data
             has_friday = 'Friday' in days
             has_saturday = 'Saturday' in days
@@ -254,10 +261,25 @@ def generate_routine(request):
                     "teachers": teachers,
                 })
             
+            # Get holiday dates from the semester model
+            holiday_dates = []
+            if selected_semester.holidays:
+                holiday_dates = [
+                    datetime.strptime(date.strip(), "%Y-%m-%d").date()
+                    for date in selected_semester.holidays.split(',')
+                    if date.strip()
+                ]
+
             while current_date <= end_date:
                 day_name = current_date.strftime('%A')
                 processed_days.append(day_name)
                 
+                # Skip if current date is a holiday
+                if current_date in holiday_dates:
+                    skipped_holidays.append(current_date.strftime('%Y-%m-%d'))
+                    current_date += timedelta(days=1)
+                    continue
+
                 # Only process Friday and Saturday (or expand for other days if needed)
                 if day_name in ['Friday', 'Saturday']:
                     day_matched = False
@@ -434,10 +456,16 @@ def get_semester_courses(request):
                         'end_date': semester.end_date.strftime('%m/%d/%Y')
                     }
                 
+                # Include government holidays if available
+                holidays_info = None
+                if semester.holidays:
+                    holidays_info = semester.holidays
+
                 return JsonResponse({
                     'courses': courses_data,
                     'lunch_break': lunch_break_info,
-                    'date_range': date_range_info
+                    'date_range': date_range_info,
+                    'holidays': holidays_info
                 })
             except Semester.DoesNotExist:
                 return JsonResponse({'courses': [], 'lunch_break': None})

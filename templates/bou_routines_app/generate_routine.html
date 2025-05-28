@@ -13,6 +13,8 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jquery-timerangepicker@0.1.1/jquery.timerangepicker.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/dmuy/MDTimePicker@v1.0.2-rc2/mdtimepicker.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <!-- Add Flatpickr CSS for multiple date selection -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <style>
         body {
             background-color: #f8f9fa;
@@ -62,6 +64,10 @@
         .form-control.mdtimepicker {
             background: #ccc;
         }
+        /* Fix for flatpickr z-index */
+        .flatpickr-calendar.open {
+            z-index: 99999999;
+        }
     </style>
 </head>
 <body>
@@ -88,7 +94,7 @@
     </nav>
     <div class="container container-box-bou">
         <h1>Generate Routine</h1>
-        
+
         {% if messages %}
         <div class="messages mb-4">
             {% for message in messages %}
@@ -99,14 +105,14 @@
             {% endfor %}
         </div>
         {% endif %}
-        
+
         <!-- Real-time overlap warning alert -->
         <div id="overlapWarning" class="alert alert-danger mb-4" style="display: none;">
             <strong>Warning: Time Overlaps Detected!</strong>
             <p>Please resolve the following overlaps before submitting:</p>
             <ul id="overlapList"></ul>
         </div>
-        
+
         <form method="post">
             {% csrf_token %}
             <div class="mb-3">
@@ -123,7 +129,15 @@
                 <label for="date_range" class="form-label">Date Range</label>
                 <input type="text" name="date_range" id="date_range" class="form-control" placeholder="Select date range">
             </div>
-            
+
+            <div class="mb-3">
+                <label for="govt_holidays" class="form-label">Holidays <small class="text-muted">(No routines will be generated for these dates)</small></label>
+                <input type="text" name="govt_holidays" id="govt_holidays" class="form-control" placeholder="Click to select government holidays">
+                <div id="selectedHolidays" class="mt-2 d-flex flex-wrap gap-1"></div>
+                <!-- Hidden input to store formatted holiday dates for backend processing -->
+                <input type="hidden" name="govt_holiday_dates" id="govt_holiday_dates">
+            </div>
+
             <div class="mb-3" id="lunchBreakSection">
                 <label class="form-label">Lunch Break</label>
                 <div class="row">
@@ -253,6 +267,8 @@
     <script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/dmuy/MDTimePicker@v1.0.2-rc2/mdtimepicker.min.js"></script>
+    <!-- Add Flatpickr JS for multiple date selection -->
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="{% static 'bou_routines_app/time_picker_fix.js' %}"></script>
     <script>
         $(function() {
@@ -263,7 +279,7 @@
                 date.setHours(hours, minutes, 0, 0);
                 return date;
             }
-            
+
             // Helper function to check if two time ranges overlap
             // Two time ranges overlap if:
             // 1. The start time of range1 is before the end time of range2 AND
@@ -271,20 +287,71 @@
             function doTimesOverlap(start1, end1, start2, end2) {
                 return start1 < end2 && start2 < end1;
             }
-            
+
             $('#date_range').daterangepicker({
                 opens: 'right',
                 autoUpdateInput: false // Prevent auto-filling with current date
             });
-            
+
             // Initialize the date picker when a value is available
             $('#date_range').on('apply.daterangepicker', function(ev, picker) {
                 $(this).val(picker.startDate.format('MM/DD/YYYY') + ' - ' + picker.endDate.format('MM/DD/YYYY'));
             });
-            
+
             // Clear the date range value when canceled
             $('#date_range').on('cancel.daterangepicker', function(ev, picker) {
                 $(this).val('');
+            });
+
+            // Initialize Flatpickr for government holidays date selection
+            $('#govt_holidays').flatpickr({
+                mode: 'multiple',
+                dateFormat: 'Y-m-d',
+                onChange: function(selectedDates, dateStr, instance) {
+                    // Format dates for display and submission
+                    let formattedDates = selectedDates.map(date => {
+                        return instance.formatDate(date, 'Y-m-d');
+                    });
+
+                    // Store the selected dates in the hidden input for form submission
+                    $('#govt_holiday_dates').val(formattedDates.join(','));
+
+                    // Display selected dates as badges for user feedback
+                    $('#selectedHolidays').empty();
+                    formattedDates.forEach(date => {
+                        const formattedDate = new Date(date).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                        });
+                        const badge = $(`<span class="badge bg-info me-1 mb-1">${formattedDate} <i class="bi bi-x-circle"></i></span>`);
+                        $('#selectedHolidays').append(badge);
+                    });
+                }
+            });
+
+            // Allow removing individual holidays by clicking on badges
+            $(document).on('click', '#selectedHolidays .badge', function() {
+                const holidayText = $(this).text().trim();
+                const picker = $('#govt_holidays')[0]._flatpickr;
+                const currentDates = picker.selectedDates;
+
+                // Find the date to remove
+                const dateToRemove = currentDates.find(date => {
+                    const dateStr = new Date(date).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                    });
+                    return dateStr.trim() === holidayText.replace(' ×', '');
+                });
+
+                // Remove the date from the picker
+                if (dateToRemove) {
+                    picker.removeDate(dateToRemove);
+                }
+
+                $(this).remove();
             });
 
             // Initialize mdtimepicker for each time input
@@ -294,7 +361,7 @@
                     if ($(this).data('mdtimepicker')) {
                         $(this).mdtimepicker('destroy');
                     }
-                    
+
                     // Then initialize a new instance
                     $(this).mdtimepicker({
                         format: 'hh:mm',
@@ -310,44 +377,44 @@
                 // Check all rows one more time for overlaps
                 let hasOverlap = false;
                 let hasEmptyFields = false;
-                
+
                 // Check for empty required fields
                 if (!$('#semester').val()) {
                     alert('Please select a semester');
                     e.preventDefault();
                     return false;
                 }
-                
+
                 if (!$('#date_range').val()) {
                     alert('Please select a date range');
                     e.preventDefault();
                     return false;
                 }
-                
+
                 // Check all course rows
                 $('.course-row').each(function() {
                     // Check for overlaps
                     if ($(this).find('.overlap-feedback').is(':visible')) {
                         hasOverlap = true;
                     }
-                    
+
                     // Check for empty fields
                     const courseCode = $(this).find('select[name="course_code[]"]').val();
                     const day = $(this).find('select[name="day[]"]').val();
                     const startTime = $(this).find('input[name="start_time[]"]').val();
                     const endTime = $(this).find('input[name="end_time[]"]').val();
-                    
+
                     if (!courseCode || !day || !startTime || !endTime) {
                         hasEmptyFields = true;
                     }
                 });
-                
+
                 if (hasEmptyFields) {
                     alert('Please fill in all course details (course, day, start time, end time)');
                     e.preventDefault();
                     return false;
                 }
-                
+
                 if (hasOverlap) {
                     e.preventDefault();
                     // Scroll to the warning
@@ -356,7 +423,7 @@
                     $('#overlapWarning').fadeOut(100).fadeIn(100).fadeOut(100).fadeIn(100);
                     return false;
                 }
-                
+
                 return true;
             });
 
@@ -370,7 +437,7 @@
                         const firstOption = select.find('option:first').clone();
                         select.empty().append(firstOption);
                     });
-                    
+
                     // Fetch courses for the selected semester
                     $.ajax({
                         url: "{% url 'get-semester-courses' %}",
@@ -381,10 +448,10 @@
                         success: function(data) {
                             if (data.courses && data.courses.length > 0) {
                                 // Create options for each course
-                                const options = data.courses.map(course => 
+                                const options = data.courses.map(course =>
                                     `<option value="${course.id}" data-teacher-id="${course.teacher_id}">${course.code} - ${course.name} (${course.teacher_name})</option>`
                                 );
-                                
+
                                 // Add options to each course select
                                 $('.course-select').each(function() {
                                     $(this).append(options.join(''));
@@ -393,20 +460,20 @@
                                 // Show a warning if no courses are available
                                 alert('No courses found for this semester. Please add courses to this semester before generating a routine.');
                             }
-                            
+
                             // Store lunch break information if available
                             if (data.lunch_break) {
                                 // Store lunch break data as a data attribute on the semester select
                                 $('#semester').data('lunch-break', data.lunch_break);
-                                
+
                                 // Show lunch break information
                                 $('#lunchBreakInfo').text(`Lunch Break: ${data.lunch_break.start} - ${data.lunch_break.end}`).show();
-                                
+
                                 // Show lunch break section and populate time fields
                                 $('#lunchBreakSection').show();
                                 $('#lunchBreakStart').val(data.lunch_break.start);
                                 $('#lunchBreakEnd').val(data.lunch_break.end);
-                                
+
                                 // Initialize the time pickers for the lunch break fields
                                 setTimeout(function() {
                                     $('#lunchBreakStart, #lunchBreakEnd').each(function() {
@@ -414,7 +481,7 @@
                                         if ($(this).data('mdtimepicker')) {
                                             $(this).mdtimepicker('destroy');
                                         }
-                                        
+
                                         // Create a new instance
                                         $(this).mdtimepicker({
                                             format: 'hh:mm',
@@ -429,7 +496,7 @@
                                 $('#lunchBreakSection').show(); // Still show section but with empty values
                                 $('#lunchBreakStart').val('');
                                 $('#lunchBreakEnd').val('');
-                                
+
                                 // Initialize the time pickers for the lunch break fields
                                 setTimeout(function() {
                                     $('#lunchBreakStart, #lunchBreakEnd').each(function() {
@@ -446,16 +513,16 @@
                                     });
                                 }, 50);
                             }
-                            
+
                             // Populate date range if available
                             if (data.date_range) {
                                 // Store date range data as a data attribute on the semester select
                                 $('#semester').data('date-range', data.date_range);
-                                
+
                                 // Set the date range input value
                                 const dateRangeStr = `${data.date_range.start_date} - ${data.date_range.end_date}`;
                                 $('#date_range').val(dateRangeStr);
-                                
+
                                 // Also update the daterangepicker with these dates
                                 if ($('#date_range').data('daterangepicker')) {
                                     const startDate = moment(data.date_range.start_date, 'MM/DD/YYYY');
@@ -468,7 +535,55 @@
                                 $('#semester').removeData('date-range');
                                 $('#date_range').val('');
                             }
-                            
+
+                            // Populate government holidays if available
+                            if (data.holidays) {
+                                // Store holidays data as a data attribute on the semester select
+                                $('#semester').data('holidays', data.holidays);
+
+                                // Get the Flatpickr instance
+                                const holidayPicker = $('#govt_holidays')[0]._flatpickr;
+                                if (holidayPicker) {
+                                    // Clear any existing selected dates
+                                    holidayPicker.clear();
+
+                                    // Parse the comma-separated dates
+                                    const holidayDates = data.holidays.split(',').filter(date => date.trim() !== '');
+
+                                    // Set the selected dates in the picker
+                                    if (holidayDates.length > 0) {
+                                        const dateObjects = holidayDates.map(date => new Date(date.trim()));
+                                        holidayPicker.setDate(dateObjects, true);
+
+                                        // Update the hidden input for form submission
+                                        $('#govt_holiday_dates').val(data.holidays);
+
+                                        // Update visual display of selected holidays
+                                        $('#selectedHolidays').empty();
+                                        holidayDates.forEach(date => {
+                                            const formattedDate = new Date(date).toLocaleDateString('en-US', {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                year: 'numeric'
+                                            });
+                                            const badge = $(`<span class="badge bg-info me-1 mb-1">${formattedDate} <i class="bi bi-x-circle"></i></span>`);
+                                            $('#selectedHolidays').append(badge);
+                                        });
+                                    }
+                                }
+                            } else {
+                                // Clear the holidays if none are stored
+                                $('#semester').removeData('holidays');
+                                // Clear the flatpickr instance if it exists
+                                const holidayPicker = $('#govt_holidays')[0]._flatpickr;
+                                if (holidayPicker) {
+                                    holidayPicker.clear();
+                                }
+                                // Clear the hidden input and visual display
+                                $('#govt_holiday_dates').val('');
+                                $('#selectedHolidays').empty();
+                            }
+
                             // Fetch and display existing routines for this semester
                             if (semesterId) {
                                 $.ajax({
@@ -482,17 +597,17 @@
                                         // Clear existing course rows except the first one
                                         const firstRow = $('.course-row:first').clone();
                                         $('#courseRepeater').empty().append(firstRow);
-                                        
+
                                         // Reset the first row
                                         firstRow.find('input').val('');
                                         firstRow.find('select').val('');
                                         firstRow.find('.overlap-feedback').hide().empty();
-                                        
+
                                         // Populate the form with existing routines
                                         if (routineData.routines && routineData.routines.length > 0) {
                                             // Skip the first row as we've already added it
                                             let isFirstRow = true;
-                                            
+
                                             routineData.routines.forEach(routine => {
                                                 let row;
                                                 if (isFirstRow) {
@@ -503,18 +618,18 @@
                                                     row = firstRow.clone();
                                                     $('#courseRepeater').append(row);
                                                 }
-                                                
+
                                                 // Set the course
                                                 row.find('select[name="course_code[]"]').val(routine.course_id);
-                                                
+
                                                 // Set the day
                                                 row.find('select[name="day[]"]').val(routine.day);
-                                                
+
                                                 // Set the times
                                                 row.find('input[name="start_time[]"]').val(routine.start_time);
                                                 row.find('input[name="end_time[]"]').val(routine.end_time);
                                             });
-                                            
+
                                             // Re-initialize time pickers after a short delay to ensure DOM is ready
                                             setTimeout(function() {
                                                 // First destroy all timepickers to avoid duplicate initialization
@@ -523,16 +638,16 @@
                                                         $(this).mdtimepicker('destroy');
                                                     }
                                                 });
-                                                
+
                                                 // Initialize them again
                                                 initMDTimePickers();
-                                                
+
                                                 // Re-check all time slots for overlaps
                                                 $('.course-row').each(function() {
                                                     checkTimeOverlap($(this));
                                                 });
                                             }, 100);
-                                            
+
                                             // Add informational message
                                             const semesterName = $('#semester option:selected').text();
                                             const warningHtml = `
@@ -542,7 +657,7 @@
                                                     <p class="mb-0">You can modify times or add/remove courses as needed. All changes will update both the current routine and generate new schedule entries.</p>
                                                 </div>
                                             `;
-                                            
+
                                             // Add the warning before the course repeater
                                             if ($('#currentRoutineInfo').length) {
                                                 $('#currentRoutineInfo').html(warningHtml);
@@ -561,15 +676,15 @@
             // Handle semester change
             $('#semester').change(function() {
                 const semesterId = $(this).val();
-                
+
                 // Clear the current routine info when semester changes
                 if ($('#currentRoutineInfo').length) {
                     $('#currentRoutineInfo').remove();
                 }
-                
+
                 loadSemesterCourses(semesterId);
             });
-            
+
             // Load courses for the initially selected semester, if any
             const initialSemester = $('#semester').val();
             if (initialSemester) {
@@ -586,34 +701,34 @@
                 const endTime = $(row).find('input[name="end_time[]"]').val();
                 const feedbackDiv = $(row).find('.overlap-feedback');
                 const checkingDiv = $(row).find('.checking-feedback');
-                
+
                 // Reset feedback and styles
                 feedbackDiv.hide().empty();
                 checkingDiv.hide();
                 $(row).find('.time-input').removeClass('is-invalid');
-                
+
                 // Only check if all fields are filled
                 if (!courseId || !day || !startTime || !endTime) {
                     $(row).removeClass('has-overlap');
                     return;
                 }
-                
+
                 // Get teacher ID from the selected course
                 const courseOption = courseSelect.find('option:selected');
                 const courseName = courseOption.text();
                 // Extract teacher ID from the data attribute
                 const teacherId = courseOption.data('teacher-id');
-                
+
                 if (!teacherId) {
                     console.error('Teacher ID not found for selected course');
                     return;
                 }
-                
+
                 // Get semester ID and lunch break info
                 const semesterId = $('#semester').val();
                 const lunchBreakStart = $('#lunchBreakStart').val();
                 const lunchBreakEnd = $('#lunchBreakEnd').val();
-                
+
                 // Check for lunch break overlap (always enforced)
                 if (lunchBreakStart && lunchBreakEnd) {
                     // Convert time strings to Date objects for easier comparison
@@ -621,22 +736,22 @@
                     const endDate = parseTimeString(endTime);
                     const lunchStartDate = parseTimeString(lunchBreakStart);
                     const lunchEndDate = parseTimeString(lunchBreakEnd);
-                    
+
                     // Check if time slot overlaps with lunch break
                     if (doTimesOverlap(startDate, endDate, lunchStartDate, lunchEndDate)) {
                         feedbackDiv.html(`Overlaps with lunch break (${lunchBreakStart} - ${lunchBreakEnd})`).show();
                         $(row).find('.time-input').addClass('is-invalid');
                         $(row).addClass('has-overlap');
-                        
+
                         // Disable submit button due to lunch break overlap
                         $('button[type="submit"]').prop('disabled', true);
                         return;
                     }
                 }
-                
+
                 // Show checking indicator
                 checkingDiv.show();
-                
+
                 // Check for overlaps via AJAX
                 $.ajax({
                     url: "{% url 'check-time-overlap' %}",
@@ -655,23 +770,23 @@
                     success: function(data) {
                         // Hide checking indicator
                         checkingDiv.hide();
-                        
+
                         if (data.overlaps && data.overlaps.length > 0) {
                             // Show overlap warning
-                            const messages = data.overlaps.map(overlap => 
+                            const messages = data.overlaps.map(overlap =>
                                 `Overlaps with: ${overlap.course} - ${overlap.course_name} (${overlap.teacher}) ${overlap.start} - ${overlap.end}`
                             );
-                            
+
                             feedbackDiv.html(messages.join('<br>')).show();
                             $(row).find('.time-input').addClass('is-invalid');
                             $(row).addClass('has-overlap');
-                            
+
                             // Disable submit button if there are overlaps
                             $('button[type="submit"]').prop('disabled', true);
                         } else {
                             // No overlaps for this row
                             $(row).removeClass('has-overlap');
-                            
+
                             // Re-enable submit button if no overlaps on this row
                             // Need to check other rows too
                             checkAllRows();
@@ -684,12 +799,12 @@
                     }
                 });
             }
-            
+
             // Check all rows for any overlap
             function checkAllRows() {
                 let hasOverlap = false;
                 let allOverlaps = [];
-                
+
                 $('.course-row').each(function() {
                     const feedbackDiv = $(this).find('.overlap-feedback');
                     if (feedbackDiv.is(':visible')) {
@@ -699,13 +814,13 @@
                         const day = $(this).find('select[name="day[]"] option:selected').text();
                         const startTime = $(this).find('input[name="start_time[]"]').val();
                         const endTime = $(this).find('input[name="end_time[]"]').val();
-                        
+
                         // Add to all overlaps list
                         const overlapText = `${courseName} on ${day} (${startTime} - ${endTime})`;
                         allOverlaps.push(overlapText);
                     }
                 });
-                
+
                 // Update global overlap warning
                 if (hasOverlap) {
                     const overlapList = $('#overlapList');
@@ -717,32 +832,32 @@
                 } else {
                     $('#overlapWarning').hide();
                 }
-                
+
                 // Enable/disable submit button based on overlaps
                 $('button[type="submit"]').prop('disabled', hasOverlap);
             }
-            
+
             // Event listeners for time inputs and related selects
             $(document).on('change', 'select[name="course_code[]"], select[name="day[]"], input[name="start_time[]"], input[name="end_time[]"]', function() {
                 const row = $(this).closest('.course-row');
                 checkTimeOverlap(row);
             });
-            
+
             // Event listener for lunch break time changes
             $('#lunchBreakStart, #lunchBreakEnd').on('change', function() {
                 const startTime = $('#lunchBreakStart').val();
                 const endTime = $('#lunchBreakEnd').val();
-                
+
                 // Update the lunch break info display
                 if (startTime && endTime) {
                     $('#lunchBreakInfo').text(`Lunch Break: ${startTime} - ${endTime}`).show();
-                    
+
                     // Update the data attribute with new values
                     $('#semester').data('lunch-break', {
                         start: startTime,
                         end: endTime
                     });
-                    
+
                     // Recheck all rows for overlaps
                     $('.course-row').each(function() {
                         checkTimeOverlap($(this));
@@ -751,7 +866,7 @@
                     $('#lunchBreakInfo').hide();
                 }
             });
-            
+
             // Also check after the time picker is closed
             $(document).on('mdtimepicker:close', '.time-input', function() {
                 const row = $(this).closest('.course-row');
@@ -766,7 +881,7 @@
                 newRow.find('.time-input').removeClass('is-invalid');
                 $('#courseRepeater').append(newRow);
                 initMDTimePickers();
-                
+
                 // If a semester is selected, apply the same courses to the new row
                 const semesterId = $('#semester').val();
                 if (semesterId) {
@@ -784,3 +899,4 @@
     </script>
 </body>
 </html>
+

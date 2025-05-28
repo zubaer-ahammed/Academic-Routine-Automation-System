@@ -19,6 +19,7 @@ class Semester(models.Model):
     lunch_break_end = models.TimeField(null=True, blank=True)
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
+    holidays = models.TextField(null=True, blank=True, help_text="Comma-separated list of holiday dates (YYYY-MM-DD)")
 
     def __str__(self):
         return self.name
@@ -87,3 +88,4 @@ class NewRoutine(models.Model):
     
     class Meta:
         ordering = ['class_date', 'start_time']
+

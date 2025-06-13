@@ -344,6 +344,72 @@ def generate_routine(request):
             # Sort generated routines by date and time for display
             generated_routines.sort(key=lambda x: (x['date'], x['start_time']))
             
+            # Prepare data for the calendar view
+            if generated_routines:
+                # Get unique dates and days for column headers
+                unique_dates = []
+                seen_dates = set()
+                for routine in generated_routines:
+                    date_str = routine['date'].strftime('%Y-%m-%d')
+                    if date_str not in seen_dates:
+                        seen_dates.add(date_str)
+                        unique_dates.append((routine['date'], routine['day']))
+
+                # Sort dates chronologically
+                unique_dates.sort(key=lambda x: x[0])
+
+                # Dynamically generate time slots from the actual start and end times
+                # of scheduled courses
+                time_slots = []
+                time_slot_set = set()
+                for routine in generated_routines:
+                    time_slot = f"{routine['start_time']} - {routine['end_time']}"
+                    if time_slot not in time_slot_set:
+                        time_slot_set.add(time_slot)
+                        time_slots.append(time_slot)
+
+                # Sort time slots chronologically
+                time_slots.sort(key=lambda x: x.split(' - ')[0])
+
+                # Add lunch break if configured
+                lunch_break = None
+                if selected_semester.lunch_break_start and selected_semester.lunch_break_end:
+                    lunch_break = f"{selected_semester.lunch_break_start.strftime('%H:%M')} - {selected_semester.lunch_break_end.strftime('%H:%M')}"
+                    if lunch_break not in time_slot_set:
+                        time_slots.append(lunch_break)
+                        time_slots.sort(key=lambda x: x.split(' - ')[0])
+
+                # Format routines for the calendar view with time slot info
+                calendar_routines = []
+                for routine in generated_routines:
+                    time_slot = f"{routine['start_time']} - {routine['end_time']}"
+
+                    calendar_routines.append({
+                        'date': routine['date'],
+                        'day': routine['day'],
+                        'course_code': routine['course_code'],
+                        'course_name': routine['course_name'],
+                        'teacher': routine['teacher'],
+                        'start_time': routine['start_time'],
+                        'end_time': routine['end_time'],
+                        'time_slot': time_slot,
+                        'is_lunch_break': False
+                    })
+
+                # Add lunch break info to calendar routines context
+                if lunch_break:
+                    context_lunch_break = {
+                        'is_lunch_break': True,
+                        'time_slot': lunch_break
+                    }
+                else:
+                    context_lunch_break = None
+            else:
+                unique_dates = []
+                time_slots = []
+                calendar_routines = []
+                context_lunch_break = None
+
             # Add success or warning message based on whether routines were generated
             if generated_routines:
                 messages.success(request, f"Successfully generated routine for {selected_semester.name} with {len(generated_routines)} classes")
@@ -379,6 +445,14 @@ def generate_routine(request):
         "generated_routines": generated_routines
     }
     
+    # Add calendar view data if routines were generated
+    if request.method == "POST" and generated_routines:
+        context.update({
+            "routine_dates": unique_dates,
+            "time_slots": time_slots,
+            "calendar_routines": calendar_routines
+        })
+
     # Include the selected semester ID if available in POST
     if request.method == "POST" and request.POST.get("semester"):
         context["selected_semester_id"] = request.POST.get("semester")

@@ -206,32 +206,93 @@
         {% if generated_routines %}
         <div class="mt-5">
             <h2 class="text-center mb-4">Generated Routine</h2>
-            <div class="table-responsive">
-                <table class="table table-striped table-hover">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>Date</th>
-                            <th>Day</th>
-                            <th>Course Code</th>
-                            <th>Course Name</th>
-                            <th>Teacher</th>
-                            <th>Time</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for routine in generated_routines %}
-                        <tr>
-                            <td>{{ routine.date|date:"M d, Y" }}</td>
-                            <td>{{ routine.day }}</td>
-                            <td>{{ routine.course_code }}</td>
-                            <td>{{ routine.course_name }}</td>
-                            <td>{{ routine.teacher }}</td>
-                            <td>{{ routine.start_time }} - {{ routine.end_time }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+
+            <!-- Visual Calendar View -->
+            <div class="card mb-4">
+                <div class="card-header bg-dark text-white text-center">
+                    <h4 class="mb-0">Routine Calendar</h4>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-bordered border-dark mb-0">
+                            <thead>
+                                <tr class="bg-dark text-white text-center">
+                                    <th width="15%" style="vertical-align: middle;">Date</th>
+                                    <th width="15%" style="vertical-align: middle;">Day</th>
+                                    <th width="70%" style="vertical-align: middle;" colspan="{{ time_slots|length }}">Class Hour</th>
+                                </tr>
+                                <tr class="bg-secondary text-white text-center">
+                                    <th></th>
+                                    <th></th>
+                                    {% for time_slot in time_slots %}
+                                    <th>{{ time_slot }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for date, day in routine_dates %}
+                                <tr>
+                                    <td class="text-center fw-bold align-middle">{{ date|date:"d/m/Y" }}</td>
+                                    <td class="text-center fw-bold align-middle">{{ day }}</td>
+                                    {% for time_slot in time_slots %}
+                                    <td class="position-relative p-0" style="min-width: 130px; height: 120px;">
+                                        <!-- Check if this is a lunch break time slot -->
+                                        {% if "01:10 - 02:00" == time_slot %}
+                                        <div class="p-2 h-100 bg-warning bg-opacity-25 text-center">
+                                            <div class="fw-bold mt-4">PRAYER & LUNCH BREAK</div>
+                                        </div>
+                                        {% else %}
+                                            {% for routine in calendar_routines %}
+                                            {% if routine.date|date:"Y-m-d" == date|date:"Y-m-d" and routine.time_slot == time_slot %}
+                                            <div class="p-2 h-100 bg-primary text-white">
+                                                <div class="fw-bold">{{ routine.course_code }}</div>
+{#                                                <div>{{ routine.course_name }}</div>#}
+{#                                                <div><small>{{ routine.teacher }}</small></div>#}
+{#                                                <div class="mt-1">#}
+{#                                                    <span class="badge bg-warning text-dark">{{ routine.start_time }} - {{ routine.end_time }}</span>#}
+{#                                                </div>#}
+                                            </div>
+                                            {% endif %}
+                                            {% endfor %}
+                                        {% endif %}
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
+
+            <!-- Original List View -->
+{#            <div class="table-responsive">#}
+{#                <table class="table table-striped table-hover">#}
+{#                    <thead class="table-dark">#}
+{#                        <tr>#}
+{#                            <th>Date</th>#}
+{#                            <th>Day</th>#}
+{#                            <th>Course Code</th>#}
+{#                            <th>Course Name</th>#}
+{#                            <th>Teacher</th>#}
+{#                            <th>Time</th>#}
+{#                        </tr>#}
+{#                    </thead>#}
+{#                    <tbody>#}
+{#                        {% for routine in generated_routines %}#}
+{#                        <tr>#}
+{#                            <td>{{ routine.date|date:"M d, Y" }}</td>#}
+{#                            <td>{{ routine.day }}</td>#}
+{#                            <td>{{ routine.course_code }}</td>#}
+{#                            <td>{{ routine.course_name }}</td>#}
+{#                            <td>{{ routine.teacher }}</td>#}
+{#                            <td>{{ routine.start_time }} - {{ routine.end_time }}</td>#}
+{#                        </tr>#}
+{#                        {% endfor %}#}
+{#                    </tbody>#}
+{#                </table>#}
+{#            </div>#}
+
             <div class="d-grid gap-2 mt-3">
                 <button type="button" class="btn btn-primary" onclick="window.print()">Print Routine</button>
             </div>

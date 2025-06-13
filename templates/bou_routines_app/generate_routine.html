@@ -217,9 +217,9 @@
                         <table class="table table-bordered border-dark mb-0">
                             <thead>
                                 <tr class="bg-dark text-white text-center">
-                                    <th width="15%" style="vertical-align: middle;">Date</th>
-                                    <th width="15%" style="vertical-align: middle;">Day</th>
-                                    <th width="70%" style="vertical-align: middle;" colspan="{{ time_slots|length }}">Class Hour</th>
+                                    <th class="date_title" width="15%" style="vertical-align: middle;">Date</th>
+                                    <th class="day_title" width="15%" style="vertical-align: middle;">Day</th>
+                                    <th class="class_hour_title" width="70%" style="vertical-align: middle;" colspan="{{ time_slots|length }}">Class Hour</th>
                                 </tr>
                                 <tr class="bg-secondary text-white text-center">
                                     <th></th>
@@ -247,7 +247,7 @@
                                             <div class="p-2 h-100 bg-primary text-white">
                                                 <div class="fw-bold">{{ routine.course_code }}</div>
 {#                                                <div>{{ routine.course_name }}</div>#}
-{#                                                <div><small>{{ routine.teacher }}</small></div>#}
+                                                  <div><small>({{ routine.teacher }})</small></div>
 {#                                                <div class="mt-1">#}
 {#                                                    <span class="badge bg-warning text-dark">{{ routine.start_time }} - {{ routine.end_time }}</span>#}
 {#                                                </div>#}

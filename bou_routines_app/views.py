@@ -9,7 +9,7 @@ import io
 import xlsxwriter
 from reportlab.lib.pagesizes import landscape, A4
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER
 
@@ -480,34 +480,35 @@ def update_semester_courses(request):
         # Include the selected semester ID in the context
         context["selected_semester_id"] = semester_id
         
-        # Remove duplicates by converting to set and back to list
-        selected_courses = list(set(request.POST.getlist("courses[]")))
-
         # Get the selected semester
         semester = Semester.objects.get(id=semester_id)
 
         # Remove all existing SemesterCourse entries for this semester
         SemesterCourse.objects.filter(semester=semester).delete()
 
+        # Get all course IDs and their corresponding number of classes
+        course_ids = request.POST.getlist("courses[]")
+        number_of_classes = request.POST.getlist("classes")
+
         # Create semester courses with number of classes
-        for course_id in selected_courses:
+        for i, course_id in enumerate(course_ids):
             course = Course.objects.get(id=course_id)
-            # Get number of classes for this course
-            number_of_classes = request.POST.get(f'classes_{course_id}', 1)
+            # Get number of classes for this course, default to 1 if not provided
             try:
-                number_of_classes = int(number_of_classes)
-                if number_of_classes < 1:
-                    number_of_classes = 1
-            except ValueError:
-                number_of_classes = 1
+                num_classes = int(number_of_classes[i]) if i < len(number_of_classes) else 1
+                if num_classes < 1:
+                    num_classes = 1
+            except (ValueError, IndexError):
+                num_classes = 1
                 
             # Create semester course with number of classes
             SemesterCourse.objects.create(
                 semester=semester,
                 course=course,
-                number_of_classes=number_of_classes
+                number_of_classes=num_classes
             )
 
+        messages.success(request, f"Successfully updated courses for {semester.name}")
         return render(request, "bou_routines_app/semester_courses.html", context)
 
     return render(request, "bou_routines_app/semester_courses.html", context)
@@ -819,20 +820,147 @@ def export_to_pdf(request, semester_id):
         # Create a response for PDF file
         buffer = io.BytesIO()
 
-        # Create the PDF document with A4 landscape orientation
+        # Create the PDF document with A4 landscape orientation and decent print margins
         doc = SimpleDocTemplate(
             buffer,
             pagesize=landscape(A4),
-            rightMargin=20,
-            leftMargin=20,
-            topMargin=20,
-            bottomMargin=20
+            rightMargin=54,  # 0.75 inch
+            leftMargin=54,   # 0.75 inch
+            topMargin=54,    # 0.75 inch
+            bottomMargin=54  # 0.75 inch
         )
 
         # Get page width and height for calculations
         page_width, page_height = landscape(A4)
 
+        # Calculate available width for all tables (accounting for document margins)
+        available_width = page_width - doc.leftMargin - doc.rightMargin
+
         elements = []
+
+        # --- HEADER IMAGE SECTION ---
+        header_img_path = 'bou_routines_app/static/pdf_routine_top.png'
+        try:
+            # Padding for the image cell (matching routine table cell padding of 2)
+            padding_for_image = 2
+
+            # Create an Image object, scaled by width to fit within the available padded space
+            # Height will be auto-calculated to maintain aspect ratio.
+            img_obj = Image(header_img_path, width=available_width - (2 * padding_for_image), height=45)
+
+            # Put the image in a single-cell table whose width spans the available area,
+            # and apply padding to the cell to align the image correctly.
+            header_img_table = Table([[img_obj]], colWidths=[available_width])
+            header_img_table.setStyle(TableStyle([
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'), # Center the image horizontally within its cell
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), # Center vertically
+                ('LEFTPADDING', (0,0), (-1, -1), padding_for_image),
+                ('RIGHTPADDING', (0,0), (-1, -1), padding_for_image),
+                ('TOPPADDING', (0,0), (-1, -1), 0), # No vertical padding here, handled by spacer
+                ('BOTTOMPADDING', (0,0), (-1, -1), 0), # No vertical padding here, handled by spacer
+            ]))
+            elements.append(header_img_table)
+        except Exception as e:
+            print(f"Error loading header image: {e}")
+            pass # If image not found, skip
+        elements.append(Spacer(1, 12))
+
+        # Build left column (program/session/term/commencement/study center)
+        header_style = ParagraphStyle(
+            'HeaderStyle',
+            fontName='Helvetica-Bold',
+            fontSize=18,
+            alignment=1,  # Center
+            leading=28,   # Increased line height
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+        header_style_small = ParagraphStyle(
+            'HeaderStyleSmall',
+            fontName='Helvetica-Bold',
+            fontSize=14,
+            alignment=1,
+            leading=22,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+        header_style_normal = ParagraphStyle(
+            'HeaderStyleNormal',
+            fontName='Helvetica-Bold',
+            fontSize=12,
+            alignment=1,
+            leading=20,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+        header_style_bold = ParagraphStyle(
+            'HeaderStyleBold',
+            fontName='Helvetica-Bold',
+            fontSize=15,
+            alignment=1,
+            leading=24,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+
+        left_content = []
+        program_name = 'B. Sc in Computer Science and Engineering Program'
+        left_content.append(Paragraph(program_name, header_style))
+        session = selected_semester.session or ''
+        if session:
+            left_content.append(Paragraph(f'{session} Session', header_style_small))
+        term = selected_semester.term or ''
+        semester_full_name = selected_semester.semester_full_name or ''
+        if term or semester_full_name:
+            combined = f'{term} Term {semester_full_name}'.strip()
+            left_content.append(Paragraph(combined, header_style_small))
+        left_content.append(Paragraph('Class Routine', header_style_bold))
+        commencement = selected_semester.start_date.strftime('%d %B %Y') if selected_semester.start_date else ''
+        study_center = selected_semester.study_center or ''
+        if commencement:
+            left_content.append(Paragraph(f'<b>Date of Commencement:</b> {commencement}', header_style_normal))
+        if study_center:
+            left_content.append(Paragraph(f'<b>Study Center:</b> {study_center}', header_style_normal))
+
+        # Build right column (contact person box)
+        contact_lines = []
+        if selected_semester.contact_person:
+            contact_lines.append(f'<b><u>Contact Person</u></b>')
+            contact_lines.append('&nbsp;')  # Minimal gap
+            contact_lines.append(selected_semester.contact_person)
+        if selected_semester.contact_person_designation:
+            contact_lines.append(selected_semester.contact_person_designation)
+        contact_lines.append('School of Science and Technology')
+        contact_lines.append('Bangladesh Open University')
+        if selected_semester.contact_person_phone:
+            contact_lines.append(f'Telephone: {selected_semester.contact_person_phone}')
+        if selected_semester.contact_person_email:
+            contact_lines.append(f'email:{selected_semester.contact_person_email}')
+        contact_box = '<br/>'.join(contact_lines)
+        contact_box_para = Paragraph(contact_box, ParagraphStyle('ContactBox', fontSize=10, borderWidth=1, borderColor=colors.black, borderPadding=6, leading=10, spaceBefore=0, spaceAfter=0))
+        contact_table = Table([[contact_box_para]], colWidths=[180], hAlign='RIGHT')
+        contact_table.setStyle(TableStyle([
+            ('BOX', (0, 0), (-1, -1), 2, colors.black),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ]))
+
+        # Combine into a two-column table with reduced contact box width, aligned to margins
+        two_col_table = Table(
+            [[left_content, contact_table]],
+            colWidths=[available_width-180, 180],
+            hAlign='LEFT'
+        )
+        two_col_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (0, 0), 'TOP'),
+            ('VALIGN', (1, 0), (1, 0), 'TOP'),
+            ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ]))
+        elements.append(two_col_table)
+        elements.append(Spacer(1, 16))
 
         # Get the routines from the database
         routines = NewRoutine.objects.filter(semester=selected_semester).order_by('class_date', 'start_time')
@@ -930,18 +1058,13 @@ def export_to_pdf(request, semester_id):
 
             table_data.append(row)
 
-        # Calculate optimal column widths based on available space
-        # Reserve fixed width for date and day columns
-        date_col_width = 55  # Fixed width for date column
-        day_col_width = 45   # Fixed width for day column
+        # Calculate available width for all tables
+        available_width = page_width - doc.leftMargin - doc.rightMargin
 
-        # Calculate remaining width for time slot columns
-        available_width = page_width - doc.leftMargin - doc.rightMargin - date_col_width - day_col_width
-
-        # Calculate width per time slot column (with a little margin for safety)
-        time_slot_width = max(35, min(65, available_width / len(time_slots)))
-
-        # Set column widths
+        # Set column widths for the main routine table
+        date_col_width = 0.12 * available_width  # 12%
+        day_col_width = 0.10 * available_width   # 10%
+        time_slot_width = (available_width - date_col_width - day_col_width) / len(time_slots) if time_slots else 0
         col_widths = [date_col_width, day_col_width] + [time_slot_width] * len(time_slots)
 
         # Create the table with defined column widths
@@ -1021,10 +1144,62 @@ def export_to_pdf(request, semester_id):
         # Add the table to elements
         elements.append(table)
 
-        # Build the PDF
-        doc.build(elements)
+        # Add vertical space before the N.B. note
+        elements.append(Spacer(1, 18))  # 18 points = 0.25 inch
 
-        # Prepare the response
+        # Add the note section as a table for proper border and wrapping
+        note_text = (
+            "N.B.  For any changes in the schedule, concerned coordinator/class teachers are requested to inform the students as well as the Dean, School of Science and Technology, BOU in advance."
+        )
+        note_table = Table(
+            [[note_text]],
+            colWidths=[available_width]
+        )
+        note_table.setStyle(TableStyle([
+            ('BOX', (0, 0), (-1, -1), 3, colors.black),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),  # Decreased font size
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),  # Reduced padding
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        elements.append(note_table)
+        elements.append(Spacer(1, 18))  # Gap below the N.B. note
+        elements.append(Paragraph("<br/>", styles['Normal']))
+
+        # Add the summary table of semester courses
+        semester_courses = SemesterCourse.objects.filter(semester=selected_semester).select_related('course', 'course__teacher')
+        summary_data = [[
+            'Course Code', 'Title', 'Number of Class', 'Course Teacher'
+        ]]
+        for sc in semester_courses:
+            summary_data.append([
+                sc.course.code,
+                sc.course.name,
+                str(sc.number_of_classes),
+                sc.course.teacher.name
+            ])
+        summary_col_widths = [0.18 * available_width, 0.38 * available_width, 0.18 * available_width, 0.26 * available_width]
+        summary_table = Table(summary_data, colWidths=summary_col_widths)
+        summary_style = TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.white),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('ALIGN', (0, 1), (-1, -1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('BOX', (0, 0), (-1, -1), 2, colors.black),
+        ])
+        summary_table.setStyle(summary_style)
+        elements.append(summary_table)
+
+        # Build the PDF (only once)
+        doc.build(elements)
         buffer.seek(0)
         response = FileResponse(buffer, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{selected_semester.name}_Routine.pdf"'

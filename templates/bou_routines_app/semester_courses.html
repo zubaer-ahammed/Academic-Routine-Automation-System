@@ -74,7 +74,7 @@
                 <label for="courseRepeater" class="form-label">Select Courses</label>
                 <div id="courseRepeater">
                     <div class="course-row row mb-3">
-                        <div class="col-md-8">
+                        <div class="col-md-6">
                             <select name="courses[]" class="form-select" required>
                                 <option value="">Select Course</option>
                                 {% for course in courses %}
@@ -82,7 +82,10 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
+                            <input type="number" name="classes" placeholder="Number of Classes" id="classes" class="form-control" value="1" min="1" required>
+                        </div>
+                        <div class="col-md-3">
                             <button type="button" class="btn btn-danger remove-course">Remove</button>
                         </div>
                     </div>
@@ -121,6 +124,7 @@
                     // Clear existing course rows except the first one
                     $('.course-row:not(:first)').remove();
                     $('.course-row:first select').val('');
+                    $('.course-row:first input[name="classes"]').val('1');
 
                     // Fetch courses for the selected semester
                     $.ajax({
@@ -136,10 +140,12 @@
                                     if (index === 0) {
                                         // Use the first row
                                         $('.course-row:first select').val(course.id);
+                                        $('.course-row:first input[name="classes"]').val(course.number_of_classes || 1);
                                     } else {
                                         // Clone and add new rows for additional courses
                                         const newRow = $('.course-row:first').clone();
                                         newRow.find('select').val(course.id);
+                                        newRow.find('input[name="classes"]').val(course.number_of_classes || 1);
                                         $('#courseRepeater').append(newRow);
                                     }
                                 });

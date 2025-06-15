@@ -35,7 +35,7 @@ class TeacherAdmin(admin.ModelAdmin):
 
 @admin.register(Semester)
 class SemesterAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'lunch_break_start', 'lunch_break_end')
+    list_display = ('id', 'name', 'semester_full_name', 'lunch_break_start', 'lunch_break_end', 'start_date')
     search_fields = ('name',)
     ordering = ('id',)
 

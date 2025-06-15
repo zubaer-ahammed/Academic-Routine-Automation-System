@@ -910,7 +910,7 @@ def export_to_pdf(request, semester_id):
                             # Create the cell content with course code and teacher name
                             # Use non-breaking space to ensure course code stays on one line
                             cell_content = Paragraph(
-                                f"{routine.course.code.replace(' ', '&nbsp;')}<br/>{teacher_name}",
+                                f"<b>{routine.course.code.replace(' ', '&nbsp;')}</b><br/>{teacher_name}",
                                 course_style
                             )
                             break

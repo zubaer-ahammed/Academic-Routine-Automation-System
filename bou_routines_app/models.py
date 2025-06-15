@@ -37,6 +37,7 @@ class SemesterCourse(models.Model):
     id = models.AutoField(primary_key=True)
     semester = models.ForeignKey(Semester, on_delete=models.CASCADE)
     course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    number_of_classes = models.PositiveIntegerField(default=1)  # Default to 1 class
     # Removed teacher field as it's already in the Course model
 
     class Meta:

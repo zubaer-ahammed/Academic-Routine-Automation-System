@@ -22,7 +22,7 @@ class CourseAdmin(admin.ModelAdmin):
 
 @admin.register(SemesterCourse)
 class SemesterCourseAdmin(admin.ModelAdmin):
-    list_display = ('id', 'semester', 'course')
+    list_display = ('id', 'semester', 'course', 'number_of_classes')
     list_filter = ('semester',)
     search_fields = ('semester__name', 'course__code')
     ordering = ('semester', 'course__code')

@@ -489,13 +489,23 @@ def update_semester_courses(request):
         # Remove all existing SemesterCourse entries for this semester
         SemesterCourse.objects.filter(semester=semester).delete()
 
-        # Create semester courses
+        # Create semester courses with number of classes
         for course_id in selected_courses:
             course = Course.objects.get(id=course_id)
-            # No need to get teacher as it's already part of the course
+            # Get number of classes for this course
+            number_of_classes = request.POST.get(f'classes_{course_id}', 1)
+            try:
+                number_of_classes = int(number_of_classes)
+                if number_of_classes < 1:
+                    number_of_classes = 1
+            except ValueError:
+                number_of_classes = 1
+                
+            # Create semester course with number of classes
             SemesterCourse.objects.create(
                 semester=semester,
-                course=course
+                course=course,
+                number_of_classes=number_of_classes
             )
 
         return render(request, "bou_routines_app/semester_courses.html", context)
@@ -519,7 +529,8 @@ def get_semester_courses(request):
                     'code': sc.course.code,
                     'name': sc.course.name,
                     'teacher_name': sc.course.teacher.name,
-                    'teacher_id': sc.course.teacher.id
+                    'teacher_id': sc.course.teacher.id,
+                    'number_of_classes': sc.number_of_classes
                 } for sc in semester_courses]
                 
                 # Include lunch break information if available

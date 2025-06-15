@@ -114,14 +114,14 @@
                     $(this).closest('.course-row').remove();
                 }
             });
-            
+
             // Function to load courses for a selected semester
             function loadSemesterCourses(semesterId) {
                 if (semesterId) {
                     // Clear existing course rows except the first one
                     $('.course-row:not(:first)').remove();
                     $('.course-row:first select').val('');
-                    
+
                     // Fetch courses for the selected semester
                     $.ajax({
                         url: "{% url 'get-semester-courses' %}",
@@ -154,7 +154,7 @@
                 const semesterId = $(this).val();
                 loadSemesterCourses(semesterId);
             });
-            
+
             // Auto-load courses for the initially selected semester (if any)
             const initialSemesterId = $('#semester').val();
             if (initialSemesterId) {

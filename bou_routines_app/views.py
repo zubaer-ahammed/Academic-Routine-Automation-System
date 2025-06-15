@@ -11,7 +11,7 @@ from reportlab.lib.pagesizes import landscape, A4
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 
 
 def routine_entry(request):
@@ -886,7 +886,7 @@ def export_to_pdf(request, semester_id):
         )
         header_style_normal = ParagraphStyle(
             'HeaderStyleNormal',
-            fontName='Helvetica-Bold',
+            fontName='Helvetica',
             fontSize=12,
             alignment=1,
             leading=20,
@@ -914,6 +914,7 @@ def export_to_pdf(request, semester_id):
         if term or semester_full_name:
             combined = f'{term} Term {semester_full_name}'.strip()
             left_content.append(Paragraph(combined, header_style_small))
+        left_content.append(Spacer(1, 8))
         left_content.append(Paragraph('Class Routine', header_style_bold))
         commencement = selected_semester.start_date.strftime('%d %B %Y') if selected_semester.start_date else ''
         study_center = selected_semester.study_center or ''
@@ -937,7 +938,7 @@ def export_to_pdf(request, semester_id):
         if selected_semester.contact_person_email:
             contact_lines.append(f'email:{selected_semester.contact_person_email}')
         contact_box = '<br/>'.join(contact_lines)
-        contact_box_para = Paragraph(contact_box, ParagraphStyle('ContactBox', fontSize=10, borderWidth=1, borderColor=colors.black, borderPadding=6, leading=10, spaceBefore=0, spaceAfter=0))
+        contact_box_para = Paragraph(contact_box, ParagraphStyle('ContactBox', fontSize=10, borderWidth=1, borderColor=colors.black, borderPadding=6, leading=14, spaceBefore=0, spaceAfter=0))
         contact_table = Table([[contact_box_para]], colWidths=[180], hAlign='RIGHT')
         contact_table.setStyle(TableStyle([
             ('BOX', (0, 0), (-1, -1), 2, colors.black),
@@ -996,8 +997,8 @@ def export_to_pdf(request, semester_id):
         styles = getSampleStyleSheet()
         title_style = styles['Title']
         title_style.alignment = 1  # Center alignment
-        title = Paragraph(f"{selected_semester.name} Routine", title_style)
-        elements.append(title)
+        # title = Paragraph(f"{selected_semester.name} Routine", title_style)
+        # elements.append(title)
         elements.append(Paragraph("<br/>", styles['Normal']))
 
         # Create the data for the table
@@ -1100,11 +1101,11 @@ def export_to_pdf(request, semester_id):
         # Add background color for lunch breaks and classes
         for i, row in enumerate(table_data[1:], 1):
             for j, cell in enumerate(row[2:], 2):
-                if cell == "PRAYER & LUNCH BREAK":
-                    style.add('BACKGROUND', (j, i), (j, i), colors.lightyellow)
+                if cell == " PRAYER \n & LUNCH \n BREAK ":
+                    style.add('BACKGROUND', (j, i), (j, i), colors.lightgrey) # Changed color
                     style.add('TEXTCOLOR', (j, i), (j, i), colors.black)
                     style.add('FONTNAME', (j, i), (j, i), 'Helvetica-Bold')
-                    style.add('FONTSIZE', (j, i), (j, i), 6)  # Decreased font size for lunch break text
+                    style.add('FONTSIZE', (j, i), (j, i), 9)  # Changed font size back to 9
                 elif cell:  # If there's content (a class)
                     style.add('BACKGROUND', (j, i), (j, i), colors.lightblue)
                     # Create styles for course code and teacher name
@@ -1197,6 +1198,59 @@ def export_to_pdf(request, semester_id):
         ])
         summary_table.setStyle(summary_style)
         elements.append(summary_table)
+
+        # Add vertical space before the signature field
+        elements.append(Spacer(1, 48)) # Gap before signature (e.g., 0.66 inch)
+
+        # --- SIGNATURE FIELD SECTION ---
+        signature_style = ParagraphStyle(
+            'SignatureStyle',
+            fontName='Helvetica',
+            fontSize=10,
+            alignment=TA_RIGHT,  # Right alignment
+            leading=12, # Line height
+            spaceBefore=0,
+            spaceAfter=0,
+        )
+
+        # Create signature lines
+        dean_line = Paragraph("Dean", signature_style)
+        school_line = Paragraph("School of Science and Technology", signature_style)
+        bou_line = Paragraph("Bangladesh Open University", signature_style)
+
+        # Create the signature table
+        signature_data = [
+            [dean_line],
+            [school_line],
+            [bou_line]
+        ]
+
+        # Set a fixed width for the signature table
+        signature_table_width = 250 # Adjust as needed
+        signature_table = Table(signature_data, colWidths=[signature_table_width])
+
+        # Style for the signature table
+        signature_table.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'RIGHT'), # Right align all content in the table
+            ('LINEABOVE', (0,0), (0,0), 1, colors.black), # Line above "Dean"
+            ('TOPPADDING', (0,0), (0,0), 4), # Padding above the line
+        ]))
+
+        # Create a wrapper table to place the signature table at the bottom right
+        # This table will span the full available width, with an empty left column
+        # to push the signature table to the right.
+        wrapper_col_widths = [available_width - signature_table_width, signature_table_width]
+        signature_wrapper_table = Table([['', signature_table]], colWidths=wrapper_col_widths)
+        signature_wrapper_table.setStyle(TableStyle([
+            ('ALIGN', (1,0), (1,0), 'RIGHT'), # Align the second column (where signature table is) to the right
+            ('VALIGN', (0,0), (-1,-1), 'BOTTOM'), # Align content to bottom if there's vertical space
+            ('LEFTPADDING', (0,0), (-1,-1), 0),
+            ('RIGHTPADDING', (0,0), (-1,-1), 0),
+            ('TOPPADDING', (0,0), (-1,-1), 0),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+        ]))
+
+        elements.append(signature_wrapper_table)
 
         # Build the PDF (only once)
         doc.build(elements)

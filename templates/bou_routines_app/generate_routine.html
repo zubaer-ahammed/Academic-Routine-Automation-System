@@ -227,9 +227,9 @@
                                     {% for time_slot in time_slots %}
                                     <th>{{ time_slot }}</th>
                                     {% endfor %}
-                                </tr>
-                            </thead>
-                            <tbody>
+                </tr>
+            </thead>
+            <tbody>
                                 {% for date, day in routine_dates %}
                                 <tr>
                                     <td class="text-center fw-bold align-middle">{{ date|date:"d/m/Y" }}</td>
@@ -257,10 +257,10 @@
                                         {% endif %}
                                     </td>
                                     {% endfor %}
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
                     </div>
                 </div>
             </div>

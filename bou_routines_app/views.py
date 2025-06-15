@@ -9,9 +9,9 @@ import io
 import xlsxwriter
 from reportlab.lib.pagesizes import landscape, A4
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
-from reportlab.platypus.paragraph import Paragraph
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER
 
 
 def routine_entry(request):
@@ -875,14 +875,44 @@ def export_to_pdf(request, semester_id):
             for time_slot in time_slots:
                 # Check if this is a lunch break
                 if lunch_break and time_slot == lunch_break:
-                    row.append("PRAYER \n & LUNCH BREAK")
+                    row.append(" PRAYER \n & LUNCH \n BREAK ")
                 else:
                     # Check if there's a class in this time slot
                     cell_content = ""
                     for routine in routines:
                         routine_time_slot = f"{routine.start_time.strftime('%H:%M')} - {routine.end_time.strftime('%H:%M')}"
                         if routine.class_date == date and routine_time_slot == time_slot:
-                            cell_content = f"{routine.course.code}\n({routine.course.teacher.name})"
+                            # Create styles for course code and teacher name
+                            course_style = ParagraphStyle(
+                                'CourseStyle',
+                                parent=styles['Normal'],
+                                fontSize=9,
+                                alignment=TA_CENTER,
+                                spaceAfter=2,
+                                leading=9,  # Fixed line height for course code
+                                spaceBefore=0  # Remove space before course code
+                            )
+                            teacher_style = ParagraphStyle(
+                                'TeacherStyle',
+                                parent=styles['Normal'],
+                                fontSize=7,
+                                alignment=TA_CENTER,
+                                textColor=colors.darkblue,
+                                leading=7,  # Line height
+                                maxLines=3,  # Maximum number of lines
+                                ellipsis='...',  # Add ellipsis if text is truncated
+                                spaceBefore=0  # Remove space before teacher name
+                            )
+                            
+                            # Format teacher name with parentheses
+                            teacher_name = f"({routine.course.teacher.name})"
+                            
+                            # Create the cell content with course code and teacher name
+                            # Use non-breaking space to ensure course code stays on one line
+                            cell_content = Paragraph(
+                                f"{routine.course.code.replace(' ', '&nbsp;')}<br/>{teacher_name}",
+                                course_style
+                            )
                             break
 
                     row.append(cell_content)
@@ -916,10 +946,10 @@ def export_to_pdf(request, semester_id):
 
             # Alignment and spacing
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # Changed to TOP alignment
             ('LEFTPADDING', (0, 0), (-1, -1), 2),
             ('RIGHTPADDING', (0, 0), (-1, -1), 2),
-            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),  # Reduced top padding
             ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
 
             # Grid and borders
@@ -940,10 +970,40 @@ def export_to_pdf(request, semester_id):
                     style.add('BACKGROUND', (j, i), (j, i), colors.lightyellow)
                     style.add('TEXTCOLOR', (j, i), (j, i), colors.black)
                     style.add('FONTNAME', (j, i), (j, i), 'Helvetica-Bold')
-                    style.add('FONTSIZE', (j, i), (j, i), 8)  # Smaller font for lunch break text
+                    style.add('FONTSIZE', (j, i), (j, i), 6)  # Decreased font size for lunch break text
                 elif cell:  # If there's content (a class)
                     style.add('BACKGROUND', (j, i), (j, i), colors.lightblue)
-                    style.add('FONTSIZE', (j, i), (j, i), 8)  # Smaller font for class text
+                    # Create styles for course code and teacher name
+                    course_style = ParagraphStyle(
+                        'CourseStyle',
+                        parent=styles['Normal'],
+                        fontSize=9,
+                        alignment=TA_CENTER,
+                        spaceAfter=2,
+                        leading=9,  # Fixed line height for course code
+                        spaceBefore=0  # Remove space before course code
+                    )
+                    teacher_style = ParagraphStyle(
+                        'TeacherStyle',
+                        parent=styles['Normal'],
+                        fontSize=7,
+                        alignment=TA_CENTER,
+                        textColor=colors.darkblue,
+                        leading=7,  # Line height
+                        maxLines=3,  # Maximum number of lines
+                        ellipsis='...',  # Add ellipsis if text is truncated
+                        spaceBefore=0  # Remove space before teacher name
+                    )
+                    
+                    # Format teacher name with parentheses
+                    teacher_name = f"({routine.course.teacher.name})"
+                    
+                    # Create the cell content with course code and teacher name
+                    # Use non-breaking space to ensure course code stays on one line
+                    cell_content = Paragraph(
+                        f"{routine.course.code.replace(' ', '&nbsp;')}<br/>{teacher_name}",
+                        course_style
+                    )
 
         table.setStyle(style)
 

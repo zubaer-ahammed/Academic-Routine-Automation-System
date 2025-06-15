@@ -4,7 +4,14 @@ from .forms import RoutineForm
 from datetime import datetime, timedelta
 from collections import defaultdict
 from django.contrib import messages
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse, FileResponse
+import io
+import xlsxwriter
+from reportlab.lib.pagesizes import landscape, A4
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+from reportlab.platypus.paragraph import Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
 
 
 def routine_entry(request):
@@ -450,7 +457,8 @@ def generate_routine(request):
         context.update({
             "routine_dates": unique_dates,
             "time_slots": time_slots,
-            "calendar_routines": calendar_routines
+            "calendar_routines": calendar_routines,
+            "lunch_break": lunch_break
         })
 
     # Include the selected semester ID if available in POST
@@ -659,3 +667,297 @@ def check_time_overlap(request):
             return JsonResponse({"error": str(e)}, status=400)
     
     return JsonResponse({"overlaps": []})
+
+def export_to_excel(request, semester_id):
+    """Export the routine to Excel file"""
+    try:
+        selected_semester = Semester.objects.get(id=semester_id)
+
+        # Create a response for Excel file
+        output = io.BytesIO()
+        workbook = xlsxwriter.Workbook(output)
+        worksheet = workbook.add_worksheet("Routine")
+
+        # Add some formatting
+        title_format = workbook.add_format({
+            'bold': True,
+            'font_size': 14,
+            'align': 'center',
+            'valign': 'vcenter'
+        })
+        header_format = workbook.add_format({
+            'bold': True,
+            'font_size': 12,
+            'align': 'center',
+            'valign': 'vcenter',
+            'bg_color': '#2c3e50',
+            'font_color': 'white',
+            'border': 1
+        })
+        cell_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1
+        })
+        date_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1,
+            'bold': True,
+            'num_format': 'dd/mm/yyyy'
+        })
+        lunch_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1,
+            'bg_color': '#fff2cc',
+            'bold': True
+        })
+        course_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1,
+            'bg_color': '#3498db',
+            'font_color': 'white',
+            'text_wrap': True
+        })
+
+        # Get the routines from the database
+        routines = NewRoutine.objects.filter(semester=selected_semester).order_by('class_date', 'start_time')
+
+        # Get unique dates
+        unique_dates = routines.values_list('class_date', flat=True).distinct().order_by('class_date')
+
+        # Get unique time slots
+        time_slot_set = set()
+        for routine in routines:
+            time_slot = f"{routine.start_time.strftime('%H:%M')} - {routine.end_time.strftime('%H:%M')}"
+            time_slot_set.add(time_slot)
+
+        # Add lunch break if configured
+        lunch_break = None
+        if selected_semester.lunch_break_start and selected_semester.lunch_break_end:
+            lunch_break = f"{selected_semester.lunch_break_start.strftime('%H:%M')} - {selected_semester.lunch_break_end.strftime('%H:%M')}"
+            time_slot_set.add(lunch_break)
+
+        # Sort time slots
+        time_slots = sorted(list(time_slot_set), key=lambda x: x.split(' - ')[0])
+
+        # Add title
+        worksheet.merge_range(0, 0, 0, len(time_slots) + 1, f"{selected_semester.name} Routine", title_format)
+
+        # Write headers
+        row = 2
+        worksheet.write(row, 0, "Date", header_format)
+        worksheet.write(row, 1, "Day", header_format)
+        for col, time_slot in enumerate(time_slots):
+            worksheet.write(row, col + 2, time_slot, header_format)
+
+        # Set column widths
+        worksheet.set_column(0, 0, 12)  # Date column
+        worksheet.set_column(1, 1, 10)  # Day column
+        worksheet.set_column(2, len(time_slots) + 1, 15)  # Time slot columns
+
+        # Write data
+        row = 3
+        for date in unique_dates:
+            day_name = date.strftime('%A')
+            worksheet.write(row, 0, date, date_format)
+            worksheet.write(row, 1, day_name, cell_format)
+
+            for col, time_slot in enumerate(time_slots):
+                # Check if this is a lunch break
+                if lunch_break and time_slot == lunch_break:
+                    worksheet.write(row, col + 2, "PRAYER & LUNCH BREAK", lunch_format)
+                else:
+                    # Check if there's a class in this time slot
+                    cell_content = ""
+                    for routine in routines:
+                        routine_time_slot = f"{routine.start_time.strftime('%H:%M')} - {routine.end_time.strftime('%H:%M')}"
+                        if routine.class_date == date and routine_time_slot == time_slot:
+                            cell_content = f"{routine.course.code}\n({routine.course.teacher.name})"
+                            break
+
+                    if cell_content:
+                        worksheet.write(row, col + 2, cell_content, course_format)
+                    else:
+                        worksheet.write(row, col + 2, "", cell_format)
+
+            row += 1
+
+        # Set row heights
+        for i in range(3, row):
+            worksheet.set_row(i, 50)
+
+        workbook.close()
+
+        # Prepare the response
+        output.seek(0)
+        response = HttpResponse(output.read(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        response['Content-Disposition'] = f'attachment; filename="{selected_semester.name}_Routine.xlsx"'
+        return response
+
+    except Exception as e:
+        return HttpResponse(f"Error generating Excel file: {str(e)}", status=500)
+
+def export_to_pdf(request, semester_id):
+    """Export the routine to PDF file"""
+    try:
+        selected_semester = Semester.objects.get(id=semester_id)
+
+        # Create a response for PDF file
+        buffer = io.BytesIO()
+
+        # Create the PDF document with A4 landscape orientation
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=landscape(A4),
+            rightMargin=20,
+            leftMargin=20,
+            topMargin=20,
+            bottomMargin=20
+        )
+
+        # Get page width and height for calculations
+        page_width, page_height = landscape(A4)
+
+        elements = []
+
+        # Get the routines from the database
+        routines = NewRoutine.objects.filter(semester=selected_semester).order_by('class_date', 'start_time')
+
+        # Get unique dates and days
+        unique_dates_days = []
+        seen_dates = set()
+        for routine in routines:
+            date_str = routine.class_date.strftime('%Y-%m-%d')
+            if date_str not in seen_dates:
+                seen_dates.add(date_str)
+                unique_dates_days.append((routine.class_date, routine.day))
+
+        # Sort dates chronologically
+        unique_dates_days.sort(key=lambda x: x[0])
+
+        # Get unique time slots
+        time_slot_set = set()
+        for routine in routines:
+            time_slot = f"{routine.start_time.strftime('%H:%M')} - {routine.end_time.strftime('%H:%M')}"
+            time_slot_set.add(time_slot)
+
+        # Add lunch break if configured
+        lunch_break = None
+        if selected_semester.lunch_break_start and selected_semester.lunch_break_end:
+            lunch_break = f"{selected_semester.lunch_break_start.strftime('%H:%M')} - {selected_semester.lunch_break_end.strftime('%H:%M')}"
+            time_slot_set.add(lunch_break)
+
+        # Sort time slots
+        time_slots = sorted(list(time_slot_set), key=lambda x: x.split(' - ')[0])
+
+        # Title
+        styles = getSampleStyleSheet()
+        title_style = styles['Title']
+        title_style.alignment = 1  # Center alignment
+        title = Paragraph(f"{selected_semester.name} Routine", title_style)
+        elements.append(title)
+        elements.append(Paragraph("<br/>", styles['Normal']))
+
+        # Create the data for the table
+        table_data = []
+
+        # Headers
+        header_row = ["Date", "Day"] + time_slots
+        table_data.append(header_row)
+
+        # Data rows
+        for date, day in unique_dates_days:
+            row = [date.strftime('%d/%m/%Y'), day]
+
+            for time_slot in time_slots:
+                # Check if this is a lunch break
+                if lunch_break and time_slot == lunch_break:
+                    row.append("PRAYER \n & LUNCH BREAK")
+                else:
+                    # Check if there's a class in this time slot
+                    cell_content = ""
+                    for routine in routines:
+                        routine_time_slot = f"{routine.start_time.strftime('%H:%M')} - {routine.end_time.strftime('%H:%M')}"
+                        if routine.class_date == date and routine_time_slot == time_slot:
+                            cell_content = f"{routine.course.code}\n({routine.course.teacher.name})"
+                            break
+
+                    row.append(cell_content)
+
+            table_data.append(row)
+
+        # Calculate optimal column widths based on available space
+        # Reserve fixed width for date and day columns
+        date_col_width = 55  # Fixed width for date column
+        day_col_width = 45   # Fixed width for day column
+
+        # Calculate remaining width for time slot columns
+        available_width = page_width - doc.leftMargin - doc.rightMargin - date_col_width - day_col_width
+
+        # Calculate width per time slot column (with a little margin for safety)
+        time_slot_width = max(35, min(65, available_width / len(time_slots)))
+
+        # Set column widths
+        col_widths = [date_col_width, day_col_width] + [time_slot_width] * len(time_slots)
+
+        # Create the table with defined column widths
+        table = Table(table_data, colWidths=col_widths, repeatRows=1)
+
+        # Custom style for the table
+        style = TableStyle([
+            # Headers styling
+            ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),  # Slightly smaller font for headers
+
+            # Alignment and spacing
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 2),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+
+            # Grid and borders
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            ('BOX', (0, 0), (-1, -1), 1, colors.black),
+
+            # Set a fixed row height
+            ('ROWHEIGHT', (0, 1), (-1, -1), 35),
+
+            # Text wrapping for all cells
+            ('WORDWRAP', (0, 0), (-1, -1), True),
+        ])
+
+        # Add background color for lunch breaks and classes
+        for i, row in enumerate(table_data[1:], 1):
+            for j, cell in enumerate(row[2:], 2):
+                if cell == "PRAYER & LUNCH BREAK":
+                    style.add('BACKGROUND', (j, i), (j, i), colors.lightyellow)
+                    style.add('TEXTCOLOR', (j, i), (j, i), colors.black)
+                    style.add('FONTNAME', (j, i), (j, i), 'Helvetica-Bold')
+                    style.add('FONTSIZE', (j, i), (j, i), 8)  # Smaller font for lunch break text
+                elif cell:  # If there's content (a class)
+                    style.add('BACKGROUND', (j, i), (j, i), colors.lightblue)
+                    style.add('FONTSIZE', (j, i), (j, i), 8)  # Smaller font for class text
+
+        table.setStyle(style)
+
+        # Add the table to elements
+        elements.append(table)
+
+        # Build the PDF
+        doc.build(elements)
+
+        # Prepare the response
+        buffer.seek(0)
+        response = FileResponse(buffer, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{selected_semester.name}_Routine.pdf"'
+        return response
+
+    except Exception as e:
+        return HttpResponse(f"Error generating PDF file: {str(e)}", status=500)

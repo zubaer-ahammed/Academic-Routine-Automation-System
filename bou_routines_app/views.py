@@ -76,6 +76,195 @@ def generate_routine(request):
     overlap_conflicts = []
     form_rows = []
 
+    # Load existing generated routines if semester is selected via GET
+    if selected_semester_id and request.method == "GET":
+        try:
+            selected_semester = Semester.objects.get(id=selected_semester_id)
+            existing_routines = NewRoutine.objects.filter(semester=selected_semester).select_related('course', 'course__teacher').order_by('class_date', 'start_time')
+            
+            if existing_routines.exists():
+                for routine in existing_routines:
+                    generated_routines.append({
+                        'id': routine.id,
+                        'date': routine.class_date,
+                        'day': routine.day,
+                        'course_code': routine.course.code,
+                        'course_name': routine.course.name,
+                        'teacher': routine.course.teacher.name,
+                        'start_time': routine.start_time.strftime('%H:%M'),
+                        'end_time': routine.end_time.strftime('%H:%M')
+                    })
+                
+                # Sort generated routines by date and time for display
+                generated_routines.sort(key=lambda x: (x['date'], x['start_time']))
+
+                # Build the routine table structure for existing routines
+                if generated_routines:
+                    unique_dates = []
+                    seen_dates = set()
+                    for routine in generated_routines:
+                        date_str = routine['date'].strftime('%Y-%m-%d')
+                        if date_str not in seen_dates:
+                            seen_dates.add(date_str)
+                            unique_dates.append((routine['date'], routine['day']))
+                    unique_dates.sort(key=lambda x: x[0])
+
+                    # Build merged time slot structure
+                    time_boundaries = set()
+                    for routine in generated_routines:
+                        time_boundaries.add(routine['start_time'])
+                        time_boundaries.add(routine['end_time'])
+                    if selected_semester.lunch_break_start and selected_semester.lunch_break_end:
+                        time_boundaries.add(selected_semester.lunch_break_start.strftime('%H:%M'))
+                        time_boundaries.add(selected_semester.lunch_break_end.strftime('%H:%M'))
+                    time_boundaries = sorted(time_boundaries)
+
+                    # Build contiguous time slots
+                    all_time_slot_labels = []
+                    for i in range(len(time_boundaries)-1):
+                        all_time_slot_labels.append(f"{time_boundaries[i]} - {time_boundaries[i+1]}")
+
+                    # Filter only slots that are actually used
+                    used_slots = set()
+                    for routine in generated_routines:
+                        r_start = routine['start_time']
+                        r_end = routine['end_time']
+                        for i in range(len(time_boundaries)-1):
+                            slot_start = time_boundaries[i]
+                            slot_end = time_boundaries[i+1]
+                            if (slot_start >= r_start and slot_end <= r_end):
+                                used_slots.add((slot_start, slot_end))
+                    
+                    # Add lunch break as used slot if present
+                    if selected_semester.lunch_break_start and selected_semester.lunch_break_end:
+                        lb_start = selected_semester.lunch_break_start.strftime('%H:%M')
+                        lb_end = selected_semester.lunch_break_end.strftime('%H:%M')
+                        for i in range(len(time_boundaries)-1):
+                            slot_start = time_boundaries[i]
+                            slot_end = time_boundaries[i+1]
+                            if (slot_start >= lb_start and slot_end <= lb_end):
+                                used_slots.add((slot_start, slot_end))
+                    
+                    # Filter time slot labels
+                    time_slot_labels = []
+                    slot_ranges = []
+                    for i in range(len(time_boundaries)-1):
+                        slot_start = time_boundaries[i]
+                        slot_end = time_boundaries[i+1]
+                        if (slot_start, slot_end) in used_slots:
+                            label = f"{slot_start} - {slot_end}"
+                            time_slot_labels.append(label)
+                            slot_ranges.append((slot_start, slot_end, label))
+
+                    # Build routine table rows
+                    from collections import defaultdict
+                    routines_by_date = defaultdict(list)
+                    for routine in generated_routines:
+                        routines_by_date[(routine['date'], routine['day'])].append(routine)
+
+                    # Add lunch break as a pseudo-routine if present
+                    lunch_break = None
+                    if selected_semester.lunch_break_start and selected_semester.lunch_break_end:
+                        lunch_break = {
+                            'start_time': selected_semester.lunch_break_start.strftime('%H:%M'),
+                            'end_time': selected_semester.lunch_break_end.strftime('%H:%M'),
+                            'is_lunch_break': True
+                        }
+
+                    routine_table_rows = []
+                    for date, day in unique_dates:
+                        row_cells = []
+                        slot_idx = 0
+                        routines = routines_by_date.get((date, day), [])
+                        routines_for_row = routines.copy()
+                        if lunch_break:
+                            routines_for_row.append({
+                                'start_time': lunch_break['start_time'],
+                                'end_time': lunch_break['end_time'],
+                                'is_lunch_break': True
+                            })
+                        routines_for_row.sort(key=lambda r: r['start_time'])
+                        
+                        while slot_idx < len(slot_ranges):
+                            slot_start, slot_end, slot_label = slot_ranges[slot_idx]
+                            found = False
+                            for r in routines_for_row:
+                                r_start = r['start_time']
+                                r_end = r['end_time']
+                                if r_start == slot_start:
+                                    colspan = 0
+                                    for j in range(slot_idx, len(slot_ranges)):
+                                        s2, e2, _ = slot_ranges[j]
+                                        if e2 <= r_end:
+                                            colspan += 1
+                                        else:
+                                            break
+                                    if r.get('is_lunch_break'):
+                                        content = 'BREAK'
+                                        cell = {'content': content, 'colspan': colspan, 'is_lunch_break': True}
+                                    else:
+                                        content = {
+                                            'course_code': r['course_code'],
+                                            'teacher': r['teacher']
+                                        }
+                                        cell = {'content': content, 'colspan': colspan, 'is_lunch_break': False}
+                                    row_cells.append(cell)
+                                    slot_idx += colspan
+                                    found = True
+                                    break
+                            if not found:
+                                row_cells.append({'content': '', 'colspan': 1, 'is_lunch_break': False})
+                                slot_idx += 1
+                        routine_table_rows.append({'date': date, 'day': day, 'cells': row_cells})
+
+                    # Prepare data for the calendar view
+                    time_slots = []
+                    time_slot_set = set()
+                    for routine in generated_routines:
+                        time_slot = f"{routine['start_time']} - {routine['end_time']}"
+                        if time_slot not in time_slot_set:
+                            time_slot_set.add(time_slot)
+                            time_slots.append(time_slot)
+
+                    # Sort time slots chronologically
+                    time_slots.sort(key=lambda x: x.split(' - ')[0])
+
+                    # Add lunch break if configured
+                    if selected_semester.lunch_break_start and selected_semester.lunch_break_end:
+                        lunch_break_slot = f"{selected_semester.lunch_break_start.strftime('%H:%M')} - {selected_semester.lunch_break_end.strftime('%H:%M')}"
+                        if lunch_break_slot not in time_slot_set:
+                            time_slots.append(lunch_break_slot)
+                            time_slots.sort(key=lambda x: x.split(' - ')[0])
+
+                    # Format routines for the calendar view with time slot info
+                    calendar_routines = []
+                    for routine in generated_routines:
+                        time_slot = f"{routine['start_time']} - {routine['end_time']}"
+
+                        calendar_routines.append({
+                            'date': routine['date'],
+                            'day': routine['day'],
+                            'course_code': routine['course_code'],
+                            'course_name': routine['course_name'],
+                            'teacher': routine['teacher'],
+                            'start_time': routine['start_time'],
+                            'end_time': routine['end_time'],
+                            'time_slot': time_slot,
+                            'is_lunch_break': False
+                        })
+
+        except Semester.DoesNotExist:
+            pass
+    
+    # Initialize variables for when no routines are found
+    if not generated_routines:
+        unique_dates = []
+        time_slots = []
+        calendar_routines = []
+        lunch_break = None
+        routine_table_rows = []
+        time_slot_labels = []
+
     if request.method == "POST":
         selected_semester_id = request.POST.get("semester")
         date_range = request.POST.get("date_range")
@@ -589,8 +778,8 @@ def generate_routine(request):
         "selected_semester_id": selected_semester_id,
     }
     
-    # Add calendar view data if routines were generated
-    if request.method == "POST" and generated_routines:
+    # Add calendar view data if routines were generated (either from POST or GET)
+    if generated_routines:
         context.update({
             "routine_dates": unique_dates,
             "time_slots": time_slots,
@@ -722,6 +911,37 @@ def get_semester_courses(request):
             except Semester.DoesNotExist:
                 return JsonResponse({'courses': [], 'lunch_break': None})
     return JsonResponse({'courses': [], 'lunch_break': None})
+
+def get_existing_generated_routines(request):
+    """AJAX view to get existing generated routines for a specific semester"""
+    if request.method == "GET":
+        semester_id = request.GET.get("semester_id")
+        if semester_id:
+            try:
+                semester = Semester.objects.get(id=semester_id)
+                existing_routines = NewRoutine.objects.filter(semester=semester).select_related('course', 'course__teacher').order_by('class_date', 'start_time')
+                
+                routines_data = []
+                if existing_routines.exists():
+                    for routine in existing_routines:
+                        routines_data.append({
+                            'id': routine.id,
+                            'date': routine.class_date.strftime('%Y-%m-%d'),
+                            'day': routine.day,
+                            'course_code': routine.course.code,
+                            'course_name': routine.course.name,
+                            'teacher': routine.course.teacher.name,
+                            'start_time': routine.start_time.strftime('%H:%M'),
+                            'end_time': routine.end_time.strftime('%H:%M')
+                        })
+                
+                return JsonResponse({
+                    'routines': routines_data,
+                    'has_routines': len(routines_data) > 0
+                })
+            except Semester.DoesNotExist:
+                return JsonResponse({'routines': [], 'has_routines': False})
+    return JsonResponse({'routines': [], 'has_routines': False})
 
 def check_time_overlap(request):
     """AJAX endpoint to check for time overlaps in real-time"""

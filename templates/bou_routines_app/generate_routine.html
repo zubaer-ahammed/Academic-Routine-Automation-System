@@ -226,7 +226,20 @@
 
         {% if generated_routines %}
         <div class="mt-5">
-            <h2 class="text-center mb-4">Generated Routine</h2>
+            <h2 class="text-center mb-4">
+                {% if request.method == "GET" and selected_semester_id %}
+                    Existing Generated Routine
+                {% else %}
+                    Generated Routine
+                {% endif %}
+            </h2>
+            
+            {% if request.method == "GET" and selected_semester_id %}
+            <div class="alert alert-info mb-4">
+                <h5><i class="bi bi-info-circle-fill"></i> Existing Routine Loaded</h5>
+                <p class="mb-0">Showing previously generated routine for the selected semester. You can modify the form below and click "Generate Routine" to create a new schedule.</p>
+            </div>
+            {% endif %}
 
             <!-- Visual Calendar View (MERGED TIME SLOTS) -->
             <div class="card mb-4">
@@ -787,7 +800,32 @@
                     $('#currentRoutineInfo').remove();
                 }
 
-                loadSemesterCourses(semesterId);
+                // Check if there are existing generated routines for this semester
+                if (semesterId) {
+                    $.ajax({
+                        url: "{% url 'get-existing-generated-routines' %}",
+                        data: {
+                            'semester_id': semesterId
+                        },
+                        dataType: 'json',
+                        success: function(data) {
+                            if (data.has_routines) {
+                                // If there are existing routines, reload the page with the semester parameter
+                                window.location.href = "{% url 'generate-routine' %}?semester=" + semesterId;
+                            } else {
+                                // If no existing routines, just load the semester courses normally
+                                loadSemesterCourses(semesterId);
+                            }
+                        },
+                        error: function() {
+                            // On error, just load the semester courses normally
+                            loadSemesterCourses(semesterId);
+                        }
+                    });
+                } else {
+                    // If no semester selected, just load courses normally
+                    loadSemesterCourses(semesterId);
+                }
             });
 
             // Load courses for the initially selected semester, if any

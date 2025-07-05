@@ -341,7 +341,15 @@
                                                 <td colspan="{{ cell.colspan }}" class="bg-primary text-white text-center align-middle course-cell" 
                                                     data-routine-id="{{ cell.content.routine_id }}" 
                                                     data-course-id="{{ cell.content.course_id }}"
-                                                    style="cursor: pointer;">
+                                                    style="cursor: pointer; position: relative;">
+                                                    <span style="position: absolute; top: 2px; right: 4px; z-index: 2; cursor: pointer; opacity: 0.8; color: #1E1E1E;" title="Edit course">
+                                                      <!-- Pen SVG icon -->
+                                                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.3 3.7l4 4L7 17H3v-4l9.3-9.3z"/><path d="M15.7 6.3l-2-2"/></svg>
+                                                    </span>
+                                                    <span style="position: absolute; top: 2px; left: 4px; z-index: 2; cursor: pointer; opacity: 0.8; color: #1E1E1E;" class="remove-course-btn" title="Remove course">
+                                                      <!-- Trash SVG icon -->
+                                                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                                    </span>
                                                     <div class="fw-bold course-code">{{ cell.content.course_code }}</div>
                                                     <div><small class="teacher-name">({{ cell.content.teacher }})</small></div>
                                                     <div class="edit-controls" style="display: none;">
@@ -366,7 +374,11 @@
                                                 data-time-slot="{{ forloop.counter0 }}"
                                                 data-start-time="{{ cell.start_time }}"
                                                 data-end-time="{{ cell.end_time }}"
-                                                style="cursor: pointer; background-color: #f8f9fa;">
+                                                style="cursor: pointer; background-color: #f8f9fa; position: relative;">
+                                                <span style="position: absolute; top: 2px; right: 4px; z-index: 2; cursor: pointer; opacity: 0.8; color: #1E1E1E;" title="Add course">
+                                                  <!-- Pen SVG icon -->
+                                                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.3 3.7l4 4L7 17H3v-4l9.3-9.3z"/><path d="M15.7 6.3l-2-2"/></svg>
+                                                </span>
                                                 <div class="empty-cell-content" style="display: block;">
                                                     <small class="text-muted">Click to add course</small>
                                                 </div>
@@ -1350,6 +1362,97 @@
                     $('.edit-controls').hide();
                     $('.course-code, .teacher-name').show();
                 }
+            });
+
+            // Handle remove course button clicks
+            $(document).on('click', '.remove-course-btn', function(e) {
+                e.stopPropagation();
+                const cell = $(this).closest('.course-cell');
+                const routineId = cell.data('routine-id');
+                
+                if (!routineId) {
+                    alert('No routine entry found to remove.');
+                    return;
+                }
+                
+                if (!confirm('Are you sure you want to remove this course from this time slot?')) {
+                    return;
+                }
+                
+                // Show loading state
+                const removeBtn = $(this);
+                const originalOpacity = removeBtn.css('opacity');
+                removeBtn.css('opacity', '0.3');
+                
+                // Send AJAX request to remove the course
+                $.ajax({
+                    url: "{% url 'remove-routine-course' %}",
+                    method: 'POST',
+                    data: {
+                        'routine_id': routineId,
+                        'csrfmiddlewaretoken': $('[name=csrfmiddlewaretoken]').val()
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            // Convert course cell back to empty cell
+                            const date = cell.closest('tr').find('td:first').text();
+                            const day = cell.closest('tr').find('td:nth-child(2)').text();
+                            const timeSlot = cell.index() - 2; // -2 for date and day columns
+                            const startTime = cell.data('start-time');
+                            const endTime = cell.data('end-time');
+                            
+                            cell.removeClass('course-cell bg-primary text-white').addClass('empty-cell');
+                            cell.removeAttr('data-routine-id data-course-id');
+                            cell.attr({
+                                'data-date': date,
+                                'data-day': day,
+                                'data-time-slot': timeSlot,
+                                'data-start-time': startTime,
+                                'data-end-time': endTime
+                            });
+                            cell.css('background-color', '#f8f9fa');
+                            
+                            // Update the display
+                            cell.html(`
+                                <span style="position: absolute; top: 2px; right: 4px; z-index: 2; cursor: pointer; opacity: 0.7;">
+                                  <!-- Pen SVG icon -->
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.3 3.7l4 4L7 17H3v-4l9.3-9.3z"/><path d="M15.7 6.3l-2-2"/></svg>
+                                </span>
+                                <div class="empty-cell-content" style="display: block;">
+                                    <small class="text-muted">Click to add course</small>
+                                </div>
+                                <div class="edit-controls" style="display: none;">
+                                    <select class="form-select form-select-sm course-select-edit">
+                                        <option value="">Select Course</option>
+                                    </select>
+                                    <div class="mt-1">
+                                        <button type="button" class="btn btn-success btn-sm save-course">Save</button>
+                                        <button type="button" class="btn btn-secondary btn-sm cancel-edit">Cancel</button>
+                                    </div>
+                                </div>
+                            `);
+                            
+                            // Show success message
+                            const successMsg = $('<div class="alert alert-success alert-dismissible fade show" role="alert">Course removed successfully!<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>');
+                            $('.messages').append(successMsg);
+                            
+                            // Auto-dismiss after 3 seconds
+                            setTimeout(function() {
+                                successMsg.alert('close');
+                            }, 3000);
+                        } else {
+                            alert('Error removing course: ' + (response.error || 'Unknown error'));
+                        }
+                    },
+                    error: function(xhr) {
+                        const errorMsg = xhr.responseJSON ? xhr.responseJSON.error : 'Error removing course';
+                        alert(errorMsg);
+                    },
+                    complete: function() {
+                        // Reset button state
+                        removeBtn.css('opacity', originalOpacity);
+                    }
+                });
             });
 
             // Get all time slot headers (skip first two th for date/day)

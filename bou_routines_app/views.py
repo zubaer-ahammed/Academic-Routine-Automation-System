@@ -1152,6 +1152,33 @@ def update_routine_course(request):
     
     return JsonResponse({"error": "Invalid request method"}, status=405)
 
+def remove_routine_course(request):
+    """Remove a routine entry via AJAX"""
+    if request.method == 'POST':
+        try:
+            routine_id = request.POST.get('routine_id')
+            
+            if not routine_id:
+                return JsonResponse({"error": "Missing routine_id"}, status=400)
+            
+            # Get and delete the routine
+            try:
+                routine = NewRoutine.objects.get(id=routine_id)
+                routine.delete()
+                
+                return JsonResponse({
+                    "success": True,
+                    "message": "Routine entry removed successfully"
+                })
+                
+            except NewRoutine.DoesNotExist:
+                return JsonResponse({"error": "Routine not found"}, status=404)
+                
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=400)
+    
+    return JsonResponse({"error": "Invalid request method"}, status=405)
+
 def export_to_excel(request, semester_id):
     """Export the routine to Excel file"""
     try:

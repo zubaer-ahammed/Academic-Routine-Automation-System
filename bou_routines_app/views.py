@@ -12,6 +12,8 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+from django.urls import reverse
+from django.utils.http import urlencode
 
 
 def routine_entry(request):
@@ -604,9 +606,12 @@ def generate_routine(request):
 def update_semester_courses(request):
     semesters = Semester.objects.all()
     courses = Course.objects.all()
+    from .models import Teacher
+    teachers = Teacher.objects.all().order_by('name')
     context = {
         "semesters": semesters,
         "courses": courses,
+        "teachers": teachers,
     }
     
     if request.method == "POST":
@@ -627,9 +632,16 @@ def update_semester_courses(request):
 
         SemesterCourse.objects.filter(semester=semester).delete()
         course_ids = request.POST.getlist("courses[]")
+        teacher_ids = request.POST.getlist("teachers[]")
         number_of_classes = request.POST.getlist("classes")
         for i, course_id in enumerate(course_ids):
             course = Course.objects.get(id=course_id)
+            # Update teacher if changed
+            if i < len(teacher_ids):
+                teacher_id = teacher_ids[i]
+                if teacher_id and str(course.teacher.id) != str(teacher_id):
+                    course.teacher = Teacher.objects.get(id=teacher_id)
+                    course.save()
             try:
                 num_classes = int(number_of_classes[i]) if i < len(number_of_classes) else 1
                 if num_classes < 1:
@@ -642,7 +654,16 @@ def update_semester_courses(request):
                 number_of_classes=num_classes
             )
         messages.success(request, f"Successfully updated courses for {semester.name}")
-        return render(request, "bou_routines_app/semester_courses.html", context)
+        # Redirect to the same page with selected semester as query param
+        base_url = reverse('update-semester-courses')
+        query_string = urlencode({'semester': semester_id})
+        url = f"{base_url}?{query_string}"
+        return redirect(url)
+
+    # On GET, pre-select semester if query param is present
+    semester_id = request.GET.get("semester")
+    if semester_id:
+        context["selected_semester_id"] = semester_id
     return render(request, "bou_routines_app/semester_courses.html", context)
 
 def get_semester_courses(request):

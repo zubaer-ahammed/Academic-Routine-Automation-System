@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -29,14 +30,21 @@
         .form-control.mdtimepicker {
             background: #ccc;
         }
+        .bou-logo {
+            height: 38px;
+            margin-right: 12px;
+            vertical-align: middle;
+        }
     </style>
 </head>
 <body>
 
-
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
-            <a class="navbar-brand" href="#">BOU Routine Generator</a>
+            <a class="navbar-brand d-flex align-items-center" href="#">
+                <img src="{% static 'bou_logo_icon.png' %}" alt="BOU Logo" class="bou-logo">
+                <span>BOU Routine Generator</span>
+            </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -110,15 +118,23 @@
                 <label for="courseRepeater" class="form-label">Select Courses</label>
                 <div id="courseRepeater">
                     <div class="course-row row mb-3">
-                        <div class="col-md-6">
-                            <select name="courses[]" class="form-select" required>
+                        <div class="col-md-4">
+                            <select name="courses[]" class="form-select course-select" required>
                                 <option value="">Select Course</option>
                                 {% for course in courses %}
-                                <option value="{{ course.id }}">{{ course.code }} - {{ course.name }} ({{ course.teacher.name }})</option>
+                                <option value="{{ course.id }}" data-teacher-id="{{ course.teacher.id }}">{{ course.code }} - {{ course.name }} ({{ course.teacher.name }})</option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="col-md-3">
+                            <select name="teachers[]" class="form-select teacher-select" required>
+                                <option value="">Select Teacher</option>
+                                {% for teacher in teachers %}
+                                <option value="{{ teacher.id }}">{{ teacher.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
                             <input type="number" name="classes" placeholder="Number of Classes" id="classes" class="form-control" value="0" min="0" required>
                         </div>
                         <div class="col-md-3">
@@ -172,15 +188,16 @@
                         success: function(data) {
                             if (data.courses && data.courses.length > 0) {
                                 $.each(data.courses, function(index, course) {
+                                    let row;
                                     if (index === 0) {
-                                        $('.course-row:first select').val(course.id);
-                                        $('.course-row:first input[name="classes"]').val(course.number_of_classes || 0);
+                                        row = $('.course-row:first');
                                     } else {
-                                        const newRow = $('.course-row:first').clone();
-                                        newRow.find('select').val(course.id);
-                                        newRow.find('input[name="classes"]').val(course.number_of_classes || 0);
-                                        $('#courseRepeater').append(newRow);
+                                        row = $('.course-row:first').clone();
+                                        $('#courseRepeater').append(row);
                                     }
+                                    row.find('select.course-select').val(course.id);
+                                    row.find('input[name="classes"]').val(course.number_of_classes || 0);
+                                    row.find('select.teacher-select').val(course.teacher_id);
                                 });
                             }
                             // Fill semester info fields if present
@@ -210,6 +227,18 @@
             if (initialSemesterId) {
                 loadSemesterCourses(initialSemesterId);
             }
+
+            // When a course is changed, update the teacher dropdown to the default teacher for that course
+            $(document).on('change', 'select.course-select', function() {
+                var courseId = $(this).val();
+                var row = $(this).closest('.course-row');
+                if (courseId) {
+                    var teacherId = $(this).find('option:selected').data('teacher-id');
+                    if (teacherId) {
+                        row.find('select.teacher-select').val(teacherId);
+                    }
+                }
+            });
 
             // Set the current year in the footer
             document.getElementById('currentYear').textContent = new Date().getFullYear();

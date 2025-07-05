@@ -350,6 +350,112 @@ def generate_routine(request):
                 
             # Sort generated routines by date and time for display
             generated_routines.sort(key=lambda x: (x['date'], x['start_time']))
+
+            # Ensure unique_dates is always defined
+            if generated_routines:
+                unique_dates = []
+                seen_dates = set()
+                for routine in generated_routines:
+                    date_str = routine['date'].strftime('%Y-%m-%d')
+                    if date_str not in seen_dates:
+                        seen_dates.add(date_str)
+                        unique_dates.append((routine['date'], routine['day']))
+                unique_dates.sort(key=lambda x: x[0])
+            else:
+                unique_dates = []
+
+            # --- NEW: Build merged time slot structure ---
+            # 1. Collect all unique time boundaries (start and end times)
+            time_boundaries = set()
+            for routine in generated_routines:
+                time_boundaries.add(routine['start_time'])
+                time_boundaries.add(routine['end_time'])
+            if selected_semester.lunch_break_start and selected_semester.lunch_break_end:
+                time_boundaries.add(selected_semester.lunch_break_start.strftime('%H:%M'))
+                time_boundaries.add(selected_semester.lunch_break_end.strftime('%H:%M'))
+            # Convert to sorted list
+            time_boundaries = sorted(time_boundaries)
+
+            # 2. Build contiguous time slots (pairs of adjacent boundaries)
+            time_slot_labels = []  # e.g., ['08:45 - 09:45', '09:45 - 10:50', ...]
+            for i in range(len(time_boundaries)-1):
+                time_slot_labels.append(f"{time_boundaries[i]} - {time_boundaries[i+1]}")
+
+            # 3. For each date/day, build a row of cells (with content and colspan)
+            # Map: (date, day) -> list of routines for that date
+            from collections import defaultdict
+            routines_by_date = defaultdict(list)
+            for routine in generated_routines:
+                routines_by_date[(routine['date'], routine['day'])].append(routine)
+
+            # Add lunch break as a pseudo-routine if present
+            lunch_break = None
+            if selected_semester.lunch_break_start and selected_semester.lunch_break_end:
+                lunch_break = {
+                    'start_time': selected_semester.lunch_break_start.strftime('%H:%M'),
+                    'end_time': selected_semester.lunch_break_end.strftime('%H:%M'),
+                    'is_lunch_break': True
+                }
+
+            routine_table_rows = []  # Each row: {'date':..., 'day':..., 'cells': [ {content, colspan, is_lunch_break}, ... ]}
+            for date, day in unique_dates:
+                row_cells = []
+                slot_idx = 0
+                # Build a list of (start, end, label) for easier comparison
+                slot_ranges = []
+                for label in time_slot_labels:
+                    s, e = label.split(' - ')
+                    slot_ranges.append((s, e, label))
+                # For this date, get all routines (by start/end)
+                routines = routines_by_date.get((date, day), [])
+                # Add lunch break as a pseudo-routine
+                routines_for_row = routines.copy()
+                if lunch_break:
+                    routines_for_row.append({
+                        'start_time': lunch_break['start_time'],
+                        'end_time': lunch_break['end_time'],
+                        'is_lunch_break': True
+                    })
+                # Sort by start_time
+                routines_for_row.sort(key=lambda r: r['start_time'])
+                # For each slot, check if a routine (or lunch) starts at this slot
+                i = 0
+                while slot_idx < len(slot_ranges):
+                    slot_start, slot_end, slot_label = slot_ranges[slot_idx]
+                    found = False
+                    for r in routines_for_row:
+                        r_start = r['start_time']
+                        r_end = r['end_time']
+                        if r_start == slot_start:
+                            # Determine how many slots this routine spans
+                            colspan = 0
+                            for j in range(slot_idx, len(slot_ranges)):
+                                s2, e2, _ = slot_ranges[j]
+                                if e2 <= r_end:
+                                    colspan += 1
+                                else:
+                                    break
+                            # Prepare cell content
+                            if r.get('is_lunch_break'):
+                                content = 'PRAYER & LUNCH BREAK'
+                                is_lunch_break = True
+                                cell = {'content': content, 'colspan': colspan, 'is_lunch_break': True}
+                            else:
+                                content = {
+                                    'course_code': r['course_code'],
+                                    'teacher': r['teacher']
+                                }
+                                cell = {'content': content, 'colspan': colspan, 'is_lunch_break': False}
+                            row_cells.append(cell)
+                            slot_idx += colspan
+                            found = True
+                            break
+                    if not found:
+                        # Empty cell for this slot
+                        row_cells.append({'content': '', 'colspan': 1, 'is_lunch_break': False})
+                        slot_idx += 1
+                routine_table_rows.append({'date': date, 'day': day, 'cells': row_cells})
+            # --- END NEW ---
             
             # Prepare data for the calendar view
             if generated_routines:
@@ -458,7 +564,10 @@ def generate_routine(request):
             "routine_dates": unique_dates,
             "time_slots": time_slots,
             "calendar_routines": calendar_routines,
-            "lunch_break": lunch_break
+            "lunch_break": lunch_break,
+            # New keys for merged table
+            "routine_table_rows": routine_table_rows,
+            "time_slot_labels": time_slot_labels
         })
 
     # Include the selected semester ID if available in POST

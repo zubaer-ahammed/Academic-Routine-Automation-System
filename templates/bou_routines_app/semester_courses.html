@@ -83,7 +83,7 @@
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <input type="number" name="classes" placeholder="Number of Classes" id="classes" class="form-control" value="1" min="1" required>
+                            <input type="number" name="classes" placeholder="Number of Classes" id="classes" class="form-control" value="0" min="0" required>
                         </div>
                         <div class="col-md-3">
                             <button type="button" class="btn btn-danger remove-course">Remove</button>
@@ -140,12 +140,12 @@
                                     if (index === 0) {
                                         // Use the first row
                                         $('.course-row:first select').val(course.id);
-                                        $('.course-row:first input[name="classes"]').val(course.number_of_classes || 1);
+                                        $('.course-row:first input[name="classes"]').val(course.number_of_classes || 0);
                                     } else {
                                         // Clone and add new rows for additional courses
                                         const newRow = $('.course-row:first').clone();
                                         newRow.find('select').val(course.id);
-                                        newRow.find('input[name="classes"]').val(course.number_of_classes || 1);
+                                        newRow.find('input[name="classes"]').val(course.number_of_classes || 0);
                                         $('#courseRepeater').append(newRow);
                                     }
                                 });

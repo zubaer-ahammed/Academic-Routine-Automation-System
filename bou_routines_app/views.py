@@ -631,9 +631,9 @@ def update_semester_courses(request):
             try:
                 num_classes = int(number_of_classes[i]) if i < len(number_of_classes) else 1
                 if num_classes < 1:
-                    num_classes = 1
+                    num_classes = 0
             except (ValueError, IndexError):
-                num_classes = 1
+                num_classes = 0
                 
             # Create semester course with number of classes
             SemesterCourse.objects.create(

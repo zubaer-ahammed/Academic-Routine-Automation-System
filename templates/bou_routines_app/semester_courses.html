@@ -15,6 +15,13 @@
             margin: auto;
             padding: 2rem;
         }
+        .container-bou {
+            max-width: 80%;
+        }
+        .bou-header {
+            padding-top: 1em;
+            padding-bottom: 1em;
+        }
         .container-box-bou {
             max-width: 80%;
             margin-top: 3rem;
@@ -31,7 +38,7 @@
             background: #ccc;
         }
         .bou-logo {
-            height: 38px;
+            height: 70px;
             margin-right: 12px;
             vertical-align: middle;
         }
@@ -40,7 +47,7 @@
 <body>
 
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container">
+        <div class="container container-bou bou-header">
             <a class="navbar-brand d-flex align-items-center" href="#">
                 <img src="{% static 'bou_logo_icon.png' %}" alt="BOU Logo" class="bou-logo">
                 <span>BOU Routine Generator</span>
@@ -50,9 +57,9 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/">Routine Entry</a>
-                    </li>
+{#                    <li class="nav-item">#}
+{#                        <a class="nav-link" href="/">Routine Entry</a>#}
+{#                    </li>#}
                     <li class="nav-item">
                         <a class="nav-link active" href="/generate/">Generate Routine</a>
                     </li>

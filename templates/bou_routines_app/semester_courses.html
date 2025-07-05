@@ -70,6 +70,42 @@
                 </select>
             </div>
 
+            <!-- Semester Info Fields -->
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label for="semester_full_name" class="form-label">Semester full name:</label>
+                    <input type="text" class="form-control" name="semester_full_name" id="semester_full_name">
+                </div>
+                <div class="col-md-6">
+                    <label for="term" class="form-label">Term:</label>
+                    <input type="text" class="form-control" name="term" id="term">
+                </div>
+                <div class="col-md-6">
+                    <label for="session" class="form-label">Session:</label>
+                    <input type="text" class="form-control" name="session" id="session">
+                </div>
+                <div class="col-md-6">
+                    <label for="study_center" class="form-label">Study center:</label>
+                    <input type="text" class="form-control" name="study_center" id="study_center">
+                </div>
+                <div class="col-md-6">
+                    <label for="contact_person" class="form-label">Contact person:</label>
+                    <input type="text" class="form-control" name="contact_person" id="contact_person">
+                </div>
+                <div class="col-md-6">
+                    <label for="contact_person_designation" class="form-label">Contact person designation:</label>
+                    <input type="text" class="form-control" name="contact_person_designation" id="contact_person_designation">
+                </div>
+                <div class="col-md-6">
+                    <label for="contact_person_phone" class="form-label">Contact person phone:</label>
+                    <input type="text" class="form-control" name="contact_person_phone" id="contact_person_phone">
+                </div>
+                <div class="col-md-6">
+                    <label for="contact_person_email" class="form-label">Contact person email:</label>
+                    <input type="email" class="form-control" name="contact_person_email" id="contact_person_email">
+                </div>
+            </div>
+
             <div class="mb-3">
                 <label for="courseRepeater" class="form-label">Select Courses</label>
                 <div id="courseRepeater">
@@ -126,7 +162,7 @@
                     $('.course-row:first select').val('');
                     $('.course-row:first input[name="classes"]').val('1');
 
-                    // Fetch courses for the selected semester
+                    // Fetch courses and semester info for the selected semester
                     $.ajax({
                         url: "{% url 'get-semester-courses' %}",
                         data: {
@@ -135,20 +171,28 @@
                         dataType: 'json',
                         success: function(data) {
                             if (data.courses && data.courses.length > 0) {
-                                // If we have semester courses, populate them
                                 $.each(data.courses, function(index, course) {
                                     if (index === 0) {
-                                        // Use the first row
                                         $('.course-row:first select').val(course.id);
                                         $('.course-row:first input[name="classes"]').val(course.number_of_classes || 0);
                                     } else {
-                                        // Clone and add new rows for additional courses
                                         const newRow = $('.course-row:first').clone();
                                         newRow.find('select').val(course.id);
                                         newRow.find('input[name="classes"]').val(course.number_of_classes || 0);
                                         $('#courseRepeater').append(newRow);
                                     }
                                 });
+                            }
+                            // Fill semester info fields if present
+                            if (data.semester_data) {
+                                $('#semester_full_name').val(data.semester_data.semester_full_name || '');
+                                $('#term').val(data.semester_data.term || '');
+                                $('#session').val(data.semester_data.session || '');
+                                $('#study_center').val(data.semester_data.study_center || '');
+                                $('#contact_person').val(data.semester_data.contact_person || '');
+                                $('#contact_person_designation').val(data.semester_data.contact_person_designation || '');
+                                $('#contact_person_phone').val(data.semester_data.contact_person_phone || '');
+                                $('#contact_person_email').val(data.semester_data.contact_person_email || '');
                             }
                         }
                     });

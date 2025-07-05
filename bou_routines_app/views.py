@@ -611,40 +611,38 @@ def update_semester_courses(request):
     
     if request.method == "POST":
         semester_id = request.POST.get("semester")
-        # Include the selected semester ID in the context
         context["selected_semester_id"] = semester_id
-        
-        # Get the selected semester
         semester = Semester.objects.get(id=semester_id)
 
-        # Remove all existing SemesterCourse entries for this semester
-        SemesterCourse.objects.filter(semester=semester).delete()
+        # Update semester info fields from POST
+        semester.semester_full_name = request.POST.get("semester_full_name", semester.semester_full_name)
+        semester.term = request.POST.get("term", semester.term)
+        semester.session = request.POST.get("session", semester.session)
+        semester.study_center = request.POST.get("study_center", semester.study_center)
+        semester.contact_person = request.POST.get("contact_person", semester.contact_person)
+        semester.contact_person_designation = request.POST.get("contact_person_designation", semester.contact_person_designation)
+        semester.contact_person_phone = request.POST.get("contact_person_phone", semester.contact_person_phone)
+        semester.contact_person_email = request.POST.get("contact_person_email", semester.contact_person_email)
+        semester.save()
 
-        # Get all course IDs and their corresponding number of classes
+        SemesterCourse.objects.filter(semester=semester).delete()
         course_ids = request.POST.getlist("courses[]")
         number_of_classes = request.POST.getlist("classes")
-
-        # Create semester courses with number of classes
         for i, course_id in enumerate(course_ids):
             course = Course.objects.get(id=course_id)
-            # Get number of classes for this course, default to 1 if not provided
             try:
                 num_classes = int(number_of_classes[i]) if i < len(number_of_classes) else 1
                 if num_classes < 1:
                     num_classes = 0
             except (ValueError, IndexError):
                 num_classes = 0
-                
-            # Create semester course with number of classes
             SemesterCourse.objects.create(
                 semester=semester,
                 course=course,
                 number_of_classes=num_classes
             )
-
         messages.success(request, f"Successfully updated courses for {semester.name}")
         return render(request, "bou_routines_app/semester_courses.html", context)
-
     return render(request, "bou_routines_app/semester_courses.html", context)
 
 def get_semester_courses(request):
@@ -652,13 +650,9 @@ def get_semester_courses(request):
     if request.method == "GET":
         semester_id = request.GET.get("semester_id")
         if semester_id:
-            # Get the semester object
             try:
                 semester = Semester.objects.get(id=semester_id)
-                # Get all SemesterCourse objects for this semester
                 semester_courses = SemesterCourse.objects.filter(semester_id=semester_id).select_related('course', 'course__teacher')
-                
-                # Format the data for response
                 courses_data = [{
                     'id': sc.course.id,
                     'code': sc.course.code,
@@ -667,37 +661,41 @@ def get_semester_courses(request):
                     'teacher_id': sc.course.teacher.id,
                     'number_of_classes': sc.number_of_classes
                 } for sc in semester_courses]
-                
-                # Include lunch break information if available
                 lunch_break_info = None
                 if semester.lunch_break_start and semester.lunch_break_end:
                     lunch_break_info = {
                         'start': semester.lunch_break_start.strftime('%H:%M'),
                         'end': semester.lunch_break_end.strftime('%H:%M')
                     }
-                
-                # Include semester date range information if available
                 date_range_info = None
                 if semester.start_date and semester.end_date:
                     date_range_info = {
                         'start_date': semester.start_date.strftime('%m/%d/%Y'),
                         'end_date': semester.end_date.strftime('%m/%d/%Y')
                     }
-                
-                # Include government holidays if available
                 holidays_info = None
                 if semester.holidays:
                     holidays_info = semester.holidays
-
+                # Add all semester info fields
+                semester_data = {
+                    'semester_full_name': semester.semester_full_name,
+                    'term': semester.term,
+                    'session': semester.session,
+                    'study_center': semester.study_center,
+                    'contact_person': semester.contact_person,
+                    'contact_person_designation': semester.contact_person_designation,
+                    'contact_person_phone': semester.contact_person_phone,
+                    'contact_person_email': semester.contact_person_email,
+                }
                 return JsonResponse({
                     'courses': courses_data,
                     'lunch_break': lunch_break_info,
                     'date_range': date_range_info,
-                    'holidays': holidays_info
+                    'holidays': holidays_info,
+                    'semester_data': semester_data
                 })
             except Semester.DoesNotExist:
                 return JsonResponse({'courses': [], 'lunch_break': None})
-    
     return JsonResponse({'courses': [], 'lunch_break': None})
 
 def check_time_overlap(request):
@@ -968,7 +966,6 @@ def export_to_excel(request, semester_id):
             while slot_idx < len(slot_ranges):
                 slot_start, slot_end, slot_label = slot_ranges[slot_idx]
                 found = False
-                
                 for r in routines_for_row:
                     r_start = r['start_time']
                     r_end = r['end_time']

@@ -653,10 +653,10 @@ def update_semester_courses(request):
                 course=course,
                 number_of_classes=num_classes
             )
-        messages.success(request, f"Successfully updated courses for {semester.name}")
-        # Redirect to the same page with selected semester as query param
+        #messages.success(request, f"Successfully updated courses for {semester.name}")
+        # Redirect to the same page with selected semester and success param
         base_url = reverse('update-semester-courses')
-        query_string = urlencode({'semester': semester_id})
+        query_string = urlencode({'semester': semester_id, 'success': 1})
         url = f"{base_url}?{query_string}"
         return redirect(url)
 

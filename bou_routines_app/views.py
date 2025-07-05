@@ -949,7 +949,7 @@ def export_to_excel(request, semester_id):
                 if r.class_date == date and r.day == day:
                     routines_for_row.append({
                         'course_code': r.course.code,
-                        'teacher': r.course.teacher.name,
+                        'teacher': r.course.teacher.short_name,
                         'start_time': r.start_time.strftime('%H:%M'),
                         'end_time': r.end_time.strftime('%H:%M'),
                         'is_lunch_break': False
@@ -989,7 +989,7 @@ def export_to_excel(request, semester_id):
                             cell_content = "BREAK"
                             format_to_use = lunch_format
                         else:
-                            cell_content = f"{r['course_code']}\n({r['teacher']})"
+                            cell_content = f"{r['course_code']} ({r['teacher']})"
                             format_to_use = course_format
                         
                         # Write content and merge if needed

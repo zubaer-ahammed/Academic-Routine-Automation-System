@@ -871,63 +871,142 @@ def export_to_excel(request, semester_id):
         # Get the routines from the database
         routines = NewRoutine.objects.filter(semester=selected_semester).order_by('class_date', 'start_time')
 
-        # Get unique dates
-        unique_dates = routines.values_list('class_date', flat=True).distinct().order_by('class_date')
-
-        # Get unique time slots
-        time_slot_set = set()
+        # Get unique dates and days
+        unique_dates_days = []
+        seen_dates = set()
         for routine in routines:
-            time_slot = f"{routine.start_time.strftime('%H:%M')} - {routine.end_time.strftime('%H:%M')}"
-            time_slot_set.add(time_slot)
+            date_str = routine.class_date.strftime('%Y-%m-%d')
+            if date_str not in seen_dates:
+                seen_dates.add(date_str)
+                unique_dates_days.append((routine.class_date, routine.day))
 
-        # Add lunch break if configured
-        lunch_break = None
+        # Sort dates chronologically
+        unique_dates_days.sort(key=lambda x: x[0])
+
+        # --- Build slot_ranges for merging logic ---
+        time_boundaries = set()
+        for routine in routines:
+            time_boundaries.add(routine.start_time.strftime('%H:%M'))
+            time_boundaries.add(routine.end_time.strftime('%H:%M'))
         if selected_semester.lunch_break_start and selected_semester.lunch_break_end:
-            lunch_break = f"{selected_semester.lunch_break_start.strftime('%H:%M')} - {selected_semester.lunch_break_end.strftime('%H:%M')}"
-            time_slot_set.add(lunch_break)
+            time_boundaries.add(selected_semester.lunch_break_start.strftime('%H:%M'))
+            time_boundaries.add(selected_semester.lunch_break_end.strftime('%H:%M'))
+        time_boundaries = sorted(time_boundaries)
 
-        # Sort time slots
-        time_slots = sorted(list(time_slot_set), key=lambda x: x.split(' - ')[0])
+        slot_ranges = []
+        for i in range(len(time_boundaries)-1):
+            slot_start = time_boundaries[i]
+            slot_end = time_boundaries[i+1]
+            slot_ranges.append((slot_start, slot_end, f"{slot_start} - {slot_end}"))
+
+        used_slots = set()
+        for routine in routines:
+            r_start = routine.start_time.strftime('%H:%M')
+            r_end = routine.end_time.strftime('%H:%M')
+            for i in range(len(time_boundaries)-1):
+                slot_start = time_boundaries[i]
+                slot_end = time_boundaries[i+1]
+                if (slot_start >= r_start and slot_end <= r_end):
+                    used_slots.add((slot_start, slot_end))
+        if selected_semester.lunch_break_start and selected_semester.lunch_break_end:
+            lb_start = selected_semester.lunch_break_start.strftime('%H:%M')
+            lb_end = selected_semester.lunch_break_end.strftime('%H:%M')
+            for i in range(len(time_boundaries)-1):
+                slot_start = time_boundaries[i]
+                slot_end = time_boundaries[i+1]
+                if (slot_start >= lb_start and slot_end <= lb_end):
+                    used_slots.add((slot_start, slot_end))
+        filtered_slot_ranges = []
+        for slot_start, slot_end, label in slot_ranges:
+            if (slot_start, slot_end) in used_slots:
+                filtered_slot_ranges.append((slot_start, slot_end, label))
+        slot_ranges = filtered_slot_ranges
 
         # Add title
-        worksheet.merge_range(0, 0, 0, len(time_slots) + 1, f"{selected_semester.name} Routine", title_format)
+        worksheet.merge_range(0, 0, 0, len(slot_ranges) + 1, f"{selected_semester.name} Routine", title_format)
 
         # Write headers
         row = 2
         worksheet.write(row, 0, "Date", header_format)
         worksheet.write(row, 1, "Day", header_format)
-        for col, time_slot in enumerate(time_slots):
-            worksheet.write(row, col + 2, time_slot, header_format)
+        for col, (_, _, label) in enumerate(slot_ranges):
+            worksheet.write(row, col + 2, label, header_format)
 
         # Set column widths
         worksheet.set_column(0, 0, 12)  # Date column
         worksheet.set_column(1, 1, 10)  # Day column
-        worksheet.set_column(2, len(time_slots) + 1, 15)  # Time slot columns
+        worksheet.set_column(2, len(slot_ranges) + 1, 15)  # Time slot columns
 
-        # Write data
+        # Write data with merging
         row = 3
-        for date in unique_dates:
-            day_name = date.strftime('%A')
+        for date, day in unique_dates_days:
             worksheet.write(row, 0, date, date_format)
-            worksheet.write(row, 1, day_name, cell_format)
+            worksheet.write(row, 1, day, cell_format)
 
-            for col, time_slot in enumerate(time_slots):
-                # Check if this is a lunch break
-                if lunch_break and time_slot == lunch_break:
-                    worksheet.write(row, col + 2, "BREAK", lunch_format)
-                else:
-                    # Check if there's a class in this time slot
-                    cell_content = ""
-                    for routine in routines:
-                        routine_time_slot = f"{routine.start_time.strftime('%H:%M')} - {routine.end_time.strftime('%H:%M')}"
-                        if routine.class_date == date and routine_time_slot == time_slot:
-                            cell_content = f"{routine.course.code}\n({routine.course.teacher.name})"
-                            break
+            # Build routines for this row
+            routines_for_row = []
+            for r in routines:
+                if r.class_date == date and r.day == day:
+                    routines_for_row.append({
+                        'course_code': r.course.code,
+                        'teacher': r.course.teacher.name,
+                        'start_time': r.start_time.strftime('%H:%M'),
+                        'end_time': r.end_time.strftime('%H:%M'),
+                        'is_lunch_break': False
+                    })
+            if selected_semester.lunch_break_start and selected_semester.lunch_break_end:
+                routines_for_row.append({
+                    'start_time': selected_semester.lunch_break_start.strftime('%H:%M'),
+                    'end_time': selected_semester.lunch_break_end.strftime('%H:%M'),
+                    'is_lunch_break': True
+                })
+            routines_for_row.sort(key=lambda r: r['start_time'])
 
-                    if cell_content:
-                        worksheet.write(row, col + 2, cell_content, course_format)
-                    else:
-                        worksheet.write(row, col + 2, "", cell_format)
+            # Process each slot and handle merging
+            slot_idx = 0
+            col_idx = 2  # Start after date and day columns
+            while slot_idx < len(slot_ranges):
+                slot_start, slot_end, slot_label = slot_ranges[slot_idx]
+                found = False
+                
+                for r in routines_for_row:
+                    r_start = r['start_time']
+                    r_end = r['end_time']
+                    is_lunch = r.get('is_lunch_break', False)
+                    
+                    if r_start == slot_start:
+                        # Determine colspan
+                        colspan = 0
+                        for j in range(slot_idx, len(slot_ranges)):
+                            s2, e2, _ = slot_ranges[j]
+                            if e2 <= r_end:
+                                colspan += 1
+                            else:
+                                break
+                        
+                        # Prepare cell content
+                        if is_lunch:
+                            cell_content = "BREAK"
+                            format_to_use = lunch_format
+                        else:
+                            cell_content = f"{r['course_code']}\n({r['teacher']})"
+                            format_to_use = course_format
+                        
+                        # Write content and merge if needed
+                        if colspan > 1:
+                            worksheet.merge_range(row, col_idx, row, col_idx + colspan - 1, cell_content, format_to_use)
+                        else:
+                            worksheet.write(row, col_idx, cell_content, format_to_use)
+                        
+                        col_idx += colspan
+                        slot_idx += colspan
+                        found = True
+                        break
+                
+                if not found:
+                    worksheet.write(row, col_idx, "", cell_format)
+                    col_idx += 1
+                    slot_idx += 1
 
             row += 1
 

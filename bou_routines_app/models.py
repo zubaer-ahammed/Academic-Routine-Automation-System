@@ -16,6 +16,7 @@ class Teacher(models.Model):
 class Semester(models.Model):
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=10)
+    order = models.IntegerField(default=0, help_text="Display order for semester dropdown")
     semester_full_name = models.CharField(max_length=100, blank=True, null=True)
     term = models.CharField(max_length=50, blank=True, null=True)
     session = models.CharField(max_length=50, blank=True, null=True)

@@ -61,8 +61,8 @@ def time_overlap(start1, end1, start2, end2):
     return start1 < end2 and start2 < end1
 
 def generate_routine(request):
-    semesters = Semester.objects.all()
-    courses = Course.objects.select_related('teacher').all()
+    semesters = Semester.objects.all().order_by('name')
+    courses = Course.objects.select_related('teacher').all().order_by('code')
     teachers = Teacher.objects.all()
 
     # Check if we have any semester courses at all
@@ -604,8 +604,8 @@ def generate_routine(request):
     return render(request, "bou_routines_app/generate_routine.html", context)
 
 def update_semester_courses(request):
-    semesters = Semester.objects.all()
-    courses = Course.objects.all()
+    semesters = Semester.objects.all().order_by('name')
+    courses = Course.objects.all().order_by('code')
     from .models import Teacher
     teachers = Teacher.objects.all().order_by('name')
     context = {

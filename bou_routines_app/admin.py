@@ -31,12 +31,12 @@ class SemesterCourseAdmin(admin.ModelAdmin):
 class TeacherAdmin(admin.ModelAdmin):
     list_display = ('id', 'name', 'short_name')
     search_fields = ('name', 'short_name')
-    ordering = ('id',)
+    ordering = ('name',)
 
 @admin.register(Semester)
 class SemesterAdmin(admin.ModelAdmin):
     list_display = ('id', 'name', 'semester_full_name', 'lunch_break_start', 'lunch_break_end', 'start_date')
     search_fields = ('name',)
-    ordering = ('id',)
+    ordering = ('name',)
 
 admin.site.register([NewRoutine])

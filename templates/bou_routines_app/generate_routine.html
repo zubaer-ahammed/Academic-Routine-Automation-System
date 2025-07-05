@@ -810,11 +810,31 @@
                         dataType: 'json',
                         success: function(data) {
                             if (data.has_routines) {
+                                // Show loading message
+                                $('body').append('<div id="loadingOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center;"><div class="bg-white p-4 rounded"><i class="bi bi-arrow-clockwise"></i> Loading existing routine...</div></div>');
+                                
                                 // If there are existing routines, reload the page with the semester parameter
                                 window.location.href = "{% url 'generate-routine' %}?semester=" + semesterId;
                             } else {
                                 // If no existing routines, just load the semester courses normally
                                 loadSemesterCourses(semesterId);
+                                
+                                // Show a message that no existing routine was found
+                                const semesterName = $('#semester option:selected').text();
+                                const noRoutineHtml = `
+                                    <div class="alert alert-warning mt-3 mb-3">
+                                        <h5><i class="bi bi-exclamation-triangle-fill"></i> No Existing Routine Found</h5>
+                                        <p class="mb-0">No previously generated routine found for <strong>${semesterName}</strong>. You can create a new routine by filling out the form below.</p>
+                                    </div>
+                                `;
+                                
+                                // Remove any existing no routine message
+                                if ($('#noRoutineInfo').length) {
+                                    $('#noRoutineInfo').remove();
+                                }
+                                
+                                // Add the message before the course repeater
+                                $('#courseRepeater').before('<div id="noRoutineInfo">' + noRoutineHtml + '</div>');
                             }
                         },
                         error: function() {

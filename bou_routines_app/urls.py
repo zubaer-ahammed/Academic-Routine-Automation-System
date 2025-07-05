@@ -9,6 +9,7 @@ urlpatterns = [
     path('get-semester-courses/', views.get_semester_courses, name='get-semester-courses'),
     path('get-existing-generated-routines/', views.get_existing_generated_routines, name='get-existing-generated-routines'),
     path('check-time-overlap/', views.check_time_overlap, name='check-time-overlap'),
+    path('update-routine-course/', views.update_routine_course, name='update-routine-course'),
     path('export-to-excel/<int:semester_id>/', views.export_to_excel, name='export-to-excel'),
     path('export-to-pdf/<int:semester_id>/', views.export_to_pdf, name='export-to-pdf'),
 ]

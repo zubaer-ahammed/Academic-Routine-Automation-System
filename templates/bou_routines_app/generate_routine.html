@@ -83,6 +83,44 @@
         table.generate-routine-table tbody tr td {
             font-size: 0.8em;
         }
+        
+        /* Inline editing styles */
+        .course-cell {
+            transition: all 0.2s ease;
+        }
+        
+        .course-cell:hover {
+            background-color: #0056b3 !important;
+            transform: scale(1.02);
+        }
+        
+        .course-cell .edit-controls {
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 4px;
+            padding: 8px;
+            margin-top: 4px;
+        }
+        
+        .course-cell .edit-controls .form-select {
+            font-size: 0.75em;
+            margin-bottom: 4px;
+        }
+        
+        .course-cell .edit-controls .btn {
+            font-size: 0.7em;
+            padding: 2px 6px;
+            margin: 0 2px;
+        }
+        
+        .course-cell .edit-controls .btn-success {
+            background-color: #28a745;
+            border-color: #28a745;
+        }
+        
+        .course-cell .edit-controls .btn-secondary {
+            background-color: #6c757d;
+            border-color: #6c757d;
+        }
     </style>
 </head>
 <body>
@@ -273,9 +311,22 @@
                                             {% if cell.is_lunch_break %}
                                                 <td colspan="{{ cell.colspan }}" class="bg-warning bg-opacity-25 text-center align-middle fw-bold">{{ cell.content }}</td>
                                             {% else %}
-                                                <td colspan="{{ cell.colspan }}" class="bg-primary text-white text-center align-middle">
-                                                    <div class="fw-bold">{{ cell.content.course_code }}</div>
-                                                    <div><small>({{ cell.content.teacher }})</small></div>
+                                                <td colspan="{{ cell.colspan }}" class="bg-primary text-white text-center align-middle course-cell" 
+                                                    data-routine-id="{{ cell.content.routine_id }}" 
+                                                    data-course-id="{{ cell.content.course_id }}"
+                                                    style="cursor: pointer;">
+                                                    <div class="fw-bold course-code">{{ cell.content.course_code }}</div>
+                                                    <div><small class="teacher-name">({{ cell.content.teacher }})</small></div>
+                                                    <div class="edit-controls" style="display: none;">
+                                                        <select class="form-select form-select-sm course-select-edit">
+                                                            <option value="">Select Course</option>
+                                                            <!-- Options will be populated dynamically via JS -->
+                                                        </select>
+                                                        <div class="mt-1">
+                                                            <button type="button" class="btn btn-success btn-sm save-course">Save</button>
+                                                            <button type="button" class="btn btn-secondary btn-sm cancel-edit">Cancel</button>
+                                                        </div>
+                                                    </div>
                                                 </td>
                                             {% endif %}
                                         {% else %}
@@ -1070,6 +1121,120 @@
             $(document).on('click', '.remove-course', function () {
                 if ($('.course-row').length > 1) {
                     $(this).closest('.course-row').remove();
+                }
+            });
+
+            // Inline editing functionality for routine table
+            $(document).on('click', '.course-cell', function(e) {
+                if ($(e.target).closest('.edit-controls').length) {
+                    return;
+                }
+                const cell = $(this);
+                const routineId = cell.data('routine-id');
+                const courseId = cell.data('course-id');
+                if (!routineId) return;
+                // Get current semester
+                const semesterId = $('#semester').val();
+                if (!semesterId) {
+                    alert('Please select a semester first.');
+                    return;
+                }
+                // Fetch semester courses via AJAX
+                $.ajax({
+                    url: "{% url 'get-semester-courses' %}",
+                    data: { 'semester_id': semesterId },
+                    dataType: 'json',
+                    success: function(data) {
+                        const select = cell.find('.course-select-edit');
+                        select.empty();
+                        select.append('<option value="">Select Course</option>');
+                        if (data.courses && data.courses.length > 0) {
+                            data.courses.forEach(function(course) {
+                                const option = $('<option></option>')
+                                    .val(course.id)
+                                    .text(course.code + ' - ' + course.name + ' (' + course.teacher_name + ')');
+                                if (course.id == courseId) option.prop('selected', true);
+                                select.append(option);
+                            });
+                        }
+                        cell.find('.edit-controls').show();
+                        cell.find('.course-code, .teacher-name').hide();
+                    },
+                    error: function() {
+                        alert('Could not load courses for this semester.');
+                    }
+                });
+            });
+
+            $(document).on('click', '.save-course', function() {
+                const cell = $(this).closest('.course-cell');
+                const routineId = cell.data('routine-id');
+                const select = cell.find('.course-select-edit');
+                const newCourseId = select.val();
+                
+                if (!newCourseId) {
+                    alert('Please select a course');
+                    return;
+                }
+                
+                // Show loading state
+                const saveBtn = $(this);
+                const originalText = saveBtn.text();
+                saveBtn.text('Saving...').prop('disabled', true);
+                
+                // Send AJAX request
+                $.ajax({
+                    url: "{% url 'update-routine-course' %}",
+                    method: 'POST',
+                    data: {
+                        'routine_id': routineId,
+                        'course_id': newCourseId,
+                        'csrfmiddlewaretoken': $('[name=csrfmiddlewaretoken]').val()
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            // Update the display
+                            cell.find('.course-code').text(response.course_code).show();
+                            cell.find('.teacher-name').text('(' + response.teacher_name + ')').show();
+                            cell.find('.edit-controls').hide();
+                            
+                            // Update data attributes
+                            cell.data('course-id', newCourseId);
+                            
+                            // Show success message
+                            const successMsg = $('<div class="alert alert-success alert-dismissible fade show" role="alert">Course updated successfully!<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>');
+                            $('.messages').append(successMsg);
+                            
+                            // Auto-dismiss after 3 seconds
+                            setTimeout(function() {
+                                successMsg.alert('close');
+                            }, 3000);
+                        } else {
+                            alert('Error updating course: ' + (response.error || 'Unknown error'));
+                        }
+                    },
+                    error: function(xhr) {
+                        const errorMsg = xhr.responseJSON ? xhr.responseJSON.error : 'Error updating course';
+                        alert('Error updating course: ' + errorMsg);
+                    },
+                    complete: function() {
+                        // Reset button state
+                        saveBtn.text(originalText).prop('disabled', false);
+                    }
+                });
+            });
+
+            $(document).on('click', '.cancel-edit', function() {
+                const cell = $(this).closest('.course-cell');
+                cell.find('.edit-controls').hide();
+                cell.find('.course-code, .teacher-name').show();
+            });
+
+            // Close edit mode when clicking outside
+            $(document).on('click', function(e) {
+                if (!$(e.target).closest('.course-cell').length) {
+                    $('.edit-controls').hide();
+                    $('.course-code, .teacher-name').show();
                 }
             });
         });

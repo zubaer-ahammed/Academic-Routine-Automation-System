@@ -86,6 +86,7 @@ def generate_routine(request):
                 for routine in existing_routines:
                     generated_routines.append({
                         'id': routine.id,
+                        'course_id': routine.course.id,
                         'date': routine.class_date,
                         'day': routine.day,
                         'course_code': routine.course.code,
@@ -205,8 +206,11 @@ def generate_routine(request):
                                     else:
                                         content = {
                                             'course_code': r['course_code'],
-                                            'teacher': r['teacher']
+                                            'teacher': r['teacher'],
                                         }
+                                        if 'id' in r and 'course_id' in r:
+                                            content['routine_id'] = r['id']
+                                            content['course_id'] = r['course_id']
                                         cell = {'content': content, 'colspan': colspan, 'is_lunch_break': False}
                                     row_cells.append(cell)
                                     slot_idx += colspan
@@ -520,6 +524,7 @@ def generate_routine(request):
                                 # Add to generated_routines for display
                                 generated_routines.append({
                                     'id': new_routine.id,
+                                    'course_id': course.id,
                                     'date': current_date,
                                     'day': day_name,
                                     'course_code': course.code,
@@ -662,8 +667,11 @@ def generate_routine(request):
                             else:
                                 content = {
                                     'course_code': r['course_code'],
-                                    'teacher': r['teacher']
+                                    'teacher': r['teacher'],
                                 }
+                                if 'id' in r and 'course_id' in r:
+                                    content['routine_id'] = r['id']
+                                    content['course_id'] = r['course_id']
                                 cell = {'content': content, 'colspan': colspan, 'is_lunch_break': False}
                             row_cells.append(cell)
                             slot_idx += colspan
@@ -1057,6 +1065,42 @@ def check_time_overlap(request):
     
     return JsonResponse({"overlaps": []})
 
+def update_routine_course(request):
+    """Update a routine's course via AJAX"""
+    if request.method == 'POST':
+        try:
+            routine_id = request.POST.get('routine_id')
+            new_course_id = request.POST.get('course_id')
+            
+            if not routine_id or not new_course_id:
+                return JsonResponse({"error": "Missing routine_id or course_id"}, status=400)
+            
+            # Get the routine and course
+            routine = NewRoutine.objects.get(id=routine_id)
+            new_course = Course.objects.get(id=new_course_id)
+            
+            # Update the routine's course
+            routine.course = new_course
+            routine.save()
+            
+            # Return updated course information
+            return JsonResponse({
+                "success": True,
+                "course_code": new_course.code,
+                "course_name": new_course.name,
+                "teacher_name": new_course.teacher.name,
+                "teacher_short_name": new_course.teacher.short_name if new_course.teacher.short_name else new_course.teacher.name
+            })
+            
+        except NewRoutine.DoesNotExist:
+            return JsonResponse({"error": "Routine not found"}, status=404)
+        except Course.DoesNotExist:
+            return JsonResponse({"error": "Course not found"}, status=404)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=400)
+    
+    return JsonResponse({"error": "Invalid request method"}, status=405)
+
 def export_to_excel(request, semester_id):
     """Export the routine to Excel file"""
     try:
@@ -1378,8 +1422,11 @@ def download_routines(request):
                             else:
                                 content = {
                                     'course_code': r['course_code'],
-                                    'teacher': r['teacher']
+                                    'teacher': r['teacher'],
                                 }
+                                if 'id' in r and 'course_id' in r:
+                                    content['routine_id'] = r['id']
+                                    content['course_id'] = r['course_id']
                                 cell = {'content': content, 'colspan': colspan, 'is_lunch_break': False}
                             row_cells.append(cell)
                             slot_idx += colspan

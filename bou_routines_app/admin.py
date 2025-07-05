@@ -39,4 +39,15 @@ class SemesterAdmin(admin.ModelAdmin):
     search_fields = ('name',)
     ordering = ('name',)
 
-admin.site.register([NewRoutine])
+@admin.register(NewRoutine)
+class NewRoutineAdmin(admin.ModelAdmin):
+    list_display = ('id', 'semester', 'course', 'class_date', 'day', 'start_time', 'end_time', 'get_teacher')
+    list_filter = ('semester', 'day', 'course__teacher', 'class_date')
+    search_fields = ('course__code', 'course__name', 'course__teacher__name', 'semester__name', 'day', 'class_date')
+    ordering = ('semester', 'class_date', 'start_time')
+    date_hierarchy = 'class_date'
+    
+    def get_teacher(self, obj):
+        return obj.teacher.name
+    get_teacher.short_description = 'Teacher'
+    get_teacher.admin_order_field = 'course__teacher'

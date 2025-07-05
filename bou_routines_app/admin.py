@@ -29,8 +29,8 @@ class SemesterCourseAdmin(admin.ModelAdmin):
 
 @admin.register(Teacher)
 class TeacherAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name')
-    search_fields = ('name',)
+    list_display = ('id', 'name', 'short_name')
+    search_fields = ('name', 'short_name')
     ordering = ('id',)
 
 @admin.register(Semester)

@@ -1187,7 +1187,7 @@ def export_to_pdf(request, semester_id):
                 if r.class_date == date and r.day == day:
                     routines_for_row.append({
                         'course_code': r.course.code,
-                        'teacher': r.course.teacher.name,
+                        'teacher': r.course.teacher.short_name,
                         'start_time': r.start_time.strftime('%H:%M'),
                         'end_time': r.end_time.strftime('%H:%M'),
                         'is_lunch_break': False
@@ -1220,7 +1220,7 @@ def export_to_pdf(request, semester_id):
                         if is_lunch:
                             cell_content = " PRAYER \n & LUNCH \n BREAK "
                         else:
-                            cell_content = f"{r['course_code']}\n({r['teacher']})"
+                            cell_content = f"{r['course_code']} ({r['teacher']})"
                         row.append(cell_content)
                         for _ in range(colspan-1):
                             row.append(None)
@@ -1324,7 +1324,7 @@ def export_to_pdf(request, semester_id):
                 sc.course.code,
                 sc.course.name,
                 str(sc.number_of_classes),
-                sc.course.teacher.name
+                sc.course.teacher.name + ' ('+sc.course.teacher.short_name+')'
             ])
         summary_col_widths = [0.18 * available_width, 0.38 * available_width, 0.18 * available_width, 0.26 * available_width]
         summary_table = Table(summary_data, colWidths=summary_col_widths)

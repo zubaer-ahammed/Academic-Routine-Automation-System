@@ -978,21 +978,35 @@
                 checkTimeOverlap(row);
             });
 
+            // Handle adding new course rows
             $('#addCourse').click(function () {
-                const newRow = $('.course-row:first').clone();
-                newRow.find('input').val('');
-                newRow.find('select').val('');
-                newRow.find('.overlap-feedback').hide().empty();
-                newRow.find('.time-input').removeClass('is-invalid');
-                $('#courseRepeater').append(newRow);
-                initMDTimePickers();
+                // Clone only the HTML, not data/events
+                const $firstRow = $('.course-row:first');
+                const $newRow = $firstRow.clone(false, false);
 
-                // If a semester is selected, apply the same courses to the new row
-                const semesterId = $('#semester').val();
-                if (semesterId) {
-                    const options = $('.course-select:first').html();
-                    newRow.find('.course-select').html(options);
-                }
+                // Clear all input/select values in the new row
+                $newRow.find('input').val('');
+                $newRow.find('select').val('');
+
+                // Remove any plugin artifacts (e.g., time pickers)
+                $newRow.find('.mdtimepicker').each(function() {
+                    // Remove any time picker plugin DOM artifacts if present
+                    $(this).off(); // Remove all event handlers
+                    $(this).removeClass('mdtimepicker-input');
+                });
+
+                // Remove any error or feedback messages
+                $newRow.find('.overlap-feedback, .checking-feedback').hide();
+
+                // Append the new row
+                $('#courseRepeater').append($newRow);
+
+                // Re-initialize time pickers on the new row
+                $newRow.find('.mdtimepicker').mdtimepicker({
+                    format: 'hh:mm',
+                    theme: 'blue',
+                    hourPadding: true
+                });
             });
 
             $(document).on('click', '.remove-course', function () {

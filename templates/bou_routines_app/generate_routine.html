@@ -121,6 +121,33 @@
             background-color: #6c757d;
             border-color: #6c757d;
         }
+        
+        /* Empty cell styles */
+        .empty-cell {
+            transition: all 0.2s ease;
+        }
+        
+        .empty-cell:hover {
+            background-color: #e9ecef !important;
+            transform: scale(1.02);
+        }
+        
+        .empty-cell .edit-controls {
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 4px;
+            padding: 8px;
+        }
+        
+        .empty-cell .edit-controls .form-select {
+            font-size: 0.75em;
+            margin-bottom: 4px;
+        }
+        
+        .empty-cell .edit-controls .btn {
+            font-size: 0.7em;
+            padding: 2px 6px;
+            margin: 0 2px;
+        }
     </style>
 </head>
 <body>
@@ -297,11 +324,11 @@
                                     <th></th>
                                     <th></th>
                                     {% for slot in time_slot_labels %}
-                                    <th>{{ slot }}</th>
+                                        <th>{{ slot }}</th>
                                     {% endfor %}
-                </tr>
-            </thead>
-            <tbody>
+                                </tr>
+                            </thead>
+                            <tbody>
                                 {% for row in routine_table_rows %}
                                 <tr>
                                     <td class="text-center fw-bold align-middle">{{ row.date|date:"d/m/Y" }}</td>
@@ -330,13 +357,36 @@
                                                 </td>
                                             {% endif %}
                                         {% else %}
-                                            <td colspan="{{ cell.colspan }}"></td>
+                                            <!-- DEBUG: cell data = {{ cell|safe }} -->
+                                            <!-- DEBUG: cell.start_time = {{ cell.start_time }} -->
+                                            <!-- DEBUG: cell.end_time = {{ cell.end_time }} -->
+                                            <td colspan="{{ cell.colspan }}" class="empty-cell"
+                                                data-date="{{ row.date|date:'Y-m-d' }}"
+                                                data-day="{{ row.day }}"
+                                                data-time-slot="{{ forloop.counter0 }}"
+                                                data-start-time="{{ cell.start_time }}"
+                                                data-end-time="{{ cell.end_time }}"
+                                                style="cursor: pointer; background-color: #f8f9fa;">
+                                                <div class="empty-cell-content" style="display: block;">
+                                                    <small class="text-muted">Click to add course</small>
+                                                </div>
+                                                <div class="edit-controls" style="display: none;">
+                                                    <select class="form-select form-select-sm course-select-edit">
+                                                        <option value="">Select Course</option>
+                                                        <!-- Options will be populated dynamically via JS -->
+                                                    </select>
+                                                    <div class="mt-1">
+                                                        <button type="button" class="btn btn-success btn-sm save-course">Save</button>
+                                                        <button type="button" class="btn btn-secondary btn-sm cancel-edit">Cancel</button>
+                                                    </div>
+                                                </div>
+                                            </td>
                                         {% endif %}
                                     {% endfor %}
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -1125,20 +1175,27 @@
             });
 
             // Inline editing functionality for routine table
-            $(document).on('click', '.course-cell', function(e) {
-                if ($(e.target).closest('.edit-controls').length) {
+            $(document).on('click', '.course-cell, .empty-cell', function(e) {
+                // Prevent triggering when clicking on edit controls or their children
+                if ($(e.target).closest('.edit-controls').length || 
+                    $(e.target).hasClass('form-select') || 
+                    $(e.target).hasClass('btn') ||
+                    $(e.target).closest('.btn').length) {
+                    e.stopPropagation();
                     return;
                 }
                 const cell = $(this);
+                const isEmptyCell = cell.hasClass('empty-cell');
                 const routineId = cell.data('routine-id');
                 const courseId = cell.data('course-id');
-                if (!routineId) return;
+                
                 // Get current semester
                 const semesterId = $('#semester').val();
                 if (!semesterId) {
                     alert('Please select a semester first.');
                     return;
                 }
+                
                 // Fetch semester courses via AJAX
                 $.ajax({
                     url: "{% url 'get-semester-courses' %}",
@@ -1158,7 +1215,11 @@
                             });
                         }
                         cell.find('.edit-controls').show();
-                        cell.find('.course-code, .teacher-name').hide();
+                        if (isEmptyCell) {
+                            cell.find('.empty-cell-content').hide();
+                        } else {
+                            cell.find('.course-code, .teacher-name').hide();
+                        }
                     },
                     error: function() {
                         alert('Could not load courses for this semester.');
@@ -1167,7 +1228,8 @@
             });
 
             $(document).on('click', '.save-course', function() {
-                const cell = $(this).closest('.course-cell');
+                const cell = $(this).closest('.course-cell, .empty-cell');
+                const isEmptyCell = cell.hasClass('empty-cell');
                 const routineId = cell.data('routine-id');
                 const select = cell.find('.course-select-edit');
                 const newCourseId = select.val();
@@ -1182,27 +1244,63 @@
                 const originalText = saveBtn.text();
                 saveBtn.text('Saving...').prop('disabled', true);
                 
+                // Prepare data for AJAX request
+                const ajaxData = {
+                    'course_id': newCourseId,
+                    'csrfmiddlewaretoken': $('[name=csrfmiddlewaretoken]').val()
+                };
+                
+                if (isEmptyCell) {
+                    // Creating new entry
+                    ajaxData['date'] = cell.data('date');
+                    ajaxData['day'] = cell.data('day');
+                    ajaxData['time_slot'] = cell.data('time-slot');
+                    ajaxData['semester_id'] = $('#semester').val();
+                    ajaxData['start_time'] = cell.data('start-time');
+                    ajaxData['end_time'] = cell.data('end-time');
+                } else {
+                    // Updating existing entry
+                    ajaxData['routine_id'] = routineId;
+                }
+                
                 // Send AJAX request
                 $.ajax({
                     url: "{% url 'update-routine-course' %}",
                     method: 'POST',
-                    data: {
-                        'routine_id': routineId,
-                        'course_id': newCourseId,
-                        'csrfmiddlewaretoken': $('[name=csrfmiddlewaretoken]').val()
-                    },
+                    data: ajaxData,
                     success: function(response) {
                         if (response.success) {
-                            // Update the display
-                            cell.find('.course-code').text(response.course_code).show();
-                            cell.find('.teacher-name').text('(' + response.teacher_name + ')').show();
-                            cell.find('.edit-controls').hide();
-                            
-                            // Update data attributes
-                            cell.data('course-id', newCourseId);
+                            if (isEmptyCell) {
+                                // Convert empty cell to course cell
+                                cell.removeClass('empty-cell').addClass('course-cell bg-primary text-white');
+                                cell.removeAttr('data-date data-day data-time-slot');
+                                cell.data('routine-id', response.routine_id);
+                                cell.data('course-id', newCourseId);
+                                
+                                // Update the display
+                                cell.html(`
+                                    <div class="fw-bold course-code">${response.course_code}</div>
+                                    <div><small class="teacher-name">(${response.teacher_name})</small></div>
+                                    <div class="edit-controls" style="display: none;">
+                                        <select class="form-select form-select-sm course-select-edit">
+                                            <option value="">Select Course</option>
+                                        </select>
+                                        <div class="mt-1">
+                                            <button type="button" class="btn btn-success btn-sm save-course">Save</button>
+                                            <button type="button" class="btn btn-secondary btn-sm cancel-edit">Cancel</button>
+                                        </div>
+                                    </div>
+                                `);
+                            } else {
+                                // Update existing course cell
+                                cell.find('.course-code').text(response.course_code).show();
+                                cell.find('.teacher-name').text('(' + response.teacher_name + ')').show();
+                                cell.find('.edit-controls').hide();
+                                cell.data('course-id', newCourseId);
+                            }
                             
                             // Show success message
-                            const successMsg = $('<div class="alert alert-success alert-dismissible fade show" role="alert">Course updated successfully!<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>');
+                            const successMsg = $('<div class="alert alert-success alert-dismissible fade show" role="alert">Course ' + (isEmptyCell ? 'added' : 'updated') + ' successfully!<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>');
                             $('.messages').append(successMsg);
                             
                             // Auto-dismiss after 3 seconds
@@ -1210,12 +1308,12 @@
                                 successMsg.alert('close');
                             }, 3000);
                         } else {
-                            alert('Error updating course: ' + (response.error || 'Unknown error'));
+                            alert('Error ' + (isEmptyCell ? 'adding' : 'updating') + ' course: ' + (response.error || 'Unknown error'));
                         }
                     },
                     error: function(xhr) {
-                        const errorMsg = xhr.responseJSON ? xhr.responseJSON.error : 'Error updating course';
-                        alert('Error updating course: ' + errorMsg);
+                        const errorMsg = xhr.responseJSON ? xhr.responseJSON.error : 'Error ' + (isEmptyCell ? 'adding' : 'updating') + ' course';
+                        alert(errorMsg);
                     },
                     complete: function() {
                         // Reset button state
@@ -1225,9 +1323,25 @@
             });
 
             $(document).on('click', '.cancel-edit', function() {
-                const cell = $(this).closest('.course-cell');
+                const cell = $(this).closest('.course-cell, .empty-cell');
+                const isEmptyCell = cell.hasClass('empty-cell');
+                
                 cell.find('.edit-controls').hide();
-                cell.find('.course-code, .teacher-name').show();
+                if (isEmptyCell) {
+                    cell.find('.empty-cell-content').show();
+                } else {
+                    cell.find('.course-code, .teacher-name').show();
+                }
+            });
+
+            // Prevent dropdown from closing when clicking on it
+            $(document).on('click', '.course-select-edit', function(e) {
+                e.stopPropagation();
+            });
+
+            // Prevent dropdown from closing when clicking on buttons
+            $(document).on('click', '.save-course, .cancel-edit', function(e) {
+                e.stopPropagation();
             });
 
             // Close edit mode when clicking outside
@@ -1235,6 +1349,30 @@
                 if (!$(e.target).closest('.course-cell').length) {
                     $('.edit-controls').hide();
                     $('.course-code, .teacher-name').show();
+                }
+            });
+
+            // Get all time slot headers (skip first two th for date/day)
+            const ths = document.querySelectorAll('.generate-routine-table thead tr:nth-child(2) th');
+            // Add data-start-time and data-end-time to each time slot header by parsing the label
+            ths.forEach(function(th, idx) {
+                if (idx < 2) return; // skip date/day columns
+                const label = th.textContent.trim();
+                const match = label.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+                if (match) {
+                    th.setAttribute('data-start-time', match[1]);
+                    th.setAttribute('data-end-time', match[2]);
+                }
+            });
+            // For each empty cell, set start/end time from header if missing
+            document.querySelectorAll('.empty-cell').forEach(function(td) {
+                const slotIdx = parseInt(td.getAttribute('data-time-slot'), 10);
+                const th = ths[slotIdx + 2]; // +2 to skip date/day columns
+                if (th) {
+                    if (!td.getAttribute('data-start-time') || !td.getAttribute('data-end-time')) {
+                        td.setAttribute('data-start-time', th.getAttribute('data-start-time'));
+                        td.setAttribute('data-end-time', th.getAttribute('data-end-time'));
+                    }
                 }
             });
         });

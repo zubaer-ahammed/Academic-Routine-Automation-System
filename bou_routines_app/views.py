@@ -678,8 +678,15 @@ def generate_routine(request):
                             found = True
                             break
                     if not found:
-                        # Empty cell for this slot
-                        row_cells.append({'content': '', 'colspan': 1, 'is_lunch_break': False})
+                        # Empty cell: attach start_time and end_time from slot_ranges
+                        cell = {
+                            'content': '',
+                            'colspan': 1,
+                            'is_lunch_break': False,
+                            'start_time': slot_start,
+                            'end_time': slot_end,
+                        }
+                        row_cells.append(cell)
                         slot_idx += 1
                 routine_table_rows.append({'date': date, 'day': day, 'cells': row_cells})
             # --- END NEW ---
@@ -1066,34 +1073,78 @@ def check_time_overlap(request):
     return JsonResponse({"overlaps": []})
 
 def update_routine_course(request):
-    """Update a routine's course via AJAX"""
+    """Update a routine's course or create a new routine entry via AJAX"""
     if request.method == 'POST':
         try:
             routine_id = request.POST.get('routine_id')
             new_course_id = request.POST.get('course_id')
             
-            if not routine_id or not new_course_id:
-                return JsonResponse({"error": "Missing routine_id or course_id"}, status=400)
+            if not new_course_id:
+                return JsonResponse({"error": "Missing course_id"}, status=400)
             
-            # Get the routine and course
-            routine = NewRoutine.objects.get(id=routine_id)
+            # Get the course
             new_course = Course.objects.get(id=new_course_id)
             
-            # Update the routine's course
-            routine.course = new_course
-            routine.save()
+            if routine_id:
+                # Updating existing routine
+                try:
+                    routine = NewRoutine.objects.get(id=routine_id)
+                    routine.course = new_course
+                    routine.save()
+                    
+                    # Return updated course information
+                    return JsonResponse({
+                        "success": True,
+                        "course_code": new_course.code,
+                        "course_name": new_course.name,
+                        "teacher_name": new_course.teacher.name,
+                        "teacher_short_name": new_course.teacher.short_name if new_course.teacher.short_name else new_course.teacher.name
+                    })
+                except NewRoutine.DoesNotExist:
+                    return JsonResponse({"error": "Routine not found"}, status=404)
+            else:
+                # Creating new routine entry
+                date_str = request.POST.get('date')
+                day = request.POST.get('day')
+                time_slot = request.POST.get('time_slot')
+                semester_id = request.POST.get('semester_id')
+                start_time_str = request.POST.get('start_time')
+                end_time_str = request.POST.get('end_time')
+                
+                if not all([date_str, day, time_slot, semester_id, start_time_str, end_time_str]):
+                    return JsonResponse({"error": "Missing required fields for new routine"}, status=400)
+                
+                try:
+                    semester = Semester.objects.get(id=semester_id)
+                    class_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                    start_time = datetime.strptime(start_time_str, '%H:%M').time()
+                    end_time = datetime.strptime(end_time_str, '%H:%M').time()
+                    
+                    # Create new routine entry
+                    new_routine = NewRoutine.objects.create(
+                        semester=semester,
+                        course=new_course,
+                        class_date=class_date,
+                        day=day,
+                        start_time=start_time,
+                        end_time=end_time
+                    )
+                    
+                    # Return new routine information
+                    return JsonResponse({
+                        "success": True,
+                        "routine_id": new_routine.id,
+                        "course_code": new_course.code,
+                        "course_name": new_course.name,
+                        "teacher_name": new_course.teacher.name,
+                        "teacher_short_name": new_course.teacher.short_name if new_course.teacher.short_name else new_course.teacher.name
+                    })
+                    
+                except Semester.DoesNotExist:
+                    return JsonResponse({"error": "Semester not found"}, status=404)
+                except ValueError:
+                    return JsonResponse({"error": "Invalid date or time format"}, status=400)
             
-            # Return updated course information
-            return JsonResponse({
-                "success": True,
-                "course_code": new_course.code,
-                "course_name": new_course.name,
-                "teacher_name": new_course.teacher.name,
-                "teacher_short_name": new_course.teacher.short_name if new_course.teacher.short_name else new_course.teacher.name
-            })
-            
-        except NewRoutine.DoesNotExist:
-            return JsonResponse({"error": "Routine not found"}, status=404)
         except Course.DoesNotExist:
             return JsonResponse({"error": "Course not found"}, status=404)
         except Exception as e:

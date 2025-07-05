@@ -1,0 +1,49 @@
+<div class="card mt-4">
+  <div class="card-header bg-dark text-white text-center">
+    <h5 class="mb-0">Existing Routine</h5>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-bordered routine-table mb-0">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Day</th>
+            {% for time_slot in time_slot_labels %}
+              <th>{{ time_slot }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in routine_table_rows %}
+            <tr>
+              <td class="date-cell">{{ row.date|date:"d/m/Y" }}</td>
+              <td class="day-cell">{{ row.day }}</td>
+              {% for cell in row.cells %}
+                {% if cell.colspan > 1 %}
+                  <td class="{% if cell.is_lunch_break %}break-cell{% else %}course-cell{% endif %}" colspan="{{ cell.colspan }}">
+                    {% if cell.is_lunch_break %}
+                      {{ cell.content }}
+                    {% else %}
+                      {{ cell.content.course_code }}<br>
+                      <small>({{ cell.content.teacher }})</small>
+                    {% endif %}
+                  </td>
+                {% else %}
+                  <td class="{% if cell.is_lunch_break %}break-cell{% else %}course-cell{% endif %}">
+                    {% if cell.is_lunch_break %}
+                      {{ cell.content }}
+                    {% elif cell.content %}
+                      {{ cell.content.course_code }}<br>
+                      <small>({{ cell.content.teacher }})</small>
+                    {% endif %}
+                  </td>
+                {% endif %}
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div> 

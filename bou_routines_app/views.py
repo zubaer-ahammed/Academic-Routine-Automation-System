@@ -585,7 +585,8 @@ def generate_routine(request):
         "semesters": semesters,
         "courses": courses,
         "teachers": teachers,
-        "generated_routines": generated_routines
+        "generated_routines": generated_routines,
+        "selected_semester_id": selected_semester_id,
     }
     
     # Add calendar view data if routines were generated

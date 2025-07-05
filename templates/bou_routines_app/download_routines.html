@@ -1,0 +1,278 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download Routines</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            padding: 2rem;
+        }
+        .container-bou {
+            max-width: 80%;
+        }
+        .bou-header {
+            padding-top: 1em;
+            padding-bottom: 1em;
+        }
+        .container-box-bou {
+            max-width: 80%;
+            margin-top: 3rem;
+            background: #fff;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .bou-logo {
+            height: 70px;
+            margin-right: 12px;
+            vertical-align: middle;
+        }
+        .semester-card {
+            margin-bottom: 2rem;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .semester-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .semester-title {
+            font-size: 1.25rem;
+            font-weight: bold;
+            margin: 0;
+        }
+        .semester-info {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        .download-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .routine-table {
+            margin: 0;
+        }
+        .routine-table th {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 0.5rem;
+            font-size: 0.85rem;
+            text-align: center;
+            vertical-align: middle;
+        }
+        .routine-table td {
+            border: 1px solid #dee2e6;
+            padding: 0.5rem;
+            font-size: 0.8rem;
+            text-align: center;
+            vertical-align: middle;
+            height: 50px;
+        }
+        .routine-table .date-cell {
+            background-color: #e9ecef;
+            font-weight: bold;
+            width: 100px;
+        }
+        .routine-table .day-cell {
+            background-color: #f8f9fa;
+            font-weight: bold;
+            width: 80px;
+        }
+        .routine-table .course-cell {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            font-weight: bold;
+        }
+        .routine-table .break-cell {
+            background-color: #fff3cd;
+            color: #856404;
+            font-weight: bold;
+        }
+        .no-routines {
+            text-align: center;
+            padding: 3rem;
+            color: #6c757d;
+            font-style: italic;
+        }
+        .stats-badge {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container container-bou bou-header">
+            <a class="navbar-brand d-flex align-items-center" href="#">
+                <img src="{% static 'bou_logo_icon.png' %}" alt="BOU Logo" class="bou-logo">
+                <span>BOU Routine Generator</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/generate/">Generate Routine</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'update-semester-courses' %}">Semester Courses</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{% url 'download-routines' %}">Download Routines</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container container-box-bou">
+        <h1>Download Routines</h1>
+        
+        {% if semester_routines %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i>
+                This page displays the last generated routines for all semesters. You can download them in Excel or PDF format.
+            </div>
+            
+            {% for semester_data in semester_routines %}
+                <div class="semester-card">
+                    <div class="semester-header">
+                        <div>
+                            <h3 class="semester-title">{{ semester_data.semester.name }}</h3>
+                            <div class="semester-info">
+                                {% if semester_data.semester.semester_full_name %}
+                                    {{ semester_data.semester.semester_full_name }}
+                                {% endif %}
+                                {% if semester_data.semester.term %}
+                                    • {{ semester_data.semester.term }}
+                                {% endif %}
+                                {% if semester_data.semester.session %}
+                                    • {{ semester_data.semester.session }}
+                                {% endif %}
+                                <span class="stats-badge">{{ semester_data.routine_count }} classes</span>
+                            </div>
+                        </div>
+                        <div class="download-buttons">
+                            <a href="{% url 'export-to-excel' semester_data.semester.id %}" class="btn btn-success btn-sm">
+                                <i class="bi bi-file-earmark-excel"></i> Excel
+                            </a>
+                            <a href="{% url 'export-to-pdf' semester_data.semester.id %}" class="btn btn-danger btn-sm">
+                                <i class="bi bi-file-earmark-pdf"></i> PDF
+                            </a>
+                            <a href="{% url 'generate-routine' %}?semester={{ semester_data.semester.id }}" class="btn btn-primary btn-sm">
+                                <i class="bi bi-pencil-square"></i> Edit
+                            </a>
+                            <button type="button" class="btn btn-outline-secondary btn-sm ms-2 view-toggle-btn" data-bs-toggle="collapse" data-bs-target="#routine-table-{{ semester_data.semester.id }}" aria-expanded="false" aria-controls="routine-table-{{ semester_data.semester.id }}">
+                                <span class="toggle-text">View</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="table-responsive collapse" id="routine-table-{{ semester_data.semester.id }}">
+                        <table class="table table-bordered routine-table mt-0">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Day</th>
+                                    {% for time_slot in semester_data.time_slot_labels %}
+                                        <th>{{ time_slot }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in semester_data.routine_table_rows %}
+                                    <tr>
+                                        <td class="date-cell">{{ row.date|date:"d/m/Y" }}</td>
+                                        <td class="day-cell">{{ row.day }}</td>
+                                        {% for cell in row.cells %}
+                                            {% if cell.colspan > 1 %}
+                                                <td class="{% if cell.is_lunch_break %}break-cell{% else %}course-cell{% endif %}" 
+                                                    colspan="{{ cell.colspan }}">
+                                                    {% if cell.is_lunch_break %}
+                                                        {{ cell.content }}
+                                                    {% else %}
+                                                        {{ cell.content.course_code }}<br>
+                                                        <small>({{ cell.content.teacher }})</small>
+                                                    {% endif %}
+                                                </td>
+                                            {% else %}
+                                                <td class="{% if cell.is_lunch_break %}break-cell{% else %}course-cell{% endif %}">
+                                                    {% if cell.is_lunch_break %}
+                                                        {{ cell.content }}
+                                                    {% elif cell.content %}
+                                                        {{ cell.content.course_code }}<br>
+                                                        <small>({{ cell.content.teacher }})</small>
+                                                    {% endif %}
+                                                </td>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="no-routines">
+                <h3>No Routines Found</h3>
+                <p>No routines have been generated yet. Please generate routines first using the "Generate Routine" page.</p>
+                <a href="/generate/" class="btn btn-primary">Go to Generate Routine</a>
+            </div>
+        {% endif %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set the current year in the footer
+            document.getElementById('currentYear').textContent = new Date().getFullYear();
+
+            // Attach event listeners for all collapses
+            document.querySelectorAll('.table-responsive.collapse').forEach(function(target) {
+                target.addEventListener('show.bs.collapse', function() {
+                    var btn = document.querySelector('.view-toggle-btn[data-bs-target="#' + target.id + '"]');
+                    if (btn) btn.querySelector('.toggle-text').textContent = 'Hide';
+                });
+                target.addEventListener('hide.bs.collapse', function() {
+                    var btn = document.querySelector('.view-toggle-btn[data-bs-target="#' + target.id + '"]');
+                    if (btn) btn.querySelector('.toggle-text').textContent = 'View';
+                });
+            });
+        });
+    </script>
+
+    <!-- Copyright Footer -->
+    <footer class="bg-dark text-white text-center py-3 mt-5">
+        <div class="container">
+            <p class="mb-0">
+                © <span id="currentYear"></span> BOU Routine Generator. Developed by
+                <a href="https://github.com/zubaer-ahammed/" target="_blank" class="text-info">Md. Zubaer Ahammed</a> and
+                <a href="https://github.com/Mojahidul21" target="_blank" class="text-info">Mojahidul Alam</a>
+            </p>
+        </div>
+    </footer>
+</body>
+</html> 

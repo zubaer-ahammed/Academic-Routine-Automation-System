@@ -65,6 +65,9 @@ def generate_routine(request):
     courses = Course.objects.select_related('teacher').all().order_by('code')
     teachers = Teacher.objects.all()
 
+    # Pre-select semester if provided in query params (GET)
+    selected_semester_id = request.GET.get('semester')
+
     # Check if we have any semester courses at all
     if not SemesterCourse.objects.exists():
         messages.warning(request, "No courses have been assigned to any semester yet. Please add courses to a semester first via the 'Semester Courses' menu.")
@@ -1042,6 +1045,140 @@ def export_to_excel(request, semester_id):
 
     except Exception as e:
         return HttpResponse(f"Error generating Excel file: {str(e)}", status=500)
+
+def download_routines(request):
+    """Display the last generated routines for all semesters"""
+    # Get all semesters that have generated routines
+    semesters_with_routines = Semester.objects.filter(
+        newroutine__isnull=False
+    ).distinct().order_by('order', 'name')
+    
+    # For each semester, get the last generated routine data
+    semester_routines = []
+    for semester in semesters_with_routines:
+        # Get the latest routines for this semester
+        latest_routines = NewRoutine.objects.filter(
+            semester=semester
+        ).order_by('class_date', 'start_time')
+        
+        if latest_routines.exists():
+            # Get unique dates and days
+            unique_dates_days = []
+            seen_dates = set()
+            for routine in latest_routines:
+                date_str = routine.class_date.strftime('%Y-%m-%d')
+                if date_str not in seen_dates:
+                    seen_dates.add(date_str)
+                    unique_dates_days.append((routine.class_date, routine.day))
+            
+            # Sort dates chronologically
+            unique_dates_days.sort(key=lambda x: x[0])
+            
+            # Build time slot structure for merged view
+            time_boundaries = set()
+            for routine in latest_routines:
+                time_boundaries.add(routine.start_time.strftime('%H:%M'))
+                time_boundaries.add(routine.end_time.strftime('%H:%M'))
+            if semester.lunch_break_start and semester.lunch_break_end:
+                time_boundaries.add(semester.lunch_break_start.strftime('%H:%M'))
+                time_boundaries.add(semester.lunch_break_end.strftime('%H:%M'))
+            time_boundaries = sorted(time_boundaries)
+            
+            slot_ranges = []
+            for i in range(len(time_boundaries)-1):
+                slot_start = time_boundaries[i]
+                slot_end = time_boundaries[i+1]
+                slot_ranges.append((slot_start, slot_end, f"{slot_start} - {slot_end}"))
+            
+            used_slots = set()
+            for routine in latest_routines:
+                r_start = routine.start_time.strftime('%H:%M')
+                r_end = routine.end_time.strftime('%H:%M')
+                for i in range(len(time_boundaries)-1):
+                    slot_start = time_boundaries[i]
+                    slot_end = time_boundaries[i+1]
+                    if (slot_start >= r_start and slot_end <= r_end):
+                        used_slots.add((slot_start, slot_end))
+            if semester.lunch_break_start and semester.lunch_break_end:
+                lb_start = semester.lunch_break_start.strftime('%H:%M')
+                lb_end = semester.lunch_break_end.strftime('%H:%M')
+                for i in range(len(time_boundaries)-1):
+                    slot_start = time_boundaries[i]
+                    slot_end = time_boundaries[i+1]
+                    if (slot_start >= lb_start and slot_end <= lb_end):
+                        used_slots.add((slot_start, slot_end))
+            
+            filtered_slot_ranges = []
+            for slot_start, slot_end, label in slot_ranges:
+                if (slot_start, slot_end) in used_slots:
+                    filtered_slot_ranges.append((slot_start, slot_end, label))
+            slot_ranges = filtered_slot_ranges
+            
+            # Build routine table rows
+            routine_table_rows = []
+            for date, day in unique_dates_days:
+                row_cells = []
+                slot_idx = 0
+                routines_for_row = []
+                for r in latest_routines:
+                    if r.class_date == date and r.day == day:
+                        routines_for_row.append({
+                            'course_code': r.course.code,
+                            'teacher': r.course.teacher.short_name,
+                            'start_time': r.start_time.strftime('%H:%M'),
+                            'end_time': r.end_time.strftime('%H:%M'),
+                            'is_lunch_break': False
+                        })
+                if semester.lunch_break_start and semester.lunch_break_end:
+                    routines_for_row.append({
+                        'start_time': semester.lunch_break_start.strftime('%H:%M'),
+                        'end_time': semester.lunch_break_end.strftime('%H:%M'),
+                        'is_lunch_break': True
+                    })
+                routines_for_row.sort(key=lambda r: r['start_time'])
+                
+                while slot_idx < len(slot_ranges):
+                    slot_start, slot_end, slot_label = slot_ranges[slot_idx]
+                    found = False
+                    for r in routines_for_row:
+                        r_start = r['start_time']
+                        r_end = r['end_time']
+                        if r_start == slot_start:
+                            colspan = 0
+                            for j in range(slot_idx, len(slot_ranges)):
+                                s2, e2, _ = slot_ranges[j]
+                                if e2 <= r_end:
+                                    colspan += 1
+                                else:
+                                    break
+                            if r.get('is_lunch_break'):
+                                content = 'BREAK'
+                                cell = {'content': content, 'colspan': colspan, 'is_lunch_break': True}
+                            else:
+                                content = {
+                                    'course_code': r['course_code'],
+                                    'teacher': r['teacher']
+                                }
+                                cell = {'content': content, 'colspan': colspan, 'is_lunch_break': False}
+                            row_cells.append(cell)
+                            slot_idx += colspan
+                            found = True
+                            break
+                    if not found:
+                        row_cells.append({'content': '', 'colspan': 1, 'is_lunch_break': False})
+                        slot_idx += 1
+                routine_table_rows.append({'date': date, 'day': day, 'cells': row_cells})
+            
+            semester_routines.append({
+                'semester': semester,
+                'routine_table_rows': routine_table_rows,
+                'time_slot_labels': [label for _, _, label in slot_ranges],
+                'routine_count': latest_routines.count()
+            })
+    
+    return render(request, 'bou_routines_app/download_routines.html', {
+        'semester_routines': semester_routines
+    })
 
 def export_to_pdf(request, semester_id):
     """Export the routine to PDF file"""

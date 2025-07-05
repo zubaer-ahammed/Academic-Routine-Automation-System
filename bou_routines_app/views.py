@@ -377,12 +377,43 @@ def generate_routine(request):
             time_boundaries = sorted(time_boundaries)
 
             # 2. Build contiguous time slots (pairs of adjacent boundaries)
-            time_slot_labels = []  # e.g., ['08:45 - 09:45', '09:45 - 10:50', ...]
+            all_time_slot_labels = []  # e.g., ['08:45 - 09:45', ...]
             for i in range(len(time_boundaries)-1):
-                time_slot_labels.append(f"{time_boundaries[i]} - {time_boundaries[i+1]}")
+                all_time_slot_labels.append(f"{time_boundaries[i]} - {time_boundaries[i+1]}")
+
+            # 2.5. Filter only slots that are actually used by a class or lunch break
+            # Build a set of (start, end) for all routines and lunch break
+            used_slots = set()
+            for routine in generated_routines:
+                r_start = routine['start_time']
+                r_end = routine['end_time']
+                for i in range(len(time_boundaries)-1):
+                    slot_start = time_boundaries[i]
+                    slot_end = time_boundaries[i+1]
+                    # If the slot is fully within the routine
+                    if (slot_start >= r_start and slot_end <= r_end):
+                        used_slots.add((slot_start, slot_end))
+            # Add lunch break as used slot if present
+            if selected_semester.lunch_break_start and selected_semester.lunch_break_end:
+                lb_start = selected_semester.lunch_break_start.strftime('%H:%M')
+                lb_end = selected_semester.lunch_break_end.strftime('%H:%M')
+                for i in range(len(time_boundaries)-1):
+                    slot_start = time_boundaries[i]
+                    slot_end = time_boundaries[i+1]
+                    if (slot_start >= lb_start and slot_end <= lb_end):
+                        used_slots.add((slot_start, slot_end))
+            # Now, filter all_time_slot_labels to only those in used_slots
+            time_slot_labels = []
+            slot_ranges = []
+            for i in range(len(time_boundaries)-1):
+                slot_start = time_boundaries[i]
+                slot_end = time_boundaries[i+1]
+                if (slot_start, slot_end) in used_slots:
+                    label = f"{slot_start} - {slot_end}"
+                    time_slot_labels.append(label)
+                    slot_ranges.append((slot_start, slot_end, label))
 
             # 3. For each date/day, build a row of cells (with content and colspan)
-            # Map: (date, day) -> list of routines for that date
             from collections import defaultdict
             routines_by_date = defaultdict(list)
             for routine in generated_routines:
@@ -401,11 +432,7 @@ def generate_routine(request):
             for date, day in unique_dates:
                 row_cells = []
                 slot_idx = 0
-                # Build a list of (start, end, label) for easier comparison
-                slot_ranges = []
-                for label in time_slot_labels:
-                    s, e = label.split(' - ')
-                    slot_ranges.append((s, e, label))
+                # Use filtered slot_ranges
                 # For this date, get all routines (by start/end)
                 routines = routines_by_date.get((date, day), [])
                 # Add lunch break as a pseudo-routine
@@ -419,7 +446,6 @@ def generate_routine(request):
                 # Sort by start_time
                 routines_for_row.sort(key=lambda r: r['start_time'])
                 # For each slot, check if a routine (or lunch) starts at this slot
-                i = 0
                 while slot_idx < len(slot_ranges):
                     slot_start, slot_end, slot_label = slot_ranges[slot_idx]
                     found = False
@@ -438,7 +464,6 @@ def generate_routine(request):
                             # Prepare cell content
                             if r.get('is_lunch_break'):
                                 content = 'PRAYER & LUNCH BREAK'
-                                is_lunch_break = True
                                 cell = {'content': content, 'colspan': colspan, 'is_lunch_break': True}
                             else:
                                 content = {

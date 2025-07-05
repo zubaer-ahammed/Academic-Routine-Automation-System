@@ -1,0 +1,8 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block branding %}
+  <a href="{% url 'admin:index' %}" style="display: flex; align-items: center; gap: 10px; padding: 0.25em 1em; background-color: #fff; border-radius: 3px;" >
+    <img src="{% static 'bou_logo.png' %}" alt="BOU Logo" style="height: 48px; vertical-align: middle;">
+  </a>
+{% endblock %} 

@@ -80,6 +80,9 @@
             margin-right: 12px;
             vertical-align: middle;
         }
+        table.generate-routine-table tbody tr td {
+            font-size: 0.8em;
+        }
     </style>
 </head>
 <body>
@@ -110,7 +113,7 @@
             </div>
         </div>
     </nav>
-    <div class="container container-box-bou">
+    <div class="container container-box-bou generate-routine-container">
         <h1>Generate Routine</h1>
 
         {% if messages %}
@@ -232,7 +235,7 @@
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-bordered border-dark mb-0">
+                        <table class="table table-bordered border-dark mb-0 generate-routine-table">
                             <thead>
                                 <tr class="bg-dark text-white text-center">
                                     <th class="date_title" width="9%" style="vertical-align: middle;">Date</th>
@@ -333,7 +336,6 @@
     <script src="https://cdn.jsdelivr.net/gh/dmuy/MDTimePicker@v1.0.2-rc2/mdtimepicker.min.js"></script>
     <!-- Add Flatpickr JS for multiple date selection -->
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <script src="{% static 'bou_routines_app/time_picker_fix.js' %}"></script>
     <script>
         $(function() {
             // Set the current year in the footer

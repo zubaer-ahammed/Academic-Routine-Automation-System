@@ -1135,148 +1135,157 @@ def export_to_pdf(request, semester_id):
         # elements.append(title)
         elements.append(Paragraph("<br/>", styles['Normal']))
 
-        # Create the data for the table
-        table_data = []
+        # --- Build slot_ranges before using it ---
+        time_boundaries = set()
+        for routine in routines:
+            time_boundaries.add(routine.start_time.strftime('%H:%M'))
+            time_boundaries.add(routine.end_time.strftime('%H:%M'))
+        if selected_semester.lunch_break_start and selected_semester.lunch_break_end:
+            time_boundaries.add(selected_semester.lunch_break_start.strftime('%H:%M'))
+            time_boundaries.add(selected_semester.lunch_break_end.strftime('%H:%M'))
+        time_boundaries = sorted(time_boundaries)
 
-        # Headers
-        header_row = ["Date", "Day"] + time_slots
-        table_data.append(header_row)
+        slot_ranges = []
+        for i in range(len(time_boundaries)-1):
+            slot_start = time_boundaries[i]
+            slot_end = time_boundaries[i+1]
+            slot_ranges.append((slot_start, slot_end, f"{slot_start} - {slot_end}"))
 
-        # Data rows
-        for date, day in unique_dates_days:
+        used_slots = set()
+        for routine in routines:
+            r_start = routine.start_time.strftime('%H:%M')
+            r_end = routine.end_time.strftime('%H:%M')
+            for i in range(len(time_boundaries)-1):
+                slot_start = time_boundaries[i]
+                slot_end = time_boundaries[i+1]
+                if (slot_start >= r_start and slot_end <= r_end):
+                    used_slots.add((slot_start, slot_end))
+        if selected_semester.lunch_break_start and selected_semester.lunch_break_end:
+            lb_start = selected_semester.lunch_break_start.strftime('%H:%M')
+            lb_end = selected_semester.lunch_break_end.strftime('%H:%M')
+            for i in range(len(time_boundaries)-1):
+                slot_start = time_boundaries[i]
+                slot_end = time_boundaries[i+1]
+                if (slot_start >= lb_start and slot_end <= lb_end):
+                    used_slots.add((slot_start, slot_end))
+        filtered_slot_ranges = []
+        for slot_start, slot_end, label in slot_ranges:
+            if (slot_start, slot_end) in used_slots:
+                filtered_slot_ranges.append((slot_start, slot_end, label))
+        slot_ranges = filtered_slot_ranges
+
+        # --- Build table_data for PDF with colspans and track spans ---
+        span_commands = []  # To collect ('SPAN', ...) commands
+        header_row = ["Date", "Day"] + [label for _, _, label in slot_ranges]
+        table_data = [header_row]
+        for row_idx, (date, day) in enumerate(unique_dates_days, start=1):
             row = [date.strftime('%d/%m/%Y'), day]
-
-            for time_slot in time_slots:
-                # Check if this is a lunch break
-                if lunch_break and time_slot == lunch_break:
-                    row.append(" PRAYER \n & LUNCH \n BREAK ")
-                else:
-                    # Check if there's a class in this time slot
-                    cell_content = ""
-                    for routine in routines:
-                        routine_time_slot = f"{routine.start_time.strftime('%H:%M')} - {routine.end_time.strftime('%H:%M')}"
-                        if routine.class_date == date and routine_time_slot == time_slot:
-                            # Create styles for course code and teacher name
-                            course_style = ParagraphStyle(
-                                'CourseStyle',
-                                parent=styles['Normal'],
-                                fontSize=9,
-                                alignment=TA_CENTER,
-                                spaceAfter=2,
-                                leading=9,  # Fixed line height for course code
-                                spaceBefore=0  # Remove space before course code
-                            )
-                            teacher_style = ParagraphStyle(
-                                'TeacherStyle',
-                                parent=styles['Normal'],
-                                fontSize=7,
-                                alignment=TA_CENTER,
-                                textColor=colors.darkblue,
-                                leading=7,  # Line height
-                                maxLines=3,  # Maximum number of lines
-                                ellipsis='...',  # Add ellipsis if text is truncated
-                                spaceBefore=0  # Remove space before teacher name
-                            )
-                            
-                            # Format teacher name with parentheses
-                            teacher_name = f"({routine.course.teacher.name})"
-                            
-                            # Create the cell content with course code and teacher name
-                            # Use non-breaking space to ensure course code stays on one line
-                            cell_content = Paragraph(
-                                f"<b>{routine.course.code.replace(' ', '&nbsp;')}</b><br/>{teacher_name}",
-                                course_style
-                            )
-                            break
-
-                    row.append(cell_content)
-
+            slot_idx = 0
+            # Build routines_for_row: all routines for this date/day, plus lunch break if present
+            routines_for_row = []
+            for r in routines:
+                if r.class_date == date and r.day == day:
+                    routines_for_row.append({
+                        'course_code': r.course.code,
+                        'teacher': r.course.teacher.name,
+                        'start_time': r.start_time.strftime('%H:%M'),
+                        'end_time': r.end_time.strftime('%H:%M'),
+                        'is_lunch_break': False
+                    })
+            if selected_semester.lunch_break_start and selected_semester.lunch_break_end:
+                routines_for_row.append({
+                    'start_time': selected_semester.lunch_break_start.strftime('%H:%M'),
+                    'end_time': selected_semester.lunch_break_end.strftime('%H:%M'),
+                    'is_lunch_break': True
+                })
+            routines_for_row.sort(key=lambda r: r['start_time'])
+            col_idx = 2  # first two columns are date and day
+            while slot_idx < len(slot_ranges):
+                slot_start, slot_end, slot_label = slot_ranges[slot_idx]
+                found = False
+                for r in routines_for_row:
+                    r_start = r['start_time']
+                    r_end = r['end_time']
+                    is_lunch = r.get('is_lunch_break', False)
+                    if r_start == slot_start:
+                        # Determine colspan
+                        colspan = 0
+                        for j in range(slot_idx, len(slot_ranges)):
+                            s2, e2, _ = slot_ranges[j]
+                            if e2 <= r_end:
+                                colspan += 1
+                            else:
+                                break
+                        # Add content and None for colspan-1
+                        if is_lunch:
+                            cell_content = " PRAYER \n & LUNCH \n BREAK "
+                        else:
+                            cell_content = f"{r['course_code']}\n({r['teacher']})"
+                        row.append(cell_content)
+                        for _ in range(colspan-1):
+                            row.append(None)
+                        # Add SPAN command if colspan > 1
+                        if colspan > 1:
+                            span_commands.append(('SPAN', (col_idx, row_idx), (col_idx + colspan - 1, row_idx)))
+                        col_idx += colspan
+                        slot_idx += colspan
+                        found = True
+                        break
+                if not found:
+                    row.append("")
+                    col_idx += 1
+                    slot_idx += 1
             table_data.append(row)
 
         # Calculate available width for all tables
         available_width = page_width - doc.leftMargin - doc.rightMargin
 
-        # Set column widths for the main routine table
-        date_col_width = 0.12 * available_width  # 12%
-        day_col_width = 0.10 * available_width   # 10%
-        time_slot_width = (available_width - date_col_width - day_col_width) / len(time_slots) if time_slots else 0
-        col_widths = [date_col_width, day_col_width] + [time_slot_width] * len(time_slots)
-
-        # Create the table with defined column widths
+        # Set the routine table to the same width as the summary table
+        # Use available_width and distribute proportionally across all columns
+        num_cols = len(header_row)
+        col_widths = [available_width * (1/num_cols)] * num_cols
+        # If you want to keep date/day columns slightly narrower, you can do:
+        # date_col_width = 0.18 * available_width
+        # day_col_width = 0.18 * available_width
+        # time_col_width = (available_width - date_col_width - day_col_width) / (num_cols - 2)
+        # col_widths = [date_col_width, day_col_width] + [time_col_width] * (num_cols - 2)
         table = Table(table_data, colWidths=col_widths, repeatRows=1)
-
         # Custom style for the table
         style = TableStyle([
             # Headers styling
             ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 9),  # Slightly smaller font for headers
-
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
             # Alignment and spacing
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # Changed to TOP alignment
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('LEFTPADDING', (0, 0), (-1, -1), 2),
             ('RIGHTPADDING', (0, 0), (-1, -1), 2),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),  # Reduced top padding
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-
             # Grid and borders
             ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
             ('BOX', (0, 0), (-1, -1), 1, colors.black),
-
             # Set a fixed row height
             ('ROWHEIGHT', (0, 1), (-1, -1), 35),
-
             # Text wrapping for all cells
             ('WORDWRAP', (0, 0), (-1, -1), True),
         ])
-
         # Add background color for lunch breaks and classes
         for i, row in enumerate(table_data[1:], 1):
             for j, cell in enumerate(row[2:], 2):
                 if cell == " PRAYER \n & LUNCH \n BREAK ":
-                    style.add('BACKGROUND', (j, i), (j, i), colors.lightgrey) # Changed color
+                    style.add('BACKGROUND', (j, i), (j, i), colors.lightgrey)
                     style.add('TEXTCOLOR', (j, i), (j, i), colors.black)
                     style.add('FONTNAME', (j, i), (j, i), 'Helvetica-Bold')
-                    style.add('FONTSIZE', (j, i), (j, i), 9)  # Changed font size back to 9
+                    style.add('FONTSIZE', (j, i), (j, i), 9)
                 elif cell:  # If there's content (a class)
                     style.add('BACKGROUND', (j, i), (j, i), colors.lightblue)
-                    # Create styles for course code and teacher name
-                    course_style = ParagraphStyle(
-                        'CourseStyle',
-                        parent=styles['Normal'],
-                        fontSize=9,
-                        alignment=TA_CENTER,
-                        spaceAfter=2,
-                        leading=9,  # Fixed line height for course code
-                        spaceBefore=0  # Remove space before course code
-                    )
-                    teacher_style = ParagraphStyle(
-                        'TeacherStyle',
-                        parent=styles['Normal'],
-                        fontSize=7,
-                        alignment=TA_CENTER,
-                        textColor=colors.darkblue,
-                        leading=7,  # Line height
-                        maxLines=3,  # Maximum number of lines
-                        ellipsis='...',  # Add ellipsis if text is truncated
-                        spaceBefore=0  # Remove space before teacher name
-                    )
-                    
-                    # Format teacher name with parentheses
-                    teacher_name = f"({routine.course.teacher.name})"
-                    
-                    # Create the cell content with course code and teacher name
-                    # Use non-breaking space to ensure course code stays on one line
-                    cell_content = Paragraph(
-                        f"{routine.course.code.replace(' ', '&nbsp;')}<br/>{teacher_name}",
-                        course_style
-                    )
-
+        # After creating the TableStyle, add the span commands
+        for cmd in span_commands:
+            style.add(*cmd)
         table.setStyle(style)
-
-        # Add the table to elements
         elements.append(table)
 
         # Add vertical space before the N.B. note

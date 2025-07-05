@@ -227,9 +227,9 @@
                                     {% for slot in time_slot_labels %}
                                     <th>{{ slot }}</th>
                                     {% endfor %}
-                                </tr>
-                            </thead>
-                            <tbody>
+                </tr>
+            </thead>
+            <tbody>
                                 {% for row in routine_table_rows %}
                                 <tr>
                                     <td class="text-center fw-bold align-middle">{{ row.date|date:"d/m/Y" }}</td>
@@ -248,10 +248,10 @@
                                             <td colspan="{{ cell.colspan }}"></td>
                                         {% endif %}
                                     {% endfor %}
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
                     </div>
                 </div>
             </div>

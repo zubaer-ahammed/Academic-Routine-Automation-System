@@ -463,7 +463,7 @@ def generate_routine(request):
                                     break
                             # Prepare cell content
                             if r.get('is_lunch_break'):
-                                content = 'PRAYER & LUNCH BREAK'
+                                content = 'BREAK'
                                 cell = {'content': content, 'colspan': colspan, 'is_lunch_break': True}
                             else:
                                 content = {
@@ -914,7 +914,7 @@ def export_to_excel(request, semester_id):
             for col, time_slot in enumerate(time_slots):
                 # Check if this is a lunch break
                 if lunch_break and time_slot == lunch_break:
-                    worksheet.write(row, col + 2, "PRAYER & LUNCH BREAK", lunch_format)
+                    worksheet.write(row, col + 2, "BREAK", lunch_format)
                 else:
                     # Check if there's a class in this time slot
                     cell_content = ""
@@ -1218,7 +1218,7 @@ def export_to_pdf(request, semester_id):
                                 break
                         # Add content and None for colspan-1
                         if is_lunch:
-                            cell_content = " PRAYER \n & LUNCH \n BREAK "
+                            cell_content = "BREAK"
                         else:
                             cell_content = f"{r['course_code']} ({r['teacher']})"
                         row.append(cell_content)
@@ -1240,15 +1240,31 @@ def export_to_pdf(request, semester_id):
         # Calculate available width for all tables
         available_width = page_width - doc.leftMargin - doc.rightMargin
 
-        # Set the routine table to the same width as the summary table
-        # Use available_width and distribute proportionally across all columns
+        # Set column widths directly without depending on lunch_col_idx
         num_cols = len(header_row)
-        col_widths = [available_width * (1/num_cols)] * num_cols
-        # If you want to keep date/day columns slightly narrower, you can do:
-        # date_col_width = 0.18 * available_width
-        # day_col_width = 0.18 * available_width
-        # time_col_width = (available_width - date_col_width - day_col_width) / (num_cols - 2)
-        # col_widths = [date_col_width, day_col_width] + [time_col_width] * (num_cols - 2)
+        date_col_width = 65   # narrow date column
+        day_col_width = 55    # narrow day column
+
+        # Calculate remaining width for other columns
+        remaining_width = available_width - date_col_width - day_col_width
+        other_col_width = remaining_width / (num_cols - 2) if num_cols > 2 else 0
+
+        # Build column widths list
+        col_widths = []
+        for i in range(num_cols):
+            if i == 0:
+                col_widths.append(date_col_width)
+            elif i == 1:
+                col_widths.append(day_col_width)
+            else:
+                col_widths.append(other_col_width)
+
+        # Scale down if sum(col_widths) > available_width
+        total_width = sum(col_widths)
+        if total_width > available_width:
+            scale = available_width / total_width
+            col_widths = [w * scale for w in col_widths]
+
         table = Table(table_data, colWidths=col_widths, repeatRows=1)
         # Custom style for the table
         style = TableStyle([
@@ -1275,7 +1291,7 @@ def export_to_pdf(request, semester_id):
         # Add background color for lunch breaks and classes
         for i, row in enumerate(table_data[1:], 1):
             for j, cell in enumerate(row[2:], 2):
-                if cell == " PRAYER \n & LUNCH \n BREAK ":
+                if cell == "BREAK":
                     style.add('BACKGROUND', (j, i), (j, i), colors.lightgrey)
                     style.add('TEXTCOLOR', (j, i), (j, i), colors.black)
                     style.add('FONTNAME', (j, i), (j, i), 'Helvetica-Bold')
@@ -1326,7 +1342,7 @@ def export_to_pdf(request, semester_id):
                 str(sc.number_of_classes),
                 sc.course.teacher.name + ' ('+sc.course.teacher.short_name+')'
             ])
-        summary_col_widths = [0.18 * available_width, 0.38 * available_width, 0.18 * available_width, 0.26 * available_width]
+        summary_col_widths = [0.12 * available_width, 0.38 * available_width, 0.14 * available_width, 0.36 * available_width]
         summary_table = Table(summary_data, colWidths=summary_col_widths)
         summary_style = TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.white),

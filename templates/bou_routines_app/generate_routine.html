@@ -1288,9 +1288,17 @@
                                 cell.removeAttr('data-date data-day data-time-slot');
                                 cell.data('routine-id', response.routine_id);
                                 cell.data('course-id', newCourseId);
-                                
-                                // Update the display
+
+                                // Update the display with icons and content
                                 cell.html(`
+                                    <span style="position: absolute; top: 2px; right: 4px; z-index: 2; cursor: pointer; opacity: 0.8; color: #1E1E1E;" title="Edit course">
+                                      <!-- Pen SVG icon -->
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.3 3.7l4 4L7 17H3v-4l9.3-9.3z"/><path d="M15.7 6.3l-2-2"/></svg>
+                                    </span>
+                                    <span style="position: absolute; top: 2px; left: 4px; z-index: 2; cursor: pointer; opacity: 0.8; color: #1E1E1E;" class="remove-course-btn" title="Remove course">
+                                      <!-- Trash SVG icon -->
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                    </span>
                                     <div class="fw-bold course-code">${response.course_code}</div>
                                     <div><small class="teacher-name">(${response.teacher_name})</small></div>
                                     <div class="edit-controls" style="display: none;">

@@ -1822,8 +1822,8 @@ def export_to_pdf(request, semester_id):
 
         # Set column widths directly without depending on lunch_col_idx
         num_cols = len(header_row)
-        date_col_width = 65   # narrow date column
-        day_col_width = 55    # narrow day column
+        date_col_width = 60   # narrow date column
+        day_col_width = 50    # narrow day column
 
         # Calculate remaining width for other columns
         remaining_width = available_width - date_col_width - day_col_width

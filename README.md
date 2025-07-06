@@ -17,5 +17,6 @@ Academic Routine Automation System for SST, BOU
 <img width="1259" alt="sample_routine" src="https://github.com/user-attachments/assets/e7cac3ac-ce1a-43d8-bdb6-5dd04682cb72" />
 
 ## Admin Backend
-<img width="1442" alt="Screenshot 2025-05-18 at 7 57 21 AM" src="https://github.com/user-attachments/assets/9b776edf-31f0-4c0b-aa14-2589ce7d77fd" />
+<img width="1494" alt="bou_routine_generator_backend" src="https://github.com/user-attachments/assets/0845159b-d8a5-4848-b683-933ef9ec29de" />
+
 

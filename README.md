@@ -19,4 +19,11 @@ Academic Routine Automation System for SST, BOU
 ## Admin Backend
 <img width="1494" alt="bou_routine_generator_backend" src="https://github.com/user-attachments/assets/0845159b-d8a5-4848-b683-933ef9ec29de" />
 
+## Semester Courses
+<img width="1278" alt="semester_courses_page" src="https://github.com/user-attachments/assets/7e01f639-78bd-46fc-8947-6ba08302c1d3" />
+
+## Download Previously Generated Routines
+<img width="1295" alt="download_routines_page" src="https://github.com/user-attachments/assets/21d41e24-68d5-4fed-832b-776e760e1230" />
+
+
 

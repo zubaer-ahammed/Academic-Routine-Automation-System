@@ -1798,9 +1798,29 @@ def export_to_pdf(request, semester_id):
                                 break
                         # Add content and None for colspan-1
                         if is_lunch:
-                            cell_content = "BREAK"
+                            cell_content = Paragraph("BREAK", ParagraphStyle(
+                                'BreakContent',
+                                fontName='Helvetica-Bold',
+                                fontSize=9,
+                                alignment=TA_CENTER,
+                                leading=10,
+                                spaceBefore=0,
+                                spaceAfter=0,
+                            ))
                         else:
-                            cell_content = f"{r['course_code']} ({r['teacher']})"
+                            # Format course content with line break for teacher name if needed
+                            course_code = r['course_code']
+                            teacher_short = r['teacher']
+                            # Create a Paragraph object to handle line breaks properly
+                            cell_content = Paragraph(f"{course_code}<br/>({teacher_short})", ParagraphStyle(
+                                'CourseContent',
+                                fontName='Helvetica',
+                                fontSize=9,
+                                alignment=TA_CENTER,
+                                leading=10,
+                                spaceBefore=0,
+                                spaceAfter=0,
+                            ))
                         row.append(cell_content)
                         for _ in range(colspan-1):
                             row.append(None)
@@ -1822,8 +1842,8 @@ def export_to_pdf(request, semester_id):
 
         # Set column widths directly without depending on lunch_col_idx
         num_cols = len(header_row)
-        date_col_width = 60   # narrow date column
-        day_col_width = 50    # narrow day column
+        date_col_width = 57   # narrow date column
+        day_col_width = 47    # narrow day column
 
         # Calculate remaining width for other columns
         remaining_width = available_width - date_col_width - day_col_width
@@ -1871,11 +1891,8 @@ def export_to_pdf(request, semester_id):
         # Add background color for lunch breaks and classes
         for i, row in enumerate(table_data[1:], 1):
             for j, cell in enumerate(row[2:], 2):
-                if cell == "BREAK":
+                if isinstance(cell, Paragraph) and hasattr(cell, 'text') and "BREAK" in cell.text:
                     style.add('BACKGROUND', (j, i), (j, i), colors.lightgrey)
-                    style.add('TEXTCOLOR', (j, i), (j, i), colors.black)
-                    style.add('FONTNAME', (j, i), (j, i), 'Helvetica-Bold')
-                    style.add('FONTSIZE', (j, i), (j, i), 9)
                 elif cell:  # If there's content (a class)
                     style.add('BACKGROUND', (j, i), (j, i), colors.lightblue)
         # After creating the TableStyle, add the span commands

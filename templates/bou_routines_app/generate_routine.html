@@ -331,7 +331,7 @@
                             <tbody>
                                 {% for row in routine_table_rows %}
                                 <tr>
-                                    <td class="text-center fw-bold align-middle">{{ row.date|date:"d/m/Y" }}</td>
+                                    <td class="text-center fw-bold align-middle" data-date="{{ row.date|date:'Y-m-d' }}">{{ row.date|date:"d/m/Y" }}</td>
                                     <td class="text-center fw-bold align-middle">{{ row.day }}</td>
                                     {% for cell in row.cells %}
                                         {% if cell.content %}
@@ -1403,11 +1403,20 @@
                     success: function(response) {
                         if (response.success) {
                             // Convert course cell back to empty cell
-                            const date = cell.closest('tr').find('td:first').text();
+                            // Get date from the first td's data-date attribute (correct format)
+                            const date = cell.closest('tr').find('td:first').attr('data-date');
                             const day = cell.closest('tr').find('td:nth-child(2)').text();
                             const timeSlot = cell.index() - 2; // -2 for date and day columns
-                            const startTime = cell.data('start-time');
-                            const endTime = cell.data('end-time');
+                            
+                            // Get time information from the table header
+                            const ths = document.querySelectorAll('.generate-routine-table thead tr:nth-child(2) th');
+                            const th = ths[timeSlot + 2]; // +2 to skip date/day columns
+                            let startTime = '';
+                            let endTime = '';
+                            if (th) {
+                                startTime = th.getAttribute('data-start-time') || '';
+                                endTime = th.getAttribute('data-end-time') || '';
+                            }
                             
                             cell.removeClass('course-cell bg-primary text-white').addClass('empty-cell');
                             cell.removeAttr('data-routine-id data-course-id');

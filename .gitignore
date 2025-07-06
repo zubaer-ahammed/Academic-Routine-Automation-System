@@ -78,3 +78,6 @@ htmlcov/
 .tox/
 .coverage
 .coverage.*
+*.docx
+*.pptx
+generate_docx_report.py

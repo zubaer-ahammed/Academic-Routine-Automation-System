@@ -335,6 +335,58 @@
                 var successModal = new bootstrap.Modal(document.getElementById('successModal'));
                 successModal.show();
             }
+
+            // Prevent duplicate course selection (client-side validation)
+            function checkDuplicateCourses() {
+                let seen = {};
+                let hasDuplicate = false;
+                // Remove previous highlights and errors
+                $('.course-row').removeClass('has-duplicate');
+                $('.duplicate-error').remove();
+                $('button[type="submit"]').prop('disabled', false);
+                
+                $('.course-row').each(function() {
+                    const courseId = $(this).find('select.course-select').val();
+                    if (courseId) {
+                        if (seen[courseId]) {
+                            // Highlight both rows
+                            $(this).addClass('has-duplicate');
+                            seen[courseId].addClass('has-duplicate');
+                            // Add error message if not already present
+                            if ($(this).find('.duplicate-error').length === 0) {
+                                $(this).find('.col-md-4').append('<div class="text-danger duplicate-error">Duplicate course selected</div>');
+                            }
+                            if (seen[courseId].find('.duplicate-error').length === 0) {
+                                seen[courseId].find('.col-md-4').append('<div class="text-danger duplicate-error">Duplicate course selected</div>');
+                            }
+                            hasDuplicate = true;
+                        } else {
+                            seen[courseId] = $(this);
+                        }
+                    }
+                });
+                if (hasDuplicate) {
+                    $('button[type="submit"]').prop('disabled', true);
+                }
+            }
+
+            // Check for duplicates on course change and when adding/removing rows
+            $(document).on('change', 'select.course-select', checkDuplicateCourses);
+            $(document).on('click', '#addCourse, .remove-course', function() {
+                setTimeout(checkDuplicateCourses, 50);
+            });
+            // Also check on page load
+            checkDuplicateCourses();
+
+            // Prevent form submission if duplicate courses exist
+            $('form').on('submit', function(e) {
+                checkDuplicateCourses();
+                if ($('.has-duplicate').length > 0) {
+                    alert('Please remove duplicate courses before submitting.');
+                    e.preventDefault();
+                    return false;
+                }
+            });
         });
     </script>
 

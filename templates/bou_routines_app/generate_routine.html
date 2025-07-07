@@ -314,7 +314,7 @@
 
             <div class="d-grid gap-2">
                 <button type="submit" class="btn btn-success btn-lg">Generate Routine</button>
-                <small class="text-muted text-center mt-2">All time overlaps must be resolved before generating the routine</small>
+                <small class="text-muted text-center mt-2">All time overlaps must be resolved before generating the routine. Also, this will override the existing routine for the selected semester.</small>
             </div>
         </form>
 
@@ -516,8 +516,8 @@
             function checkAllCourseOverlaps() {
                 let hasOverlap = false;
                 let allOverlaps = [];
-                let duplicateCourses = {};
-                let duplicateRows = [];
+                let duplicateCourse = false;
+                let duplicateMessages = [];
 
                 // Gather all course rows' info
                 let rows = [];
@@ -529,34 +529,20 @@
                     rows.push({ idx, courseCode, day, startTime, endTime, row: $(this) });
                 });
 
-                // Clear previous overlap state
-                $('.course-row').removeClass('has-overlap');
-                $('.course-row .overlap-feedback').hide().empty();
-
-                // --- Duplicate course check ---
-                let courseCount = {};
-                rows.forEach(function(info) {
-                    if (info.courseCode) {
-                        if (!courseCount[info.courseCode]) courseCount[info.courseCode] = [];
-                        courseCount[info.courseCode].push(info.idx);
-                    }
-                });
-                Object.keys(courseCount).forEach(function(courseCode) {
-                    if (courseCount[courseCode].length > 1) {
-                        hasOverlap = true;
-                        let rowIndices = courseCount[courseCode];
-                        rowIndices.forEach(function(idx) {
-                            rows[idx].row.addClass('has-overlap');
-                            rows[idx].row.find('.overlap-feedback').show().text('This course is already selected in another row');
-                            duplicateRows.push(idx+1);
-                        });
-                        allOverlaps.push(`Course selected more than once (rows: ${rowIndices.map(i=>i+1).join(', ')})`);
+                // Clear previous overlap/duplicate state
+                $('.course-row').each(function() {
+                    // Only clear if not a lunch break warning
+                    const feedback = $(this).find('.overlap-feedback');
+                    if (!feedback.text().includes('lunch break')) {
+                        $(this).removeClass('has-overlap has-duplicate');
+                        feedback.hide().empty();
                     }
                 });
 
-                // Compare every pair of rows for time overlap
+                // Compare every pair of rows
                 for (let i = 0; i < rows.length; i++) {
                     for (let j = i + 1; j < rows.length; j++) {
+                        // --- Overlap check ---
                         if (
                             rows[i].day && rows[j].day &&
                             rows[i].day === rows[j].day &&
@@ -581,27 +567,53 @@
                                 );
                             }
                         }
+                        // --- Duplicate course check (same course, same day) ---
+                        if (
+                            rows[i].courseCode && rows[j].courseCode &&
+                            rows[i].day && rows[j].day &&
+                            rows[i].day === rows[j].day &&
+                            rows[i].courseCode === rows[j].courseCode
+                        ) {
+                            rows[i].row.addClass('has-duplicate');
+                            rows[j].row.addClass('has-duplicate');
+                            rows[i].row.find('.overlap-feedback').show().text('This course is already selected for this day');
+                            rows[j].row.find('.overlap-feedback').show().text('This course is already selected for this day');
+                            duplicateCourse = true;
+                            duplicateMessages.push(
+                                `Course ${i+1} and Course ${j+1} are both set to the same course on ${rows[i].day}`
+                            );
+                        }
                     }
                 }
 
+                // Check for lunch break warning in any row
+                let lunchBreakConflict = false;
+                $('.course-row .overlap-feedback').each(function() {
+                    if ($(this).text().includes('lunch break')) {
+                        lunchBreakConflict = true;
+                    }
+                });
+
                 // Show/hide global warning
-                if (hasOverlap) {
+                if (hasOverlap || duplicateCourse || lunchBreakConflict) {
                     const overlapList = $('#overlapList');
                     overlapList.empty();
                     allOverlaps.forEach(overlap => {
                         overlapList.append(`<li>${overlap}</li>`);
                     });
+                    duplicateMessages.forEach(msg => {
+                        overlapList.append(`<li>${msg}</li>`);
+                    });
                     $('#overlapWarning').show();
-                    $('button[type="submit"]').prop('disabled', true);
+                    // Only enable if no lunch break conflict
+                    if (!lunchBreakConflict) {
+                        $('button[type="submit"]').prop('disabled', false);
+                    } else {
+                        $('button[type="submit"]').prop('disabled', true);
+                    }
                 } else {
                     $('#overlapWarning').hide();
                     $('button[type="submit"]').prop('disabled', false);
-                    // Optionally, clear overlap-feedback for all rows not in conflict
-                    $('.course-row').each(function() {
-                        if (!$(this).hasClass('has-overlap')) {
-                            $(this).find('.overlap-feedback').hide().empty();
-                        }
-                    });
                 }
             }
 

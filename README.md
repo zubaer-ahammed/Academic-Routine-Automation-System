@@ -1,6 +1,9 @@
 # Academic-Routine-Automation-System
 Academic Routine Automation System for SST, BOU
 
+## Video Demonstration
+Watch the Video of BOU Routine Generator: https://drive.google.com/file/d/1HNZ63eg-CgsGNzQLi1eHV6dFm9Xq3XSW/view
+
 ## Frontend
 <img width="1335" alt="generate_routine_page" src="https://github.com/user-attachments/assets/a2421317-e425-4282-bc5e-c8ff23564d09" />
 

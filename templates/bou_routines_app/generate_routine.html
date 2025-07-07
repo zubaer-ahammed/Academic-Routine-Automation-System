@@ -25,14 +25,14 @@
             padding: 2rem;
         }
         .container-bou {
-            max-width: 80%;
+            min-width: 80%;
         }
         .bou-header {
             padding-top: 0.5em;
             padding-bottom: 0.5em;
         }
         .container-box-bou {
-            max-width: 80%;
+            min-width: 80%;
             margin-top: 3rem;
             background: #fff;
             padding: 2rem;
@@ -148,6 +148,26 @@
             padding: 2px 6px;
             margin: 0 2px;
         }
+
+        #courseRepeater .course-row {
+            display: flex;
+            display: -webkit-flex;
+            display: -moz-flex;
+            flex-wrap: wrap;
+        }
+
+        .bou-footer-container {
+            padding-bottom: 1em;
+            padding-top: 1em;
+        }
+
+        @media screen and (max-width: 480px) {
+            #courseRepeater .course-row .col {
+                flex: initial;
+                padding-bottom: 0.25em;
+            }
+        }
+
     </style>
 </head>
 <body>
@@ -455,7 +475,7 @@
 
     <!-- Copyright Footer -->
     <footer class="bg-dark text-white text-center py-3 mt-5">
-        <div class="container">
+        <div class="container bou-footer-container">
             <p class="mb-0">
                 © <span id="currentYear"></span> BOU Routine Generator. Developed by
                 <a href="https://github.com/zubaer-ahammed/" target="_blank" class="text-info">Md. Zubaer Ahammed</a> and

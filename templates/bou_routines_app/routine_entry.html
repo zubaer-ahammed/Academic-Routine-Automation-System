@@ -22,7 +22,7 @@
             padding: 2rem;
         }
         .container-bou {
-            max-width: 80%;
+            min-width: 80%;
         }
         .bou-header {
             padding-top: 0.5em;
@@ -44,6 +44,10 @@
             height: 70px;
             margin-right: 12px;
             vertical-align: middle;
+        }
+        .bou-footer-container {
+            padding-bottom: 1em;
+            padding-top: 1em;
         }
     </style>
 </head>
@@ -232,7 +236,7 @@
 
     <!-- Copyright Footer -->
     <footer class="bg-dark text-white text-center py-3 mt-5">
-        <div class="container">
+        <div class="container bou-footer-container">
             <p class="mb-0">
                 © <span id="currentYear"></span> BOU Routine Generator. Developed by
                 <a href="https://github.com/zubaer-ahammed/" target="_blank" class="text-info">Md. Zubaer Ahammed</a> and

@@ -11,19 +11,19 @@
             background-color: #f8f9fa;
         }
         .container {
-            max-width: 1200px;
+            max-width: 900px;
             margin: auto;
             padding: 2rem;
         }
         .container-bou {
-            max-width: 80%;
+            min-width: 80%;
         }
         .bou-header {
             padding-top: 0.5em;
             padding-bottom: 0.5em;
         }
         .container-box-bou {
-            max-width: 80%;
+            min-width: 80%;
             margin-top: 3rem;
             background: #fff;
             padding: 2rem;
@@ -52,6 +52,10 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            display: -webkit-flex;
+            display: flex;
+            display: -moz-flex;
+            flex-wrap: wrap;
         }
         .semester-title {
             font-size: 1.25rem;
@@ -121,6 +125,16 @@
         .semester-card .table-bordered tr td {
             border-color: #ccc;
         }
+        .bou-footer-container {
+            padding-bottom: 1em;
+            padding-top: 1em;
+        }
+        @media screen and (max-width: 480px) {
+            .download-buttons {
+                margin-top: 1em;
+            }
+        }
+
     </style>
 </head>
 <body>
@@ -278,7 +292,7 @@
 
     <!-- Copyright Footer -->
     <footer class="bg-dark text-white text-center py-3 mt-5">
-        <div class="container">
+        <div class="container bou-footer-container">
             <p class="mb-0">
                 © <span id="currentYear"></span> BOU Routine Generator. Developed by
                 <a href="https://github.com/zubaer-ahammed/" target="_blank" class="text-info">Md. Zubaer Ahammed</a> and

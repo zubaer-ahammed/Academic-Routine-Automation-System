@@ -512,6 +512,99 @@
                 return start1 < end2 && start2 < end1;
             }
 
+            // --- NEW: Check for overlaps between any two courses on the same day ---
+            function checkAllCourseOverlaps() {
+                let hasOverlap = false;
+                let allOverlaps = [];
+                let duplicateCourses = {};
+                let duplicateRows = [];
+
+                // Gather all course rows' info
+                let rows = [];
+                $('.course-row').each(function(idx) {
+                    const courseCode = $(this).find('select[name="course_code[]"]').val();
+                    const day = $(this).find('select[name="day[]"]').val();
+                    const startTime = $(this).find('input[name="start_time[]"]').val();
+                    const endTime = $(this).find('input[name="end_time[]"]').val();
+                    rows.push({ idx, courseCode, day, startTime, endTime, row: $(this) });
+                });
+
+                // Clear previous overlap state
+                $('.course-row').removeClass('has-overlap');
+                $('.course-row .overlap-feedback').hide().empty();
+
+                // --- Duplicate course check ---
+                let courseCount = {};
+                rows.forEach(function(info) {
+                    if (info.courseCode) {
+                        if (!courseCount[info.courseCode]) courseCount[info.courseCode] = [];
+                        courseCount[info.courseCode].push(info.idx);
+                    }
+                });
+                Object.keys(courseCount).forEach(function(courseCode) {
+                    if (courseCount[courseCode].length > 1) {
+                        hasOverlap = true;
+                        let rowIndices = courseCount[courseCode];
+                        rowIndices.forEach(function(idx) {
+                            rows[idx].row.addClass('has-overlap');
+                            rows[idx].row.find('.overlap-feedback').show().text('This course is already selected in another row');
+                            duplicateRows.push(idx+1);
+                        });
+                        allOverlaps.push(`Course selected more than once (rows: ${rowIndices.map(i=>i+1).join(', ')})`);
+                    }
+                });
+
+                // Compare every pair of rows for time overlap
+                for (let i = 0; i < rows.length; i++) {
+                    for (let j = i + 1; j < rows.length; j++) {
+                        if (
+                            rows[i].day && rows[j].day &&
+                            rows[i].day === rows[j].day &&
+                            rows[i].startTime && rows[i].endTime &&
+                            rows[j].startTime && rows[j].endTime
+                        ) {
+                            // Parse times
+                            const s1 = parseTimeString(rows[i].startTime);
+                            const e1 = parseTimeString(rows[i].endTime);
+                            const s2 = parseTimeString(rows[j].startTime);
+                            const e2 = parseTimeString(rows[j].endTime);
+
+                            if (doTimesOverlap(s1, e1, s2, e2)) {
+                                // Mark both rows as having overlap
+                                rows[i].row.addClass('has-overlap');
+                                rows[j].row.addClass('has-overlap');
+                                rows[i].row.find('.overlap-feedback').show().text('Overlaps with another course on this day');
+                                rows[j].row.find('.overlap-feedback').show().text('Overlaps with another course on this day');
+                                hasOverlap = true;
+                                allOverlaps.push(
+                                    `Course ${i+1} and Course ${j+1} overlap on ${rows[i].day} (${rows[i].startTime}-${rows[i].endTime} & ${rows[j].startTime}-${rows[j].endTime})`
+                                );
+                            }
+                        }
+                    }
+                }
+
+                // Show/hide global warning
+                if (hasOverlap) {
+                    const overlapList = $('#overlapList');
+                    overlapList.empty();
+                    allOverlaps.forEach(overlap => {
+                        overlapList.append(`<li>${overlap}</li>`);
+                    });
+                    $('#overlapWarning').show();
+                    $('button[type="submit"]').prop('disabled', true);
+                } else {
+                    $('#overlapWarning').hide();
+                    $('button[type="submit"]').prop('disabled', false);
+                    // Optionally, clear overlap-feedback for all rows not in conflict
+                    $('.course-row').each(function() {
+                        if (!$(this).hasClass('has-overlap')) {
+                            $(this).find('.overlap-feedback').hide().empty();
+                        }
+                    });
+                }
+            }
+
             $('#date_range').daterangepicker({
                 opens: 'right',
                 autoUpdateInput: false // Prevent auto-filling with current date
@@ -1146,6 +1239,7 @@
             $(document).on('change', 'select[name="course_code[]"], select[name="day[]"], input[name="start_time[]"], input[name="end_time[]"]', function() {
                 const row = $(this).closest('.course-row');
                 checkTimeOverlap(row);
+                checkAllCourseOverlaps();
             });
 
             // Event listener for lunch break time changes
@@ -1176,6 +1270,7 @@
             $(document).on('mdtimepicker:close', '.time-input', function() {
                 const row = $(this).closest('.course-row');
                 checkTimeOverlap(row);
+                checkAllCourseOverlaps();
             });
 
             // Handle adding new course rows
@@ -1207,11 +1302,13 @@
                     theme: 'blue',
                     hourPadding: true
                 });
+                checkAllCourseOverlaps();
             });
 
             $(document).on('click', '.remove-course', function () {
                 if ($('.course-row').length > 1) {
                     $(this).closest('.course-row').remove();
+                    checkAllCourseOverlaps();
                 }
             });
 

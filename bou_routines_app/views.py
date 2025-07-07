@@ -14,8 +14,10 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from django.urls import reverse
 from django.utils.http import urlencode
+from django.contrib.auth.decorators import login_required
 
 
+@login_required
 def routine_entry(request):
     # Updated select_related to include course__teacher since teacher is now accessed through course
     routines = CurrentRoutine.objects.select_related("course", "course__teacher", "semester")
@@ -60,6 +62,7 @@ def time_overlap(start1, end1, start2, end2):
     # This correctly handles cases where ranges share exactly the same start or end time
     return start1 < end2 and start2 < end1
 
+@login_required
 def generate_routine(request):
     semesters = Semester.objects.all().order_by('name')
     courses = Course.objects.select_related('teacher').all().order_by('code')
@@ -811,6 +814,7 @@ def generate_routine(request):
         
     return render(request, "bou_routines_app/generate_routine.html", context)
 
+@login_required
 def update_semester_courses(request):
     semesters = Semester.objects.all().order_by('name')
     courses = Course.objects.all().order_by('code')
@@ -874,6 +878,7 @@ def update_semester_courses(request):
         context["selected_semester_id"] = semester_id
     return render(request, "bou_routines_app/semester_courses.html", context)
 
+@login_required
 def get_semester_courses(request):
     """AJAX view to get courses for a specific semester"""
     if request.method == "GET":
@@ -927,6 +932,7 @@ def get_semester_courses(request):
                 return JsonResponse({'courses': [], 'lunch_break': None})
     return JsonResponse({'courses': [], 'lunch_break': None})
 
+@login_required
 def get_existing_generated_routines(request):
     """AJAX view to get existing generated routines for a specific semester"""
     if request.method == "GET":
@@ -958,6 +964,7 @@ def get_existing_generated_routines(request):
                 return JsonResponse({'routines': [], 'has_routines': False})
     return JsonResponse({'routines': [], 'has_routines': False})
 
+@login_required
 def check_time_overlap(request):
     """AJAX endpoint to check for time overlaps in real-time"""
     if request.method == "GET":
@@ -1072,6 +1079,7 @@ def check_time_overlap(request):
     
     return JsonResponse({"overlaps": []})
 
+@login_required
 def update_routine_course(request):
     """Update a routine's course or create a new routine entry via AJAX"""
     if request.method == 'POST':
@@ -1152,6 +1160,7 @@ def update_routine_course(request):
     
     return JsonResponse({"error": "Invalid request method"}, status=405)
 
+@login_required
 def remove_routine_course(request):
     """Remove a routine entry via AJAX"""
     if request.method == 'POST':
@@ -1179,6 +1188,7 @@ def remove_routine_course(request):
     
     return JsonResponse({"error": "Invalid request method"}, status=405)
 
+@login_required
 def export_to_excel(request, semester_id):
     """Export the routine to Excel file"""
     try:
@@ -1389,6 +1399,7 @@ def export_to_excel(request, semester_id):
     except Exception as e:
         return HttpResponse(f"Error generating Excel file: {str(e)}", status=500)
 
+@login_required
 def download_routines(request):
     """Display the last generated routines for all semesters"""
     # Get all semesters that have generated routines
@@ -1526,6 +1537,7 @@ def download_routines(request):
         'semester_routines': semester_routines
     })
 
+@login_required
 def export_to_pdf(request, semester_id):
     """Export the routine to PDF file"""
     try:

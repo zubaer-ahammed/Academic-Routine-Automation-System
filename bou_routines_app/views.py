@@ -2011,7 +2011,8 @@ def export_to_pdf(request, semester_id):
         # Build the PDF (only once)
         doc.build(elements)
         buffer.seek(0)
-        response = FileResponse(buffer, content_type='application/pdf')
+        #response = FileResponse(buffer, content_type='application/pdf')
+        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{selected_semester.name}_Routine.pdf"'
         return response
 

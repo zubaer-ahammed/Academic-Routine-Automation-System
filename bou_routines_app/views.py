@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect
 from .models import CurrentRoutine, Teacher, Semester, Course, NewRoutine, SemesterCourse
 from .forms import RoutineForm
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from collections import defaultdict
 from django.contrib import messages
 from django.http import JsonResponse, HttpResponse, FileResponse
@@ -111,6 +111,24 @@ def generate_routine(request):
                         if date_str not in seen_dates:
                             seen_dates.add(date_str)
                             unique_dates.append((routine['date'], routine['day']))
+
+                    # Add makeup dates to unique_dates for existing routines display
+                    if selected_semester.makeup_dates:
+                        makeup_dates = [
+                            datetime.strptime(date.strip(), "%Y-%m-%d").date()
+                            for date in selected_semester.makeup_dates.split(',')
+                            if date.strip()
+                        ]
+                        for makeup_date in makeup_dates:
+                            day_name = makeup_date.strftime('%A')
+                            # Only add Friday and Saturday makeup dates
+                            if day_name in ['Friday', 'Saturday']:
+                                date_str = makeup_date.strftime('%Y-%m-%d')
+                                # Check if this date is not already in unique_dates
+                                date_already_exists = any(date[0].strftime('%Y-%m-%d') == date_str for date in unique_dates)
+                                if not date_already_exists:
+                                    unique_dates.append((makeup_date, day_name))
+
                     unique_dates.sort(key=lambda x: x[0])
 
                     # Build merged time slot structure
@@ -308,6 +326,12 @@ def generate_routine(request):
                     # Save comma-separated list of holiday dates directly
                     selected_semester.holidays = govt_holidays
 
+                # Process and save makeup/extra class dates
+                makeup_dates = request.POST.get('makeup_date_list')
+                if makeup_dates:
+                    # Save comma-separated list of makeup dates directly
+                    selected_semester.makeup_dates = makeup_dates
+
                 selected_semester.save()
                 #messages.success(request, f"Updated lunch break for {selected_semester.name} to {lunch_break_start} - {lunch_break_end}")
             except Exception as e:
@@ -478,6 +502,15 @@ def generate_routine(request):
                     if date.strip()
                 ]
 
+            # Get makeup dates from the semester model
+            makeup_dates = []
+            if selected_semester.makeup_dates:
+                makeup_dates = [
+                    datetime.strptime(date.strip(), "%Y-%m-%d").date()
+                    for date in selected_semester.makeup_dates.split(',')
+                    if date.strip()
+                ]
+
             while current_date <= end_date:
                 day_name = current_date.strftime('%A')
                 processed_days.append(day_name)
@@ -565,6 +598,23 @@ def generate_routine(request):
                 unique_dates.sort(key=lambda x: x[0])
             else:
                 unique_dates = []
+
+            # Add makeup dates to unique_dates as blank rows (only date and day, no classes)
+            if makeup_dates:
+                for makeup_date in makeup_dates:
+                    # Only add if the makeup date is within the date range
+                    if start_date <= makeup_date <= end_date:
+                        day_name = makeup_date.strftime('%A')
+                        # Only add Friday and Saturday makeup dates
+                        if day_name in ['Friday', 'Saturday']:
+                            date_str = makeup_date.strftime('%Y-%m-%d')
+                            # Check if this date is not already in unique_dates
+                            date_already_exists = any(date[0].strftime('%Y-%m-%d') == date_str for date in unique_dates)
+                            if not date_already_exists:
+                                unique_dates.append((makeup_date, day_name))
+
+                # Sort again after adding makeup dates
+                unique_dates.sort(key=lambda x: x[0])
 
             # --- NEW: Build merged time slot structure ---
             # 1. Collect all unique time boundaries (start and end times)
@@ -663,7 +713,6 @@ def generate_routine(request):
                                     colspan += 1
                                 else:
                                     break
-                            # Prepare cell content
                             if r.get('is_lunch_break'):
                                 content = 'BREAK'
                                 cell = {'content': content, 'colspan': colspan, 'is_lunch_break': True}
@@ -812,6 +861,30 @@ def generate_routine(request):
     if request.method == "POST" and request.POST.get("semester"):
         context["selected_semester_id"] = request.POST.get("semester")
         
+    # After routine_table_rows is built, append selected makeup/extra class dates as empty rows (if not already present)
+    if routine_table_rows and time_slot_labels:
+        # Get all dates already present in the table
+        existing_dates = set(row['date'] for row in routine_table_rows)
+        # Get makeup dates from the semester
+        makeup_dates = []
+        if selected_semester.makeup_dates:
+            makeup_dates = [
+                datetime.strptime(date.strip(), "%Y-%m-%d").date()
+                for date in selected_semester.makeup_dates.split(',')
+                if date.strip()
+            ]
+        # Add makeup dates as empty rows only if not already present
+        for makeup_date in makeup_dates:
+            if makeup_date not in existing_dates:
+                routine_table_rows.append({
+                    'date': makeup_date,
+                    'day': makeup_date.strftime('%A'),
+                    'cells': [
+                        {'content': None, 'colspan': 1, 'start_time': slot[0], 'end_time': slot[1]}
+                        for slot in slot_ranges
+                    ]
+                })
+
     return render(request, "bou_routines_app/generate_routine.html", context)
 
 @login_required
@@ -910,6 +983,11 @@ def get_semester_courses(request):
                 holidays_info = None
                 if semester.holidays:
                     holidays_info = semester.holidays
+                
+                makeup_dates_info = None
+                if semester.makeup_dates:
+                    makeup_dates_info = semester.makeup_dates
+                
                 # Add all semester info fields
                 semester_data = {
                     'semester_full_name': semester.semester_full_name,
@@ -926,6 +1004,7 @@ def get_semester_courses(request):
                     'lunch_break': lunch_break_info,
                     'date_range': date_range_info,
                     'holidays': holidays_info,
+                    'makeup_dates': makeup_dates_info,
                     'semester_data': semester_data
                 })
             except Semester.DoesNotExist:
@@ -1291,6 +1370,7 @@ def export_to_excel(request, semester_id):
                 slot_end = time_boundaries[i+1]
                 if (slot_start >= lb_start and slot_end <= lb_end):
                     used_slots.add((slot_start, slot_end))
+
         filtered_slot_ranges = []
         for slot_start, slot_end, label in slot_ranges:
             if (slot_start, slot_end) in used_slots:
@@ -1312,12 +1392,24 @@ def export_to_excel(request, semester_id):
         worksheet.set_column(1, 1, 10)  # Day column
         worksheet.set_column(2, len(slot_ranges) + 1, 15)  # Time slot columns
 
+        # Merge unique_dates_days and makeup_dates, sort, and output in order
+        makeup_dates = []
+        if selected_semester.makeup_dates:
+            makeup_dates = [
+                datetime.strptime(date.strip(), "%Y-%m-%d").date()
+                for date in selected_semester.makeup_dates.split(',')
+                if date.strip()
+            ]
+        # Build a dict for quick lookup of routines by date
+        routines_by_date = {date: day for date, day in unique_dates_days}
+        all_dates = set(routines_by_date.keys()) | set(makeup_dates)
+        sorted_dates = sorted(all_dates)
         # Write data with merging
         row = 3
-        for date, day in unique_dates_days:
+        for date in sorted_dates:
+            day = routines_by_date.get(date, date.strftime('%A'))
             worksheet.write(row, 0, date, date_format)
             worksheet.write(row, 1, day, cell_format)
-
             # Build routines for this row
             routines_for_row = []
             for r in routines:
@@ -1336,7 +1428,6 @@ def export_to_excel(request, semester_id):
                     'is_lunch_break': True
                 })
             routines_for_row.sort(key=lambda r: r['start_time'])
-
             # Process each slot and handle merging
             slot_idx = 0
             col_idx = 2  # Start after date and day columns
@@ -1347,7 +1438,6 @@ def export_to_excel(request, semester_id):
                     r_start = r['start_time']
                     r_end = r['end_time']
                     is_lunch = r.get('is_lunch_break', False)
-                    
                     if r_start == slot_start:
                         # Determine colspan
                         colspan = 0
@@ -1357,7 +1447,6 @@ def export_to_excel(request, semester_id):
                                 colspan += 1
                             else:
                                 break
-                        
                         # Prepare cell content
                         if is_lunch:
                             cell_content = "BREAK"
@@ -1365,25 +1454,20 @@ def export_to_excel(request, semester_id):
                         else:
                             cell_content = f"{r['course_code']} ({r['teacher']})"
                             format_to_use = course_format
-                        
                         # Write content and merge if needed
                         if colspan > 1:
                             worksheet.merge_range(row, col_idx, row, col_idx + colspan - 1, cell_content, format_to_use)
                         else:
                             worksheet.write(row, col_idx, cell_content, format_to_use)
-                        
                         col_idx += colspan
                         slot_idx += colspan
                         found = True
                         break
-                
                 if not found:
                     worksheet.write(row, col_idx, "", cell_format)
                     col_idx += 1
                     slot_idx += 1
-
             row += 1
-
         # Set row heights
         for i in range(3, row):
             worksheet.set_row(i, 50)
@@ -1760,6 +1844,7 @@ def export_to_pdf(request, semester_id):
                 slot_end = time_boundaries[i+1]
                 if (slot_start >= lb_start and slot_end <= lb_end):
                     used_slots.add((slot_start, slot_end))
+
         filtered_slot_ranges = []
         for slot_start, slot_end, label in slot_ranges:
             if (slot_start, slot_end) in used_slots:
@@ -1770,13 +1855,26 @@ def export_to_pdf(request, semester_id):
         span_commands = []  # To collect ('SPAN', ...) commands
         header_row = ["Date", "Day"] + [label for _, _, label in slot_ranges]
         table_data = [header_row]
-        for row_idx, (date, day) in enumerate(unique_dates_days, start=1):
-            row = [date.strftime('%d/%m/%Y'), day]
+        # Merge all routine dates and makeup dates, sort, and ensure each date appears only once in order
+        makeup_dates = []
+        if selected_semester.makeup_dates:
+            makeup_dates = [
+                datetime.strptime(date.strip(), "%Y-%m-%d").date()
+                for date in selected_semester.makeup_dates.split(',')
+                if date.strip()
+            ]
+        day_by_date = {date: day for date, day in unique_dates_days}
+        all_dates = set(day_by_date.keys()) | set(makeup_dates)
+        sorted_dates = sorted(all_dates)
+
+        for row_idx, date in enumerate(sorted_dates, start=1):
+            day = day_by_date.get(date, date.strftime('%A'))
+            row = [date, day]
             slot_idx = 0
-            # Build routines_for_row: all routines for this date/day, plus lunch break if present
+            # Build routines_for_row: all routines for this date, plus lunch break if present
             routines_for_row = []
             for r in routines:
-                if r.class_date == date and r.day == day:
+                if r.class_date == date:
                     routines_for_row.append({
                         'course_code': r.course.code,
                         'teacher': r.course.teacher.short_name,
@@ -1820,10 +1918,8 @@ def export_to_pdf(request, semester_id):
                                 spaceAfter=0,
                             ))
                         else:
-                            # Format course content with line break for teacher name if needed
                             course_code = r['course_code']
                             teacher_short = r['teacher']
-                            # Create a Paragraph object to handle line breaks properly
                             cell_content = Paragraph(f"{course_code}<br/>({teacher_short})", ParagraphStyle(
                                 'CourseContent',
                                 fontName='Helvetica',
@@ -1836,7 +1932,6 @@ def export_to_pdf(request, semester_id):
                         row.append(cell_content)
                         for _ in range(colspan-1):
                             row.append(None)
-                        # Add SPAN command if colspan > 1
                         if colspan > 1:
                             span_commands.append(('SPAN', (col_idx, row_idx), (col_idx + colspan - 1, row_idx)))
                         col_idx += colspan

@@ -253,6 +253,14 @@
                 <input type="hidden" name="govt_holiday_dates" id="govt_holiday_dates">
             </div>
 
+            <div class="mb-3">
+                <label for="makeup_dates" class="form-label">Makeup/Reserved Class Dates <small class="text-muted">(Only date and day will be shown, no pre-assigned classes)</small></label>
+                <input type="text" name="makeup_dates" id="makeup_dates" class="form-control" placeholder="Click to select makeup/extra class dates">
+                <div id="selectedMakeupDates" class="mt-2 d-flex flex-wrap gap-1"></div>
+                <!-- Hidden input to store formatted makeup dates for backend processing -->
+                <input type="hidden" name="makeup_date_list" id="makeup_date_list">
+            </div>
+
             <div class="mb-3" id="lunchBreakSection">
                 <label class="form-label">Lunch Break</label>
                 <div class="row">
@@ -716,6 +724,90 @@
                 });
             }
 
+            // Initialize Flatpickr for makeup/extra class dates selection
+            $('#makeup_dates').flatpickr({
+                mode: 'multiple',
+                dateFormat: 'Y-m-d',
+                onChange: function(selectedDates, dateStr, instance) {
+                    // Format dates for display and submission
+                    let formattedDates = selectedDates.map(date => {
+                        return instance.formatDate(date, 'Y-m-d');
+                    });
+
+                    // Store the selected dates in the hidden input for form submission
+                    $('#makeup_date_list').val(formattedDates.join(','));
+
+                    // Display selected dates as badges for user feedback
+                    $('#selectedMakeupDates').empty();
+                    formattedDates.forEach(date => {
+                        const formattedDate = new Date(date).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                        });
+                        const badge = $(`<span class="badge bg-success me-1 mb-1" data-date="${date}">${formattedDate} <i class="bi bi-x-circle" style="cursor: pointer;"></i></span>`);
+                        $('#selectedMakeupDates').append(badge);
+                    });
+                }
+            });
+
+            // Allow removing individual makeup dates by clicking on the x icon
+            $(document).on('click', '#selectedMakeupDates .badge .bi-x-circle', function(e) {
+                e.stopPropagation(); // Prevent event bubbling
+                const badge = $(this).parent();
+                const dateStr = badge.data('date');
+                const picker = $('#makeup_dates')[0]._flatpickr;
+
+                if (picker) {
+                    // First, remove the visual badge
+                    badge.remove();
+
+                    // Create a JavaScript Date object from the date string
+                    const dateToRemove = new Date(dateStr);
+
+                    // Get all current selected dates from the picker
+                    const currentDates = picker.selectedDates;
+
+                    // Find and remove the matching date
+                    const filteredDates = currentDates.filter(date => {
+                        // Compare dates by converting to the same format
+                        return picker.formatDate(date, 'Y-m-d') !== dateStr;
+                    });
+
+                    // Clear the picker completely
+                    picker.clear();
+
+                    // Set the remaining dates back
+                    if (filteredDates.length > 0) {
+                        picker.setDate(filteredDates, false); // false = don't trigger onChange
+                    }
+
+                    // Update the hidden input manually since we disabled the onChange trigger
+                    const formattedDates = filteredDates.map(date => {
+                        return picker.formatDate(date, 'Y-m-d');
+                    });
+                    $('#makeup_date_list').val(formattedDates.join(','));
+
+                    // Update the display of selected dates (in case anything was missed)
+                    updateMakeupDateBadges(filteredDates, picker);
+                }
+            });
+
+            // Helper function to update the makeup date badges display
+            function updateMakeupDateBadges(dates, picker) {
+                $('#selectedMakeupDates').empty();
+                dates.forEach(date => {
+                    const formattedDate = new Date(date).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                    });
+                    const dateStr = picker.formatDate(date, 'Y-m-d');
+                    const badge = $(`<span class="badge bg-success me-1 mb-1" data-date="${dateStr}">${formattedDate} <i class="bi bi-x-circle" style="cursor: pointer;"></i></span>`);
+                    $('#selectedMakeupDates').append(badge);
+                });
+            }
+
             // Initialize mdtimepicker for each time input
             function initMDTimePickers() {
                 $('.mdtimepicker').each(function() {
@@ -944,6 +1036,54 @@
                                 // Clear the hidden input and visual display
                                 $('#govt_holiday_dates').val('');
                                 $('#selectedHolidays').empty();
+                            }
+
+                            // Populate makeup/extra class dates if available
+                            if (data.makeup_dates) {
+                                // Store makeup dates data as a data attribute on the semester select
+                                $('#semester').data('makeup-dates', data.makeup_dates);
+
+                                // Get the Flatpickr instance
+                                const makeupPicker = $('#makeup_dates')[0]._flatpickr;
+                                if (makeupPicker) {
+                                    // Clear any existing selected dates
+                                    makeupPicker.clear();
+
+                                    // Parse the comma-separated dates
+                                    const makeupDateList = data.makeup_dates.split(',').filter(date => date.trim() !== '');
+
+                                    // Set the selected dates in the picker
+                                    if (makeupDateList.length > 0) {
+                                        const dateObjects = makeupDateList.map(date => new Date(date.trim()));
+                                        makeupPicker.setDate(dateObjects, true);
+
+                                        // Update the hidden input for form submission
+                                        $('#makeup_date_list').val(data.makeup_dates);
+
+                                        // Update visual display of selected makeup dates
+                                        $('#selectedMakeupDates').empty();
+                                        makeupDateList.forEach(date => {
+                                            const formattedDate = new Date(date).toLocaleDateString('en-US', {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                year: 'numeric'
+                                            });
+                                            const badge = $(`<span class="badge bg-success me-1 mb-1" data-date="${date}">${formattedDate} <i class="bi bi-x-circle" style="cursor: pointer;"></i></span>`);
+                                            $('#selectedMakeupDates').append(badge);
+                                        });
+                                    }
+                                }
+                            } else {
+                                // Clear the makeup dates if none are stored
+                                $('#semester').removeData('makeup-dates');
+                                // Clear the flatpickr instance if it exists
+                                const makeupPicker = $('#makeup_dates')[0]._flatpickr;
+                                if (makeupPicker) {
+                                    makeupPicker.clear();
+                                }
+                                // Clear the hidden input and visual display
+                                $('#makeup_date_list').val('');
+                                $('#selectedMakeupDates').empty();
                             }
 
                             // Fetch and display existing routines for this semester
@@ -1544,8 +1684,8 @@
                             // Get date from the first td's data-date attribute (correct format)
                             const date = cell.closest('tr').find('td:first').attr('data-date');
                             const day = cell.closest('tr').find('td:nth-child(2)').text();
-                            const timeSlot = cell.index() - 2; // -2 for date and day columns
-                            
+                            const timeSlot = cell.index() - 2; // -2 for date/day columns
+
                             // Get time information from the table header
                             const ths = document.querySelectorAll('.generate-routine-table thead tr:nth-child(2) th');
                             const th = ths[timeSlot + 2]; // +2 to skip date/day columns

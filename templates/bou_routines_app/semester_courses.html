@@ -142,6 +142,16 @@
                         <label for="contact_person_email" class="form-label">Contact person email:</label>
                         <input type="email" class="form-control" name="contact_person_email" id="contact_person_email">
                     </div>
+                    <div class="col-md-6">
+                        <label for="theory_class_duration_minutes" class="form-label">Theory class duration (minutes) for class count:</label>
+                        <input type="number" class="form-control" name="theory_class_duration_minutes" id="theory_class_duration_minutes" min="1" value="60">
+                        <small class="text-muted">How many minutes will be considered as 1 theory class (default: 60)</small>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="lab_class_duration_minutes" class="form-label">Lab class duration (minutes) for class count:</label>
+                        <input type="number" class="form-control" name="lab_class_duration_minutes" id="lab_class_duration_minutes" min="1" value="90">
+                        <small class="text-muted">How many minutes will be considered as 1 lab class (default: 90)</small>
+                    </div>
                 </div>
             </div>
 
@@ -286,6 +296,8 @@
                                 $('#contact_person_designation').val(data.semester_data.contact_person_designation || '');
                                 $('#contact_person_phone').val(data.semester_data.contact_person_phone || '');
                                 $('#contact_person_email').val(data.semester_data.contact_person_email || '');
+                                $('#theory_class_duration_minutes').val(data.semester_data.theory_class_duration_minutes || 60);
+                                $('#lab_class_duration_minutes').val(data.semester_data.lab_class_duration_minutes || 90);
                             }
                         }
                     });

@@ -511,17 +511,31 @@ def generate_routine(request):
                     if date.strip()
                 ]
 
+            # --- CLASS COUNT LIMIT LOGIC ---
+            # Build a map: course_id -> (allowed_classes, is_lab)
+            course_limits = {}
+            for sc in semester_courses:
+                is_lab = 'P' in sc.course.code
+                course_limits[str(sc.course.id)] = {
+                    'allowed': sc.number_of_classes,
+                    'is_lab': is_lab,
+                    'assigned': 0,  # count of classes assigned
+                    'assigned_minutes': 0.0,  # total minutes assigned
+                }
+
+            # Helper: get minutes for a slot
+            def get_minutes(start, end):
+                delta = datetime.combine(datetime.min.date(), end) - datetime.combine(datetime.min.date(), start)
+                return delta.total_seconds() / 60
+
+            # For each date, assign classes only if under the limit
             while current_date <= end_date:
                 day_name = current_date.strftime('%A')
                 processed_days.append(day_name)
-                
-                # Skip if current date is a holiday
                 if current_date in holiday_dates:
                     skipped_holidays.append(current_date.strftime('%Y-%m-%d'))
                     current_date += timedelta(days=1)
                     continue
-
-                # Only process Friday and Saturday (or expand for other days if needed)
                 if day_name in ['Friday', 'Saturday']:
                     day_matched = False
                     for i in range(len(days)):
@@ -530,59 +544,60 @@ def generate_routine(request):
                             course_id = course_codes[i]
                             start_time_str = start_times[i]
                             end_time_str = end_times[i]
-                            
                             try:
                                 course = Course.objects.get(id=course_id)
                                 start = datetime.strptime(start_time_str, "%H:%M").time()
                                 end = datetime.strptime(end_time_str, "%H:%M").time()
-                                
-                                # Create the new routine entry
-                                new_routine = NewRoutine.objects.create(
-                                    semester=selected_semester,
-                                    course=course,
-                                    start_time=start,
-                                    end_time=end,
-                                    day=day_name,
-                                    class_date=current_date
-                                )
-                                
-                                # Also create or update the corresponding CurrentRoutine entry
-                                CurrentRoutine.objects.update_or_create(
-                                    semester=selected_semester,
-                                    course=course,
-                                    day=day_name,
-                                    defaults={
-                                        'start_time': start,
-                                        'end_time': end
-                                    }
-                                )
-                                
-                                # Add to generated_routines for display
-                                generated_routines.append({
-                                    'id': new_routine.id,
-                                    'course_id': course.id,
-                                    'date': current_date,
-                                    'day': day_name,
-                                    'course_code': course.code,
-                                    'course_name': course.name,
-                                    'teacher': course.teacher.name,
-                                    'start_time': start.strftime('%H:%M'),
-                                    'end_time': end.strftime('%H:%M')
-                                })
-                                
-                                # Log each successful routine creation
-                                matched_days.append(f"{day_name} - {course.code}")
+                                # Check class count limit
+                                limit = course_limits.get(str(course.id))
+                                if not limit:
+                                    continue  # Not in semester_courses
+                                # Calculate minutes for this slot
+                                minutes = get_minutes(start, end)
+                                # Determine how many classes this slot counts for using semester-specific durations
+                                if limit['is_lab']:
+                                    class_equiv = minutes / selected_semester.lab_class_duration_minutes
+                                else:
+                                    class_equiv = minutes / selected_semester.theory_class_duration_minutes
+                                # Only assign if not exceeding allowed
+                                if limit['assigned'] + class_equiv <= limit['allowed'] + 1e-6:  # allow float rounding
+                                    # Assign and increment
+                                    NewRoutine.objects.create(
+                                        semester=selected_semester,
+                                        course=course,
+                                        start_time=start,
+                                        end_time=end,
+                                        day=day_name,
+                                        class_date=current_date
+                                    )
+                                    CurrentRoutine.objects.update_or_create(
+                                        semester=selected_semester,
+                                        course=course,
+                                        day=day_name,
+                                        defaults={
+                                            'start_time': start,
+                                            'end_time': end
+                                        }
+                                    )
+                                    generated_routines.append({
+                                        'id': None,  # will be filled later if needed
+                                        'course_id': course.id,
+                                        'date': current_date,
+                                        'day': day_name,
+                                        'course_code': course.code,
+                                        'course_name': course.name,
+                                        'teacher': course.teacher.name,
+                                        'start_time': start.strftime('%H:%M'),
+                                        'end_time': end.strftime('%H:%M')
+                                    })
+                                    limit['assigned'] += class_equiv
+                                    limit['assigned_minutes'] += minutes
+                                # else: skip (leave slot blank)
                             except Course.DoesNotExist:
-                                # Skip if course doesn't exist
                                 continue
-                    
-                    # If no matches were found for this day, log it
                     if not day_matched and day_name in ['Friday', 'Saturday']:
                         matched_days.append(f"{day_name} - No matching courses")
-                
-                # Move to next day
                 current_date += timedelta(days=1)
-                
             # Sort generated routines by date and time for display
             generated_routines.sort(key=lambda x: (x['date'], x['start_time']))
 
@@ -913,6 +928,21 @@ def update_semester_courses(request):
         semester.contact_person_designation = request.POST.get("contact_person_designation", semester.contact_person_designation)
         semester.contact_person_phone = request.POST.get("contact_person_phone", semester.contact_person_phone)
         semester.contact_person_email = request.POST.get("contact_person_email", semester.contact_person_email)
+        
+        # Update class duration fields
+        theory_duration = request.POST.get("theory_class_duration_minutes")
+        lab_duration = request.POST.get("lab_class_duration_minutes")
+        if theory_duration:
+            try:
+                semester.theory_class_duration_minutes = int(theory_duration)
+            except ValueError:
+                pass  # Keep existing value if invalid
+        if lab_duration:
+            try:
+                semester.lab_class_duration_minutes = int(lab_duration)
+            except ValueError:
+                pass  # Keep existing value if invalid
+        
         semester.save()
 
         SemesterCourse.objects.filter(semester=semester).delete()
@@ -998,6 +1028,8 @@ def get_semester_courses(request):
                     'contact_person_designation': semester.contact_person_designation,
                     'contact_person_phone': semester.contact_person_phone,
                     'contact_person_email': semester.contact_person_email,
+                    'theory_class_duration_minutes': semester.theory_class_duration_minutes,
+                    'lab_class_duration_minutes': semester.lab_class_duration_minutes,
                 }
                 return JsonResponse({
                     'courses': courses_data,

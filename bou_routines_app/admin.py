@@ -35,9 +35,28 @@ class TeacherAdmin(admin.ModelAdmin):
 
 @admin.register(Semester)
 class SemesterAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'semester_full_name', 'lunch_break_start', 'lunch_break_end', 'start_date')
+    list_display = ('id', 'name', 'semester_full_name', 'theory_class_duration_minutes', 'lab_class_duration_minutes', 'lunch_break_start', 'lunch_break_end', 'start_date')
     search_fields = ('name',)
     ordering = ('name',)
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('name', 'order', 'semester_full_name', 'term', 'session', 'study_center')
+        }),
+        ('Contact Information', {
+            'fields': ('contact_person', 'contact_person_designation', 'contact_person_phone', 'contact_person_email')
+        }),
+        ('Class Durations', {
+            'fields': ('theory_class_duration_minutes', 'lab_class_duration_minutes'),
+            'description': 'Duration in minutes for theory and lab classes. Used for calculating class counts during routine generation.'
+        }),
+        ('Schedule Settings', {
+            'fields': ('lunch_break_start', 'lunch_break_end', 'start_date', 'end_date')
+        }),
+        ('Dates', {
+            'fields': ('holidays', 'makeup_dates'),
+            'description': 'Comma-separated dates in YYYY-MM-DD format'
+        }),
+    )
 
 @admin.register(NewRoutine)
 class NewRoutineAdmin(admin.ModelAdmin):

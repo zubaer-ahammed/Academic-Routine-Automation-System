@@ -6,45 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Semester Courses</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'global.css' %}">
     <style>
-        body {
-            background-color: #f8f9fa;
-        }
-        .container {
-            max-width: 900px;
-            margin: auto;
-            padding: 2rem;
-        }
-        .container-bou {
-            min-width: 80%;
-        }
-        .bou-header {
-            padding-top: 0.5em;
-            padding-bottom: 0.5em;
-        }
-        .container-box-bou {
-            min-width: 80%;
-            margin-top: 3rem;
-            background: #fff;
-            padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        }
-        h1 {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
         .form-control.mdtimepicker {
             background: #ccc;
-        }
-        .bou-logo {
-            height: 70px;
-            margin-right: 12px;
-            vertical-align: middle;
-        }
-        .bou-footer-container {
-            padding-bottom: 1em;
-            padding-top: 1em;
         }
         @media screen and (max-width: 480px) {
             #courseRepeater .course-row > div {

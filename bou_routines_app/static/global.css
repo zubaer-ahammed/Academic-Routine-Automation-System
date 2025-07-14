@@ -1,0 +1,56 @@
+/* Global styles for all pages */
+body {
+    background-color: #f8f9fa;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    color: #222;
+    margin: 0;
+    padding: 0;
+}
+h1, h2, h3, h4, h5, h6 {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-weight: 600;
+    color: #222;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+}
+a {
+    color: #0056b3;
+    text-decoration: none;
+}
+a:hover {
+    text-decoration: underline;
+}
+.container {
+    max-width: 900px;
+    margin: auto;
+    padding: 2rem;
+}
+.container-bou {
+    min-width: 80%;
+}
+.bou-header {
+    padding-top: 0.5em;
+    padding-bottom: 0.5em;
+}
+.container-box-bou {
+    min-width: 80%;
+    margin-top: 3rem;
+    background: #fff;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+.bou-logo {
+    height: 70px;
+    margin-right: 12px;
+    vertical-align: middle;
+}
+.bou-footer-container {
+    padding-bottom: 1em;
+    padding-top: 1em;
+}
+@media screen and (max-width: 480px) {
+    .container {
+        padding: 1rem;
+    }
+} 

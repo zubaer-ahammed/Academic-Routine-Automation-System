@@ -9,12 +9,13 @@ import io
 import xlsxwriter
 from reportlab.lib.pagesizes import landscape, A4
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, KeepTogether
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from django.urls import reverse
 from django.utils.http import urlencode
 from django.contrib.auth.decorators import login_required
+import math
 
 
 @login_required
@@ -69,7 +70,9 @@ def generate_routine(request):
     teachers = Teacher.objects.all()
 
     # Pre-select semester if provided in query params (GET)
-    selected_semester_id = request.GET.get('semester')
+    selected_semester_id = request.GET.get('semester') or request.POST.get('semester')
+    selected_semester = None
+    teacher_short_name_newline = True  # Default
 
     # Check if we have any semester courses at all
     if not SemesterCourse.objects.exists():
@@ -78,6 +81,24 @@ def generate_routine(request):
     generated_routines = []
     overlap_conflicts = []
     form_rows = []
+
+    # On POST, save the teacher_short_name_newline value to the Semester
+    if request.method == "POST" and request.POST.get("semester"):
+        try:
+            selected_semester = Semester.objects.get(id=request.POST.get("semester"))
+            # Save the checkbox value to the Semester
+            tsn_newline = request.POST.get("teacher_short_name_newline") == "1"
+            selected_semester.teacher_short_name_newline = tsn_newline
+            selected_semester.save()
+            teacher_short_name_newline = tsn_newline
+        except Semester.DoesNotExist:
+            selected_semester = None
+    elif selected_semester_id:
+        try:
+            selected_semester = Semester.objects.get(id=selected_semester_id)
+            teacher_short_name_newline = selected_semester.teacher_short_name_newline
+        except Semester.DoesNotExist:
+            selected_semester = None
 
     # Load existing generated routines if semester is selected via GET
     if selected_semester_id and request.method == "GET":
@@ -557,8 +578,10 @@ def generate_routine(request):
                                 # Determine how many classes this slot counts for using semester-specific durations
                                 if limit['is_lab']:
                                     class_equiv = minutes / selected_semester.lab_class_duration_minutes
+                                    class_equiv = math.ceil(class_equiv * 100) / 100  # keep two decimals, round up
                                 else:
                                     class_equiv = minutes / selected_semester.theory_class_duration_minutes
+                                    class_equiv = math.ceil(class_equiv * 100) / 100  # keep two decimals, round up
                                 # Only assign if not exceeding allowed
                                 if limit['assigned'] + class_equiv <= limit['allowed'] + 1e-6:  # allow float rounding
                                     # Assign and increment
@@ -858,6 +881,7 @@ def generate_routine(request):
         "teachers": teachers,
         "generated_routines": generated_routines,
         "selected_semester_id": selected_semester_id,
+        "teacher_short_name_newline": teacher_short_name_newline,
     }
     
     # Add calendar view data if routines were generated (either from POST or GET)
@@ -1659,6 +1683,9 @@ def export_to_pdf(request, semester_id):
     try:
         selected_semester = Semester.objects.get(id=semester_id)
 
+        # Read the teacher short name display option from GET params
+        teacher_short_name_newline = request.GET.get('teacher_short_name_newline', '1') == '1'
+
         # Create a response for PDF file
         buffer = io.BytesIO()
 
@@ -1668,8 +1695,8 @@ def export_to_pdf(request, semester_id):
             pagesize=landscape(A4),
             rightMargin=54,  # 0.75 inch
             leftMargin=54,   # 0.75 inch
-            topMargin=54,    # 0.75 inch
-            bottomMargin=54  # 0.75 inch
+            topMargin=34,    # 0.75 inch
+            bottomMargin=34  # Reduced from 54 (about 1/3 inch)
         )
 
         # Get page width and height for calculations
@@ -1705,42 +1732,42 @@ def export_to_pdf(request, semester_id):
         except Exception as e:
             print(f"Error loading header image: {e}")
             pass # If image not found, skip
-        elements.append(Spacer(1, 12))
+        elements.append(Spacer(1, -4))  # Minimal gap above program name
 
         # Build left column (program/session/term/commencement/study center)
         header_style = ParagraphStyle(
             'HeaderStyle',
             fontName='Helvetica-Bold',
-            fontSize=18,
+            fontSize=15,  # Reduced from 18
             alignment=1,  # Center
-            leading=28,   # Increased line height
+            leading=18,   # Reduced from 28
             spaceAfter=0,
             spaceBefore=0,
         )
         header_style_small = ParagraphStyle(
             'HeaderStyleSmall',
             fontName='Helvetica-Bold',
-            fontSize=14,
+            fontSize=11,  # Reduced from 14
             alignment=1,
-            leading=22,
+            leading=14,   # Reduced from 22
             spaceAfter=0,
             spaceBefore=0,
         )
         header_style_normal = ParagraphStyle(
             'HeaderStyleNormal',
             fontName='Helvetica',
-            fontSize=12,
+            fontSize=10,   # Reduced from 12
             alignment=1,
-            leading=20,
+            leading=11,   # Reduced from 20
             spaceAfter=0,
             spaceBefore=0,
         )
         header_style_bold = ParagraphStyle(
             'HeaderStyleBold',
             fontName='Helvetica-Bold',
-            fontSize=15,
+            fontSize=12,  # Reduced from 15
             alignment=1,
-            leading=24,
+            leading=14,   # Reduced from 24
             spaceAfter=0,
             spaceBefore=0,
         )
@@ -1756,7 +1783,7 @@ def export_to_pdf(request, semester_id):
         if term or semester_full_name:
             combined = f'{term} Term {semester_full_name}'.strip()
             left_content.append(Paragraph(combined, header_style_small))
-        left_content.append(Spacer(1, 8))
+        left_content.append(Spacer(1, 2))  # Reduced from 8
         left_content.append(Paragraph('Class Routine', header_style_bold))
         commencement = selected_semester.start_date.strftime('%d %B %Y') if selected_semester.start_date else ''
         study_center = selected_semester.study_center or ''
@@ -1769,25 +1796,25 @@ def export_to_pdf(request, semester_id):
         contact_lines = []
         if selected_semester.contact_person:
             contact_lines.append(f'<b><u>Contact Person</u></b>')
-            contact_lines.append('&nbsp;')  # Minimal gap
+            #contact_lines.append('&nbsp;')  # Minimal gap
             contact_lines.append(selected_semester.contact_person)
         if selected_semester.contact_person_designation:
             contact_lines.append(selected_semester.contact_person_designation)
         contact_lines.append('School of Science and Technology')
         contact_lines.append('Bangladesh Open University')
         if selected_semester.contact_person_phone:
-            contact_lines.append(f'Telephone: {selected_semester.contact_person_phone}')
+            contact_lines.append(f'Telephone/Whatsapp: {selected_semester.contact_person_phone}')
         if selected_semester.contact_person_email:
             contact_lines.append(f'email:{selected_semester.contact_person_email}')
         contact_box = '<br/>'.join(contact_lines)
-        contact_box_para = Paragraph(contact_box, ParagraphStyle('ContactBox', fontSize=10, borderWidth=1, borderColor=colors.black, borderPadding=6, leading=14, spaceBefore=0, spaceAfter=0))
+        contact_box_para = Paragraph(contact_box, ParagraphStyle('ContactBox', fontSize=10, borderWidth=1, borderColor=colors.black, borderPadding=4, leading=10, spaceBefore=2, spaceAfter=2))  # fontSize and paddings reduced
         contact_table = Table([[contact_box_para]], colWidths=[180], hAlign='RIGHT')
         contact_table.setStyle(TableStyle([
-            ('BOX', (0, 0), (-1, -1), 2, colors.black),
-            ('LEFTPADDING', (0, 0), (-1, -1), 8),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-            ('TOPPADDING', (0, 0), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('BOX', (1, 1), (0, 0), 2, colors.black),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),  # Reduced from 8
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4), # Reduced from 8
+            ('TOPPADDING', (0, 0), (-1, -1), 2),   # Reduced from 6
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),# Reduced from 6
         ]))
 
         # Combine into a two-column table with reduced contact box width, aligned to margins
@@ -1797,13 +1824,14 @@ def export_to_pdf(request, semester_id):
             hAlign='LEFT'
         )
         two_col_table.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (0, 0), 'TOP'),
+            ('VALIGN', (1, 0), (1, 0), 'TOP'),
             ('VALIGN', (1, 0), (1, 0), 'TOP'),
             ('ALIGN', (0, 0), (0, 0), 'CENTER'),
             ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
         ]))
+        elements.append(Spacer(1, 4))  # Add slight gap before contact box
         elements.append(two_col_table)
-        elements.append(Spacer(1, 16))
+        elements.append(Spacer(1, 4))  # Reduced from 16
 
         # Get the routines from the database
         routines = NewRoutine.objects.filter(semester=selected_semester).order_by('class_date', 'start_time')
@@ -1901,7 +1929,7 @@ def export_to_pdf(request, semester_id):
 
         for row_idx, date in enumerate(sorted_dates, start=1):
             day = day_by_date.get(date, date.strftime('%A'))
-            row = [date, day]
+            row = [date.strftime('%d/%m/%y'), day]
             slot_idx = 0
             # Build routines_for_row: all routines for this date, plus lunch break if present
             routines_for_row = []
@@ -1921,7 +1949,7 @@ def export_to_pdf(request, semester_id):
                     'is_lunch_break': True
                 })
             routines_for_row.sort(key=lambda r: r['start_time'])
-            col_idx = 2  # first two columns are date and day
+            col_idx = 2
             while slot_idx < len(slot_ranges):
                 slot_start, slot_end, slot_label = slot_ranges[slot_idx]
                 found = False
@@ -1945,22 +1973,33 @@ def export_to_pdf(request, semester_id):
                                 fontName='Helvetica-Bold',
                                 fontSize=9,
                                 alignment=TA_CENTER,
-                                leading=10,
+                                leading=8,
                                 spaceBefore=0,
                                 spaceAfter=0,
                             ))
                         else:
                             course_code = r['course_code']
                             teacher_short = r['teacher']
-                            cell_content = Paragraph(f"{course_code}<br/>({teacher_short})", ParagraphStyle(
-                                'CourseContent',
-                                fontName='Helvetica',
-                                fontSize=9,
-                                alignment=TA_CENTER,
-                                leading=10,
-                                spaceBefore=0,
-                                spaceAfter=0,
-                            ))
+                            if teacher_short_name_newline:
+                                cell_content = Paragraph(f"{course_code}<br/>({teacher_short})", ParagraphStyle(
+                                    'CourseContent',
+                                    fontName='Helvetica',
+                                    fontSize=9,
+                                    alignment=TA_CENTER,
+                                    leading=10,
+                                    spaceBefore=0,
+                                    spaceAfter=0,
+                                ))
+                            else:
+                                cell_content = Paragraph(f"{course_code} ({teacher_short})", ParagraphStyle(
+                                    'CourseContent',
+                                    fontName='Helvetica',
+                                    fontSize=9,
+                                    alignment=TA_CENTER,
+                                    leading=10,
+                                    spaceBefore=0,
+                                    spaceAfter=0,
+                                ))
                         row.append(cell_content)
                         for _ in range(colspan-1):
                             row.append(None)
@@ -1981,12 +2020,29 @@ def export_to_pdf(request, semester_id):
 
         # Set column widths directly without depending on lunch_col_idx
         num_cols = len(header_row)
-        date_col_width = 57   # narrow date column
+        date_col_width = 47   # decreased date column width
         day_col_width = 47    # narrow day column
 
+        # Find the lunch break time label (if present)
+        lunch_break_label = None
+        if selected_semester.lunch_break_start and selected_semester.lunch_break_end:
+            lunch_break_label = f"{selected_semester.lunch_break_start.strftime('%H:%M')} - {selected_semester.lunch_break_end.strftime('%H:%M')}"
+
+        # Identify lunch break column index (if present)
+        lunch_col_idx = None
+        for idx, label in enumerate(header_row):
+            if lunch_break_label and label == lunch_break_label:
+                lunch_col_idx = idx
+                break
+        lunch_col_width = 60  # smaller width for lunch break column
         # Calculate remaining width for other columns
-        remaining_width = available_width - date_col_width - day_col_width
-        other_col_width = remaining_width / (num_cols - 2) if num_cols > 2 else 0
+        if lunch_col_idx is not None:
+            remaining_width = available_width - date_col_width - day_col_width - lunch_col_width
+            other_col_count = num_cols - 3  # date, day, lunch
+        else:
+            remaining_width = available_width - date_col_width - day_col_width
+            other_col_count = num_cols - 2
+        other_col_width = remaining_width / other_col_count if other_col_count > 0 else 0
 
         # Build column widths list
         col_widths = []
@@ -1995,6 +2051,8 @@ def export_to_pdf(request, semester_id):
                 col_widths.append(date_col_width)
             elif i == 1:
                 col_widths.append(day_col_width)
+            elif i == lunch_col_idx:
+                col_widths.append(lunch_col_width)
             else:
                 col_widths.append(other_col_width)
 
@@ -2017,13 +2075,13 @@ def export_to_pdf(request, semester_id):
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('LEFTPADDING', (0, 0), (-1, -1), 2),
             ('RIGHTPADDING', (0, 0), (-1, -1), 2),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
             # Grid and borders
             ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
             ('BOX', (0, 0), (-1, -1), 1, colors.black),
             # Set a fixed row height
-            ('ROWHEIGHT', (0, 1), (-1, -1), 35),
+            ('ROWHEIGHT', (0, 1), (-1, -1), 28),  # Reduced cell height
             # Text wrapping for all cells
             ('WORDWRAP', (0, 0), (-1, -1), True),
         ])
@@ -2041,7 +2099,7 @@ def export_to_pdf(request, semester_id):
         elements.append(table)
 
         # Add vertical space before the N.B. note
-        elements.append(Spacer(1, 18))  # 18 points = 0.25 inch
+        elements.append(Spacer(1, 6))  # 18 points = 0.25 inch
 
         # Add the note section as a table for proper border and wrapping
         note_text = (
@@ -2063,7 +2121,7 @@ def export_to_pdf(request, semester_id):
             ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ]))
         elements.append(note_table)
-        elements.append(Spacer(1, 18))  # Gap below the N.B. note
+        elements.append(Spacer(1, 6))  # Gap below the N.B. note
         elements.append(Paragraph("<br/>", styles['Normal']))
 
         # Add the summary table of semester courses
@@ -2084,7 +2142,7 @@ def export_to_pdf(request, semester_id):
             ('BACKGROUND', (0, 0), (-1, 0), colors.white),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
             ('ALIGN', (0, 1), (-1, -1), 'LEFT'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -2092,60 +2150,47 @@ def export_to_pdf(request, semester_id):
             ('BOX', (0, 0), (-1, -1), 2, colors.black),
         ])
         summary_table.setStyle(summary_style)
-        elements.append(summary_table)
-
-        # Add vertical space before the signature field
-        elements.append(Spacer(1, 48)) # Gap before signature (e.g., 0.66 inch)
-
         # --- SIGNATURE FIELD SECTION ---
         signature_style = ParagraphStyle(
             'SignatureStyle',
             fontName='Helvetica',
             fontSize=10,
             alignment=TA_RIGHT,  # Right alignment
-            leading=12, # Line height
+            leading=6, # Reduced line height for less gap
             spaceBefore=0,
             spaceAfter=0,
         )
-
-        # Create signature lines
         dean_line = Paragraph("Dean", signature_style)
         school_line = Paragraph("School of Science and Technology", signature_style)
         bou_line = Paragraph("Bangladesh Open University", signature_style)
-
-        # Create the signature table
         signature_data = [
             [dean_line],
             [school_line],
             [bou_line]
         ]
-
-        # Set a fixed width for the signature table
         signature_table_width = 250 # Adjust as needed
         signature_table = Table(signature_data, colWidths=[signature_table_width])
-
-        # Style for the signature table
         signature_table.setStyle(TableStyle([
-            ('ALIGN', (0,0), (-1,-1), 'RIGHT'), # Right align all content in the table
-            ('LINEABOVE', (0,0), (0,0), 1, colors.black), # Line above "Dean"
-            ('TOPPADDING', (0,0), (0,0), 4), # Padding above the line
+            ('ALIGN', (0,0), (-1,-1), 'RIGHT'),
+            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
+            ('TOPPADDING', (0,0), (0,0), 4),
         ]))
-
-        # Create a wrapper table to place the signature table at the bottom right
-        # This table will span the full available width, with an empty left column
-        # to push the signature table to the right.
         wrapper_col_widths = [available_width - signature_table_width, signature_table_width]
         signature_wrapper_table = Table([['', signature_table]], colWidths=wrapper_col_widths)
         signature_wrapper_table.setStyle(TableStyle([
-            ('ALIGN', (1,0), (1,0), 'RIGHT'), # Align the second column (where signature table is) to the right
-            ('VALIGN', (0,0), (-1,-1), 'BOTTOM'), # Align content to bottom if there's vertical space
+            ('ALIGN', (1,0), (1,0), 'RIGHT'),
+            ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
             ('LEFTPADDING', (0,0), (-1,-1), 0),
             ('RIGHTPADDING', (0,0), (-1,-1), 0),
             ('TOPPADDING', (0,0), (-1,-1), 0),
             ('BOTTOMPADDING', (0,0), (-1,-1), 0),
         ]))
-
-        elements.append(signature_wrapper_table)
+        # Wrap summary table and signature together
+        elements.append(KeepTogether([
+            summary_table,
+            Spacer(1, 48), # Gap before signature
+            signature_wrapper_table
+        ]))
 
         # Build the PDF (only once)
         doc.build(elements)

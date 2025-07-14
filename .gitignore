@@ -81,3 +81,5 @@ htmlcov/
 *.docx
 *.pptx
 generate_docx_report.py
+*-old.sqlite3
+*.bak

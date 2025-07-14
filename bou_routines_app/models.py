@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 DAYS = [
@@ -103,3 +104,12 @@ class NewRoutine(models.Model):
     
     class Meta:
         ordering = ['class_date', 'start_time']
+
+class LoginLog(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    login_time = models.DateTimeField(auto_now_add=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-login_time']

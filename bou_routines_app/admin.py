@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Teacher, Semester, Course, CurrentRoutine, NewRoutine, SemesterCourse
+from .models import Teacher, Semester, Course, CurrentRoutine, NewRoutine, SemesterCourse, LoginLog
 
 @admin.register(CurrentRoutine)
 class CurrentRoutineAdmin(admin.ModelAdmin):
@@ -70,3 +70,9 @@ class NewRoutineAdmin(admin.ModelAdmin):
         return obj.teacher.name
     get_teacher.short_description = 'Teacher'
     get_teacher.admin_order_field = 'course__teacher'
+
+@admin.register(LoginLog)
+class LoginLogAdmin(admin.ModelAdmin):
+    list_display = ('user', 'login_time', 'ip_address', 'user_agent')
+    search_fields = ('user__username', 'ip_address', 'user_agent')
+    list_filter = ('user',)

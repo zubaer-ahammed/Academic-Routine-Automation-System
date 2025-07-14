@@ -666,7 +666,7 @@ def generate_routine(request):
                     sessions_scheduled += 1
                 # If not enough valid dates, warn the user
                 if sessions_scheduled < sessions_needed:
-                    messages.warning(request, f"Only {sessions_scheduled} out of {sessions_needed} sessions could be scheduled for {limit['course'].code} due to semester date/makeup date/holiday constraints.")
+                    messages.warning(request, f"Only {sessions_scheduled} out of {sessions_needed} classes could be scheduled for {limit['course'].code} due to semester date constraints. Please add the remaining classes manually.")
 
             # Sort generated routines by date and time for display
             generated_routines.sort(key=lambda x: (x['date'], x['start_time']))

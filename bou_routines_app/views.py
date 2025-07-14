@@ -580,94 +580,94 @@ def generate_routine(request):
                 ]
 
             # --- CLASS COUNT LIMIT LOGIC ---
-            # Build a map: course_id -> (allowed_classes, is_lab)
+            # Build a map: course_id -> (allowed_classes, is_lab, slot_minutes)
             course_limits = {}
             for sc in semester_courses:
                 is_lab = 'P' in sc.course.code
+                slot_minutes = None
+                for i in range(len(days)):
+                    if str(course_codes[i]) == str(sc.course.id):
+                        start_time_str = start_times[i]
+                        end_time_str = end_times[i]
+                        if start_time_str and end_time_str:
+                            start = datetime.strptime(start_time_str, "%H:%M").time()
+                            end = datetime.strptime(end_time_str, "%H:%M").time()
+                            slot_minutes = (datetime.combine(datetime.min, end) - datetime.combine(datetime.min, start)).total_seconds() / 60
+                            break
                 course_limits[str(sc.course.id)] = {
                     'allowed': sc.number_of_classes,
                     'is_lab': is_lab,
-                    'assigned': 0,  # count of classes assigned
-                    'assigned_minutes': 0.0,  # total minutes assigned
+                    'slot_minutes': slot_minutes,
+                    'start_time': start_time_str if slot_minutes else None,
+                    'end_time': end_time_str if slot_minutes else None,
+                    'day': days[i] if slot_minutes else None,
+                    'course': sc.course,
                 }
 
-            # Helper: get minutes for a slot
-            def get_minutes(start, end):
-                delta = datetime.combine(datetime.min.date(), end) - datetime.combine(datetime.min.date(), start)
-                return delta.total_seconds() / 60
+            # Build a set of makeup/reserve dates
+            makeup_dates_set = set(makeup_dates)
+            # Build a set of holiday dates
+            holiday_dates_set = set(holiday_dates)
 
-            # For each date, assign classes only if under the limit
-            while current_date <= end_date:
-                day_name = current_date.strftime('%A')
-                processed_days.append(day_name)
-                if current_date in holiday_dates:
-                    skipped_holidays.append(current_date.strftime('%Y-%m-%d'))
+            # For each course, build a list of all valid dates (Fridays/Saturdays, not in makeup_dates, not in holidays, not after end_date)
+            for course_id, limit in course_limits.items():
+                if not limit['slot_minutes']:
+                    continue  # skip if no slot info
+                # Determine class duration
+                if limit['is_lab']:
+                    class_duration = selected_semester.lab_class_duration_minutes
+                else:
+                    class_duration = selected_semester.theory_class_duration_minutes
+                # Calculate how many sessions are needed (round up)
+                sessions_needed = math.ceil(limit['allowed'] * class_duration / limit['slot_minutes'])
+                # Build all valid dates for this course
+                valid_dates = []
+                current_date = start_date
+                while current_date <= end_date:
+                    if current_date in makeup_dates_set or current_date in holiday_dates_set:
+                        current_date += timedelta(days=1)
+                        continue
+                    if current_date.strftime('%A') == limit['day']:
+                        valid_dates.append(current_date)
                     current_date += timedelta(days=1)
-                    continue
-                if day_name in ['Friday', 'Saturday']:
-                    day_matched = False
-                    for i in range(len(days)):
-                        if days[i] == day_name:
-                            day_matched = True
-                            course_id = course_codes[i]
-                            start_time_str = start_times[i]
-                            end_time_str = end_times[i]
-                            try:
-                                course = Course.objects.get(id=course_id)
-                                start = datetime.strptime(start_time_str, "%H:%M").time()
-                                end = datetime.strptime(end_time_str, "%H:%M").time()
-                                # Check class count limit
-                                limit = course_limits.get(str(course.id))
-                                if not limit:
-                                    continue  # Not in semester_courses
-                                # Calculate minutes for this slot
-                                minutes = get_minutes(start, end)
-                                # Determine how many classes this slot counts for using semester-specific durations
-                                if limit['is_lab']:
-                                    class_equiv = minutes / selected_semester.lab_class_duration_minutes
-                                    class_equiv = math.ceil(class_equiv * 100) / 100  # keep two decimals, round up
-                                else:
-                                    class_equiv = minutes / selected_semester.theory_class_duration_minutes
-                                    class_equiv = math.ceil(class_equiv * 100) / 100  # keep two decimals, round up
-                                # Only assign if not exceeding allowed
-                                if limit['assigned'] + class_equiv <= limit['allowed'] + 1e-6:  # allow float rounding
-                                    # Assign and increment
-                                    NewRoutine.objects.create(
-                                        semester=selected_semester,
-                                        course=course,
-                                        start_time=start,
-                                        end_time=end,
-                                        day=day_name,
-                                        class_date=current_date
-                                    )
-                                    CurrentRoutine.objects.update_or_create(
-                                        semester=selected_semester,
-                                        course=course,
-                                        day=day_name,
-                                        defaults={
-                                            'start_time': start,
-                                            'end_time': end
-                                        }
-                                    )
-                                    generated_routines.append({
-                                        'id': None,  # will be filled later if needed
-                                        'course_id': course.id,
-                                        'date': current_date,
-                                        'day': day_name,
-                                        'course_code': course.code,
-                                        'course_name': course.name,
-                                        'teacher': course.teacher.name,
-                                        'start_time': start.strftime('%H:%M'),
-                                        'end_time': end.strftime('%H:%M')
-                                    })
-                                    limit['assigned'] += class_equiv
-                                    limit['assigned_minutes'] += minutes
-                                # else: skip (leave slot blank)
-                            except Course.DoesNotExist:
-                                continue
-                    if not day_matched and day_name in ['Friday', 'Saturday']:
-                        matched_days.append(f"{day_name} - No matching courses")
-                current_date += timedelta(days=1)
+                # Schedule up to sessions_needed or as many as possible
+                sessions_scheduled = 0
+                for d in valid_dates:
+                    if sessions_scheduled >= sessions_needed:
+                        break
+                    NewRoutine.objects.create(
+                        semester=selected_semester,
+                        course=limit['course'],
+                        start_time=datetime.strptime(limit['start_time'], "%H:%M").time(),
+                        end_time=datetime.strptime(limit['end_time'], "%H:%M").time(),
+                        day=limit['day'],
+                        class_date=d
+                    )
+                    CurrentRoutine.objects.update_or_create(
+                        semester=selected_semester,
+                        course=limit['course'],
+                        day=limit['day'],
+                        defaults={
+                            'start_time': datetime.strptime(limit['start_time'], "%H:%M").time(),
+                            'end_time': datetime.strptime(limit['end_time'], "%H:%M").time()
+                        }
+                    )
+                    generated_routines.append({
+                        'id': None,
+                        'course_id': limit['course'].id,
+                        'date': d,
+                        'day': limit['day'],
+                        'course_code': limit['course'].code,
+                        'course_name': limit['course'].name,
+                        'teacher': limit['course'].teacher.name,
+                        'start_time': limit['start_time'],
+                        'end_time': limit['end_time']
+                    })
+                    sessions_scheduled += 1
+                # If not enough valid dates, warn the user
+                if sessions_scheduled < sessions_needed:
+                    messages.warning(request, f"Only {sessions_scheduled} out of {sessions_needed} sessions could be scheduled for {limit['course'].code} due to semester date/makeup date/holiday constraints.")
+
             # Sort generated routines by date and time for display
             generated_routines.sort(key=lambda x: (x['date'], x['start_time']))
 

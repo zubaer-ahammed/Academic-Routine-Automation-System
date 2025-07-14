@@ -233,6 +233,7 @@
             <strong>Please Select a Semester to get started.</strong>
         </div>
         <form method="post" id="generateRoutineForm">
+            <input type="hidden" id="hasExistingRoutine" value="{% if generated_routines %}1{% else %}0{% endif %}">
             {% csrf_token %}
             <div class="mb-3">
                 <label for="semester" class="form-label">Semester</label>
@@ -335,12 +336,16 @@
             <div class="d-grid gap-2">
                 <div class="row">
                     <div class="col">
+                        <button type="button" id="saveChangesBtn" class="btn btn-primary btn-lg w-100" disabled>Save Changes</button>
+                    </div>
+                    <div class="col">
                         <button type="submit" id="generateRoutineBtn" class="btn btn-success btn-lg w-100" disabled>Generate Routine</button>
                     </div>
                     <div class="col">
                         <button type="button" id="resetRoutineBtn" class="btn btn-danger btn-lg w-100" disabled>Reset Routine</button>
                     </div>
                 </div>
+                <input type="hidden" id="saveOnlyInput" name="save_only" value="0">
                 <small class="text-muted text-center mt-2">All time overlaps must be resolved before generating the routine. Also, this will override the existing routine for the selected semester.</small>
             </div>
         </form>
@@ -1813,10 +1818,12 @@
     document.addEventListener('DOMContentLoaded', function() {
         var resetBtn = document.getElementById('resetRoutineBtn');
         var generateBtn = document.getElementById('generateRoutineBtn');
+        var saveBtn = document.getElementById('saveChangesBtn');
         var semesterSelect = document.getElementById('semester');
         var resetForm = document.getElementById('resetRoutineForm');
         var resetSemesterInput = document.getElementById('resetSemesterInput');
         var generateForm = document.getElementById('generateRoutineForm');
+        var saveOnlyInput = document.getElementById('saveOnlyInput');
         var confirmModal = document.getElementById('generateConfirmModal');
         var confirmGenerateBtn = document.getElementById('confirmGenerateBtn');
         var resetConfirmModal = document.getElementById('resetConfirmModal');
@@ -1841,10 +1848,39 @@
             var hasSemester = !!semesterSelect.value;
             resetBtn.disabled = !hasSemester;
             generateBtn.disabled = !hasSemester;
+            saveBtn.disabled = !hasSemester;
             setFormEnabled(hasSemester);
         }
         updateBtnsAndFields();
         semesterSelect.addEventListener('change', updateBtnsAndFields);
+
+        saveBtn.addEventListener('click', function(e) {
+            saveOnlyInput.value = '1';
+            generateForm.submit();
+        });
+
+        generateBtn.addEventListener('click', function(e) {
+            saveOnlyInput.value = '0';
+            if (generateBtn.disabled) {
+                e.preventDefault();
+                alert('Please select a semester before generating a routine.');
+            } else {
+                var hasExistingRoutine = document.getElementById('hasExistingRoutine').value === '1';
+                if (hasExistingRoutine) {
+                    e.preventDefault();
+                    if (!bsModal) {
+                        bsModal = new bootstrap.Modal(confirmModal);
+                    }
+                    bsModal.show();
+                } // else, submit directly
+            }
+        });
+
+        confirmGenerateBtn.addEventListener('click', function() {
+            saveOnlyInput.value = '0';
+            bsModal.hide();
+            generateForm.submit();
+        });
 
         resetBtn.addEventListener('click', function() {
             if (!semesterSelect.value) return;
@@ -1858,24 +1894,6 @@
             bsResetModal.hide();
             resetSemesterInput.value = semesterSelect.value;
             resetForm.submit();
-        });
-
-        generateBtn.addEventListener('click', function(e) {
-            if (generateBtn.disabled) {
-                e.preventDefault();
-                alert('Please select a semester before generating a routine.');
-            } else {
-                e.preventDefault();
-                if (!bsModal) {
-                    bsModal = new bootstrap.Modal(confirmModal);
-                }
-                bsModal.show();
-            }
-        });
-
-        confirmGenerateBtn.addEventListener('click', function() {
-            bsModal.hide();
-            generateForm.submit();
         });
     });
     </script>

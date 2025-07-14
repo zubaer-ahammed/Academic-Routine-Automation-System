@@ -17,6 +17,7 @@ from django.utils.http import urlencode
 from django.contrib.auth.decorators import login_required
 import math
 from django.views.decorators.http import require_POST
+from django.db.models import Q
 
 
 @login_required
@@ -313,6 +314,8 @@ def generate_routine(request):
         time_slot_labels = []
 
     if request.method == "POST":
+        save_only = request.POST.get("save_only") == "1"
+        print("DEBUG save_only value:", request.POST.get("save_only"))
         selected_semester_id = request.POST.get("semester")
         date_range = request.POST.get("date_range")
         days = request.POST.getlist("day[]")
@@ -332,7 +335,6 @@ def generate_routine(request):
                 selected_semester = Semester.objects.get(id=selected_semester_id)
                 selected_semester.lunch_break_start = datetime.strptime(lunch_break_start, "%H:%M").time()
                 selected_semester.lunch_break_end = datetime.strptime(lunch_break_end, "%H:%M").time()
-                
                 # Check if date_range is provided, parse and save to semester
                 if date_range:
                     try:
@@ -341,23 +343,57 @@ def generate_routine(request):
                         selected_semester.end_date = datetime.strptime(end_date_str, "%m/%d/%Y").date()
                     except Exception as e:
                         messages.error(request, f"Error parsing date range: {str(e)}")
-                
                 # Process and save government holidays
                 govt_holidays = request.POST.get('govt_holiday_dates')
                 if govt_holidays:
                     # Save comma-separated list of holiday dates directly
                     selected_semester.holidays = govt_holidays
-
                 # Process and save makeup/extra class dates
                 makeup_dates = request.POST.get('makeup_date_list')
                 if makeup_dates:
                     # Save comma-separated list of makeup dates directly
                     selected_semester.makeup_dates = makeup_dates
-
                 selected_semester.save()
                 #messages.success(request, f"Updated lunch break for {selected_semester.name} to {lunch_break_start} - {lunch_break_end}")
             except Exception as e:
                 messages.error(request, f"Error updating semester settings: {str(e)}")
+        
+        # Save class schedule rows (CurrentRoutine) for Save Changes as well
+        for i in range(len(days)):
+            day = days[i]
+            start = datetime.strptime(start_times[i], "%H:%M").time()
+            end = datetime.strptime(end_times[i], "%H:%M").time()
+            course_id = course_codes[i]
+            try:
+                course = Course.objects.get(id=course_id)
+                # Update or create CurrentRoutine for this course/day/semester
+                CurrentRoutine.objects.update_or_create(
+                    semester=selected_semester,
+                    course=course,
+                    day=day,
+                    defaults={
+                        'start_time': start,
+                        'end_time': end
+                    }
+                )
+            except Course.DoesNotExist:
+                continue
+        
+        # Delete CurrentRoutine entries for this semester that are not in the submitted form
+        submitted_pairs = set((int(course_codes[i]), days[i]) for i in range(len(days)))
+        q = Q()
+        for course_id, day in submitted_pairs:
+            q |= Q(course_id=course_id, day=day)
+        if submitted_pairs:
+            CurrentRoutine.objects.filter(semester=selected_semester).exclude(q).delete()
+        else:
+            # If no rows submitted, delete all for this semester
+            CurrentRoutine.objects.filter(semester=selected_semester).delete()
+        
+        # EARLY RETURN IF SAVE ONLY
+        if save_only:
+            messages.success(request, "Semester info and class schedule saved successfully.")
+            return redirect(f"{reverse('generate-routine')}?semester={selected_semester_id}")
         
         # Check for lunch break overlaps (always enforced)
         try:

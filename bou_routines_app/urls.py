@@ -11,6 +11,7 @@ urlpatterns = [
     path('check-time-overlap/', views.check_time_overlap, name='check-time-overlap'),
     path('update-routine-course/', views.update_routine_course, name='update-routine-course'),
     path('remove-routine-course/', views.remove_routine_course, name='remove-routine-course'),
+    path('reset-routine/', views.reset_routine, name='reset-routine'),
     path('export-to-excel/<int:semester_id>/', views.export_to_excel, name='export-to-excel'),
     path('export-to-pdf/<int:semester_id>/', views.export_to_pdf, name='export-to-pdf'),
 ]

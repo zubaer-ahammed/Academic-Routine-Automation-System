@@ -16,6 +16,7 @@ from django.urls import reverse
 from django.utils.http import urlencode
 from django.contrib.auth.decorators import login_required
 import math
+from django.views.decorators.http import require_POST
 
 
 @login_required
@@ -2202,3 +2203,20 @@ def export_to_pdf(request, semester_id):
 
     except Exception as e:
         return HttpResponse(f"Error generating PDF file: {str(e)}", status=500)
+
+@require_POST
+@login_required
+def reset_routine(request):
+    semester_id = request.POST.get('semester')
+    if not semester_id:
+        messages.error(request, "No semester selected for reset.")
+        return redirect('generate-routine')
+    try:
+        semester = Semester.objects.get(id=semester_id)
+        # Delete all routines for this semester, but NOT SemesterCourse
+        NewRoutine.objects.filter(semester=semester).delete()
+        CurrentRoutine.objects.filter(semester=semester).delete()
+        messages.success(request, f"Routine reset for {semester.name} (course schedule preserved).")
+    except Semester.DoesNotExist:
+        messages.error(request, "Semester not found.")
+    return redirect(f"{reverse('generate-routine')}?semester={semester_id}")

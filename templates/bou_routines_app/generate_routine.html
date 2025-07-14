@@ -229,7 +229,10 @@
             <ul id="overlapList"></ul>
         </div>
 
-        <form method="post">
+        <div id="selectSemesterMsg" class="alert alert-warning text-center mb-4" style="display:none;">
+            <strong>Please Select a Semester to get started.</strong>
+        </div>
+        <form method="post" id="generateRoutineForm">
             {% csrf_token %}
             <div class="mb-3">
                 <label for="semester" class="form-label">Semester</label>
@@ -330,10 +333,61 @@
             <button type="button" class="btn btn-secondary mb-3" id="addCourse">+ Add Another Course</button>
 
             <div class="d-grid gap-2">
-                <button type="submit" class="btn btn-success btn-lg">Generate Routine</button>
+                <div class="row">
+                    <div class="col">
+                        <button type="submit" id="generateRoutineBtn" class="btn btn-success btn-lg w-100" disabled>Generate Routine</button>
+                    </div>
+                    <div class="col">
+                        <button type="button" id="resetRoutineBtn" class="btn btn-danger btn-lg w-100" disabled>Reset Routine</button>
+                    </div>
+                </div>
                 <small class="text-muted text-center mt-2">All time overlaps must be resolved before generating the routine. Also, this will override the existing routine for the selected semester.</small>
             </div>
         </form>
+        <form id="resetRoutineForm" method="post" action="{% url 'reset-routine' %}" style="display:none;">
+            {% csrf_token %}
+            <input type="hidden" name="semester" id="resetSemesterInput">
+        </form>
+        <!-- Custom Confirmation Modal -->
+        <div class="modal fade bou-modal" id="generateConfirmModal" tabindex="-1" aria-labelledby="generateConfirmModalLabel" aria-hidden="true">
+          <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title" id="generateConfirmModalLabel">Confirm Routine Generation</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body">
+                This will override the previously generated routines for this semester.<br>
+                <strong>All the manual changes made will be gone.</strong><br>
+                Are you sure you want to continue?
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmGenerateBtn">Yes, Generate</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Reset Routine Confirmation Modal -->
+        <div class="modal fade bou-modal" id="resetConfirmModal" tabindex="-1" aria-labelledby="resetConfirmModalLabel" aria-hidden="true">
+          <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title" id="resetConfirmModalLabel">Confirm Routine Reset</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body">
+                <strong>This will delete the previously generated routine for this semester.</strong><br>
+                The routine table will be cleared, but the course schedule will be preserved.<br>
+                Are you sure you want to reset the routine?
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmResetBtn">Yes, Reset</button>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {% if generated_routines %}
         <div class="mt-5">
@@ -1193,54 +1247,13 @@
             // Handle semester change
             $('#semester').change(function() {
                 const semesterId = $(this).val();
-
                 // Clear the current routine info when semester changes
                 if ($('#currentRoutineInfo').length) {
                     $('#currentRoutineInfo').remove();
                 }
-
-                // Check if there are existing generated routines for this semester
                 if (semesterId) {
-                    $.ajax({
-                        url: "{% url 'get-existing-generated-routines' %}",
-                        data: {
-                            'semester_id': semesterId
-                        },
-                        dataType: 'json',
-                        success: function(data) {
-                            if (data.has_routines) {
-                                // Show loading message
-                                $('body').append('<div id="loadingOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center;"><div class="bg-white p-4 rounded"><i class="bi bi-arrow-clockwise"></i> Loading existing routine...</div></div>');
-                                
-                                // If there are existing routines, reload the page with the semester parameter
-                                window.location.href = "{% url 'generate-routine' %}?semester=" + semesterId;
-                            } else {
-                                // If no existing routines, just load the semester courses normally
-                                loadSemesterCourses(semesterId);
-                                
-                                // Show a message that no existing routine was found
-                                const semesterName = $('#semester option:selected').text();
-                                const noRoutineHtml = `
-                                    <div class="alert alert-warning mt-3 mb-3">
-                                        <h5><i class="bi bi-exclamation-triangle-fill"></i> No Existing Routine Found</h5>
-                                        <p class="mb-0">No previously generated routine found for <strong>${semesterName}</strong>. You can create a new routine by filling out the form below.</p>
-                                    </div>
-                                `;
-                                
-                                // Remove any existing no routine message
-                                if ($('#noRoutineInfo').length) {
-                                    $('#noRoutineInfo').remove();
-                                }
-                                
-                                // Add the message before the course repeater
-                                $('#courseRepeater').before('<div id="noRoutineInfo">' + noRoutineHtml + '</div>');
-                            }
-                        },
-                        error: function() {
-                            // On error, just load the semester courses normally
-                            loadSemesterCourses(semesterId);
-                        }
-                    });
+                    // Always reload the page with the selected semester, regardless of routines
+                    window.location.href = "{% url 'generate-routine' %}?semester=" + semesterId;
                 } else {
                     // If no semester selected, just load courses normally
                     loadSemesterCourses(semesterId);
@@ -1795,6 +1808,76 @@
 
         // On page load, set the PDF export hidden input to match the checkbox
         document.getElementById('pdfTeacherShortNameNewline').value = document.getElementById('teacherShortNameNewline').checked ? '1' : '0';
+    </script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var resetBtn = document.getElementById('resetRoutineBtn');
+        var generateBtn = document.getElementById('generateRoutineBtn');
+        var semesterSelect = document.getElementById('semester');
+        var resetForm = document.getElementById('resetRoutineForm');
+        var resetSemesterInput = document.getElementById('resetSemesterInput');
+        var generateForm = document.getElementById('generateRoutineForm');
+        var confirmModal = document.getElementById('generateConfirmModal');
+        var confirmGenerateBtn = document.getElementById('confirmGenerateBtn');
+        var resetConfirmModal = document.getElementById('resetConfirmModal');
+        var confirmResetBtn = document.getElementById('confirmResetBtn');
+        var bsModal = null;
+        var bsResetModal = null;
+        var selectSemesterMsg = document.getElementById('selectSemesterMsg');
+
+        function setFormEnabled(enabled) {
+            // Disable/enable all form fields except the semester dropdown
+            var formEls = generateForm.querySelectorAll('input, select, textarea, button');
+            formEls.forEach(function(el) {
+                if (el.id !== 'semester' && el.name !== 'csrfmiddlewaretoken') {
+                    el.disabled = !enabled;
+                }
+            });
+            // Show/hide the message
+            selectSemesterMsg.style.display = enabled ? 'none' : '';
+        }
+
+        function updateBtnsAndFields() {
+            var hasSemester = !!semesterSelect.value;
+            resetBtn.disabled = !hasSemester;
+            generateBtn.disabled = !hasSemester;
+            setFormEnabled(hasSemester);
+        }
+        updateBtnsAndFields();
+        semesterSelect.addEventListener('change', updateBtnsAndFields);
+
+        resetBtn.addEventListener('click', function() {
+            if (!semesterSelect.value) return;
+            if (!bsResetModal) {
+                bsResetModal = new bootstrap.Modal(resetConfirmModal);
+            }
+            bsResetModal.show();
+        });
+
+        confirmResetBtn.addEventListener('click', function() {
+            bsResetModal.hide();
+            resetSemesterInput.value = semesterSelect.value;
+            resetForm.submit();
+        });
+
+        generateBtn.addEventListener('click', function(e) {
+            if (generateBtn.disabled) {
+                e.preventDefault();
+                alert('Please select a semester before generating a routine.');
+            } else {
+                e.preventDefault();
+                if (!bsModal) {
+                    bsModal = new bootstrap.Modal(confirmModal);
+                }
+                bsModal.show();
+            }
+        });
+
+        confirmGenerateBtn.addEventListener('click', function() {
+            bsModal.hide();
+            generateForm.submit();
+        });
+    });
     </script>
 </body>
 </html>

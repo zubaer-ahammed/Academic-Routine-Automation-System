@@ -361,11 +361,16 @@ def generate_routine(request):
         # Save class schedule rows (CurrentRoutine) for Save Changes as well
         for i in range(len(days)):
             day = days[i]
-            start = datetime.strptime(start_times[i], "%H:%M").time()
-            end = datetime.strptime(end_times[i], "%H:%M").time()
+            start_time_str = start_times[i]
+            end_time_str = end_times[i]
             course_id = course_codes[i]
+            # Skip if any field is empty
+            if not (course_id and day and start_time_str and end_time_str):
+                continue
             try:
                 course = Course.objects.get(id=course_id)
+                start = datetime.strptime(start_time_str, "%H:%M").time()
+                end = datetime.strptime(end_time_str, "%H:%M").time()
                 # Update or create CurrentRoutine for this course/day/semester
                 CurrentRoutine.objects.update_or_create(
                     semester=selected_semester,
@@ -376,11 +381,16 @@ def generate_routine(request):
                         'end_time': end
                     }
                 )
-            except Course.DoesNotExist:
+            except (Course.DoesNotExist, ValueError):
                 continue
         
         # Delete CurrentRoutine entries for this semester that are not in the submitted form
-        submitted_pairs = set((int(course_codes[i]), days[i]) for i in range(len(days)))
+        from django.db.models import Q
+        submitted_pairs = set(
+            (int(course_codes[i]), days[i])
+            for i in range(len(days))
+            if course_codes[i] and days[i] and start_times[i] and end_times[i]
+        )
         q = Q()
         for course_id, day in submitted_pairs:
             q |= Q(course_id=course_id, day=day)

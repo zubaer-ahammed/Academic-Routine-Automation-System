@@ -524,6 +524,15 @@
                         </a>
                     </div>
                 </div>
+                <div class="row mt-2">
+                    <div class="col-12">
+                        {% if selected_semester_id %}
+                        <a href="{% url 'export-academic-calendar-pdf' selected_semester_id %}" class="btn btn-info w-100" style="background-color: #0dcaf0; color: #fff;">
+                            <i class="bi bi-calendar-event"></i> Download Academic Calendar
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
         </div>
         {% endif %}

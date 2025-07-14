@@ -16,9 +16,11 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from bou_routines_app.views import export_academic_calendar_pdf
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('bou_routines_app.urls')),
     path('accounts/', include('django.contrib.auth.urls')),
+    path('export-academic-calendar/<int:semester_id>/', export_academic_calendar_pdf, name='export-academic-calendar-pdf'),
 ]

@@ -2266,3 +2266,220 @@ def reset_routine(request):
     except Semester.DoesNotExist:
         messages.error(request, "Semester not found.")
     return redirect(f"{reverse('generate-routine')}?semester={semester_id}")
+
+@login_required
+def export_academic_calendar_pdf(request, semester_id):
+    """Export the academic calendar as a PDF file"""
+    try:
+        selected_semester = Semester.objects.get(id=semester_id)
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=landscape(A4),
+            rightMargin=54,
+            leftMargin=54,
+            topMargin=34,
+            bottomMargin=34
+        )
+        page_width, page_height = landscape(A4)
+        available_width = page_width - doc.leftMargin - doc.rightMargin
+        elements = []
+
+        # --- HEADER IMAGE SECTION (same as export_to_pdf) ---
+        header_img_path = 'bou_routines_app/static/pdf_routine_top.png'
+        try:
+            padding_for_image = 2
+            img_obj = Image(header_img_path, width=available_width - (2 * padding_for_image), height=45)
+            header_img_table = Table([[img_obj]], colWidths=[available_width])
+            header_img_table.setStyle(TableStyle([
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('LEFTPADDING', (0,0), (-1, -1), padding_for_image),
+                ('RIGHTPADDING', (0,0), (-1, -1), padding_for_image),
+                ('TOPPADDING', (0,0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0,0), (-1, -1), 0),
+            ]))
+            elements.append(header_img_table)
+        except Exception as e:
+            print(f"Error loading header image: {e}")
+            pass
+        elements.append(Spacer(1, -4))
+
+        # --- HEADER TEXTS (same as export_to_pdf, but title is 'Academic Calendar') ---
+        header_style = ParagraphStyle(
+            'HeaderStyle', fontName='Helvetica-Bold', fontSize=15, alignment=1, leading=18, spaceAfter=0, spaceBefore=0)
+        header_style_small = ParagraphStyle(
+            'HeaderStyleSmall', fontName='Helvetica-Bold', fontSize=11, alignment=1, leading=14, spaceAfter=0, spaceBefore=0)
+        header_style_normal = ParagraphStyle(
+            'HeaderStyleNormal', fontName='Helvetica', fontSize=10, alignment=1, leading=11, spaceAfter=0, spaceBefore=0)
+        header_style_bold = ParagraphStyle(
+            'HeaderStyleBold', fontName='Helvetica-Bold', fontSize=12, alignment=1, leading=14, spaceAfter=0, spaceBefore=0)
+
+        left_content = []
+        program_name = 'B. Sc in Computer Science and Engineering Program'
+        left_content.append(Paragraph(program_name, header_style))
+        session = selected_semester.session or ''
+        if session:
+            left_content.append(Paragraph(f'{session} Session', header_style_small))
+        term = selected_semester.term or ''
+        semester_full_name = selected_semester.semester_full_name or ''
+        if term or semester_full_name:
+            combined = f'{term} Term {semester_full_name}'.strip()
+            left_content.append(Paragraph(combined, header_style_small))
+        left_content.append(Spacer(1, 2))
+        left_content.append(Paragraph('Academic Calendar', header_style_bold))
+        commencement = selected_semester.start_date.strftime('%d %B %Y') if selected_semester.start_date else ''
+        study_center = selected_semester.study_center or ''
+        if commencement:
+            left_content.append(Paragraph(f'<b>Date of Commencement:</b> {commencement}', header_style_normal))
+        if study_center:
+            left_content.append(Paragraph(f'<b>Study Center:</b> {study_center}', header_style_normal))
+
+        # Build right column (contact person box)
+        contact_lines = []
+        if selected_semester.contact_person:
+            contact_lines.append(f'<b><u>Contact Person</u></b>')
+            contact_lines.append(selected_semester.contact_person)
+        if selected_semester.contact_person_designation:
+            contact_lines.append(selected_semester.contact_person_designation)
+        contact_lines.append('School of Science and Technology')
+        contact_lines.append('Bangladesh Open University')
+        if selected_semester.contact_person_phone:
+            contact_lines.append(f'Telephone/Whatsapp: {selected_semester.contact_person_phone}')
+        if selected_semester.contact_person_email:
+            contact_lines.append(f'email:{selected_semester.contact_person_email}')
+        contact_box = '<br/>'.join(contact_lines)
+        contact_box_para = Paragraph(contact_box, ParagraphStyle('ContactBox', fontSize=10, borderWidth=1, borderColor=colors.black, borderPadding=4, leading=10, spaceBefore=2, spaceAfter=2))
+        contact_table = Table([[contact_box_para]], colWidths=[180], hAlign='RIGHT')
+        contact_table.setStyle(TableStyle([
+            ('BOX', (1, 1), (0, 0), 2, colors.black),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ]))
+        two_col_table = Table(
+            [[left_content, contact_table]],
+            colWidths=[available_width-180, 180],
+            hAlign='LEFT'
+        )
+        two_col_table.setStyle(TableStyle([
+            ('VALIGN', (1, 0), (1, 0), 'TOP'),
+            ('VALIGN', (1, 0), (1, 0), 'TOP'),
+            ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ]))
+        elements.append(Spacer(1, 4))
+        elements.append(two_col_table)
+        elements.append(Spacer(1, 16))
+
+        # --- Academic Calendar Table ---
+        # Calculate event dates
+        events = []
+        start_date = selected_semester.start_date
+        end_date = selected_semester.end_date
+        # Find the latest makeup/extra class date (if any)
+        makeup_dates = []
+        if selected_semester.makeup_dates:
+            try:
+                makeup_dates = [
+                    datetime.strptime(date.strip(), "%Y-%m-%d").date()
+                    for date in selected_semester.makeup_dates.split(',')
+                    if date.strip()
+                ]
+            except Exception:
+                makeup_dates = []
+        if start_date:
+            events.append(("Semester Start", start_date.strftime('%d/%m/%Y')))
+            # 4th week: +21 days
+            first_class_test = start_date + timedelta(weeks=4)
+            events.append(("First Class Test", first_class_test.strftime('%d/%m/%Y')))
+            # 8th week: +7*8 days
+            second_class_test = start_date + timedelta(weeks=8)
+            events.append(("Second Class Test", second_class_test.strftime('%d/%m/%Y')))
+            # Assignments
+            first_assignment = start_date + timedelta(weeks=4)
+            events.append(("First Assignment", first_assignment.strftime('%d/%m/%Y')))
+            second_assignment = start_date + timedelta(weeks=8)
+            events.append(("Second Assignment", second_assignment.strftime('%d/%m/%Y')))
+            third_assignment = start_date + timedelta(weeks=12)
+            events.append(("Third Assignment", third_assignment.strftime('%d/%m/%Y')))
+        if end_date:
+            events.append(("Semester End", end_date.strftime('%d/%m/%Y')))
+        # Tentative Semester Final Exam: 1 week after the latest makeup date, or 1 week after end_date
+        if makeup_dates:
+            latest_makeup = max(makeup_dates)
+            tentative_final = latest_makeup + timedelta(weeks=1)
+        elif end_date:
+            tentative_final = end_date + timedelta(weeks=1)
+        else:
+            tentative_final = None
+        if tentative_final:
+            events.append(("Tentative Semester Final Exam", tentative_final.strftime('%d/%m/%Y')))
+
+        # Table data
+        table_data = [["Events", "Date"]] + events
+        col_widths = [0.6 * available_width, 0.4 * available_width]
+        table = Table(table_data, colWidths=col_widths)
+        style = TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 11),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            ('BOX', (0, 0), (-1, -1), 1, colors.black),
+        ])
+        table.setStyle(style)
+        elements.append(table)
+
+        # Add dean's signature block at the bottom (like export_to_pdf)
+        signature_style = ParagraphStyle(
+            'SignatureStyle',
+            fontName='Helvetica',
+            fontSize=10,
+            alignment=TA_RIGHT,
+            leading=6,
+            spaceBefore=0,
+            spaceAfter=0,
+        )
+        dean_line = Paragraph("Dean", signature_style)
+        school_line = Paragraph("School of Science and Technology", signature_style)
+        bou_line = Paragraph("Bangladesh Open University", signature_style)
+        signature_data = [
+            [dean_line],
+            [school_line],
+            [bou_line]
+        ]
+        signature_table_width = 250
+        signature_table = Table(signature_data, colWidths=[signature_table_width])
+        signature_table.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'RIGHT'),
+            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
+            ('TOPPADDING', (0,0), (0,0), 4),
+        ]))
+        wrapper_col_widths = [available_width - signature_table_width, signature_table_width]
+        signature_wrapper_table = Table([['', signature_table]], colWidths=wrapper_col_widths)
+        signature_wrapper_table.setStyle(TableStyle([
+            ('ALIGN', (1,0), (1,0), 'RIGHT'),
+            ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
+            ('LEFTPADDING', (0,0), (-1,-1), 0),
+            ('RIGHTPADDING', (0,0), (-1,-1), 0),
+            ('TOPPADDING', (0,0), (-1,-1), 0),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+        ]))
+        elements.append(Spacer(1, 48))
+        elements.append(signature_wrapper_table)
+
+        doc.build(elements)
+        buffer.seek(0)
+        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{selected_semester.name}_Academic_Calendar.pdf"'
+        return response
+    except Exception as e:
+        return HttpResponse(f"Error generating Academic Calendar PDF: {str(e)}", status=500)

@@ -1,17 +1,9 @@
 /* Global styles for all pages */
 body {
     background-color: #f8f9fa;
-    font-family: 'Segoe UI', Arial, sans-serif;
-    color: #222;
-    margin: 0;
-    padding: 0;
 }
 h1, h2, h3, h4, h5, h6 {
-    font-family: 'Segoe UI', Arial, sans-serif;
-    font-weight: 600;
-    color: #222;
-    margin-top: 2rem;
-    margin-bottom: 1rem;
+
 }
 a {
     color: #0056b3;
@@ -49,6 +41,12 @@ a:hover {
     padding-bottom: 1em;
     padding-top: 1em;
 }
+
+.container.container-bou.bou-header {
+    padding-left: 0;
+    padding-right: 0;
+}
+
 @media screen and (max-width: 480px) {
     .container {
         padding: 1rem;

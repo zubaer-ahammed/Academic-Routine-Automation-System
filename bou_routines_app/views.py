@@ -1568,7 +1568,11 @@ def export_to_excel(request, semester_id):
                         found = True
                         break
                 if not found:
-                    worksheet.write(row, col_idx, "", cell_format)
+                    # If this is a makeup/reserved date, show 'Reserved Class'
+                    if date in makeup_dates:
+                        worksheet.write(row, col_idx, "Reserved Class", cell_format)
+                    else:
+                        worksheet.write(row, col_idx, "", cell_format)
                     col_idx += 1
                     slot_idx += 1
             row += 1

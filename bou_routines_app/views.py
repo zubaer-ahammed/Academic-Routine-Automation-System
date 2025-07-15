@@ -2230,7 +2230,7 @@ def export_to_pdf(request, semester_id):
 
         # Add the note section as a table for proper border and wrapping
         note_text = (
-            "N.B.  For any changes in the schedule, concerned coordinator/class teachers are requested to inform the students as well as the Dean/Program Co-ordinator, School of Science and Technology, BOU in advance."
+            "N.B.  For any changes in the schedule, concerned coordinator/class teachers are requested to inform the students and the Dean/Program Co-ordinator, School of Science and Technology, BOU in advance."
         )
         note_table = Table(
             [[note_text]],

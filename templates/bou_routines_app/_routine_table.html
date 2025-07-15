@@ -16,6 +16,7 @@
         </thead>
         <tbody>
           {% for row in routine_table_rows %}
+            {% with makeup_dates=makeup_dates %}
             <tr>
               <td class="date-cell">{{ row.date|date:"d/m/Y" }}</td>
               <td class="day-cell">{{ row.day }}</td>
@@ -24,9 +25,11 @@
                   <td class="{% if cell.is_lunch_break %}break-cell{% else %}course-cell{% endif %}" colspan="{{ cell.colspan }}">
                     {% if cell.is_lunch_break %}
                       {{ cell.content }}
-                    {% else %}
+                    {% elif cell.content %}
                       {{ cell.content.course_code }}<br>
                       <small>({{ cell.content.teacher }})</small>
+                    {% elif makeup_dates and row.date in makeup_dates %}
+                      <span class="text-info">Reserved Class</span>
                     {% endif %}
                   </td>
                 {% else %}
@@ -36,11 +39,14 @@
                     {% elif cell.content %}
                       {{ cell.content.course_code }}<br>
                       <small>({{ cell.content.teacher }})</small>
+                    {% elif makeup_dates and row.date in makeup_dates %}
+                      <span class="text-info">Reserved Class</span>
                     {% endif %}
                   </td>
                 {% endif %}
               {% endfor %}
             </tr>
+            {% endwith %}
           {% endfor %}
         </tbody>
       </table>

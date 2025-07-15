@@ -234,6 +234,7 @@
                             </thead>
                             <tbody>
                                 {% for row in semester_data.routine_table_rows %}
+                                    {% with makeup_dates=semester_data.makeup_dates %}
                                     <tr>
                                         <td class="date-cell">{{ row.date|date:"d/m/Y" }}</td>
                                         <td class="day-cell">{{ row.day }}</td>
@@ -243,9 +244,11 @@
                                                     colspan="{{ cell.colspan }}">
                                                     {% if cell.is_lunch_break %}
                                                         {{ cell.content }}
-                                                    {% else %}
+                                                    {% elif cell.content %}
                                                         {{ cell.content.course_code }}<br>
                                                         <small>({{ cell.content.teacher }})</small>
+                                                    {% elif makeup_dates and row.date in makeup_dates %}
+                                                        <span class="text-info">Reserved Class</span>
                                                     {% endif %}
                                                 </td>
                                             {% else %}
@@ -255,11 +258,14 @@
                                                     {% elif cell.content %}
                                                         {{ cell.content.course_code }}<br>
                                                         <small>({{ cell.content.teacher }})</small>
+                                                    {% elif makeup_dates and row.date in makeup_dates %}
+                                                        <span class="text-info">Reserved Class</span>
                                                     {% endif %}
                                                 </td>
                                             {% endif %}
                                         {% endfor %}
                                     </tr>
+                                    {% endwith %}
                                 {% endfor %}
                             </tbody>
                         </table>

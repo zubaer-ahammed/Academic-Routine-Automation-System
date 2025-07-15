@@ -940,7 +940,8 @@ def generate_routine(request):
             "lunch_break": lunch_break,
             # New keys for merged table
             "routine_table_rows": routine_table_rows,
-            "time_slot_labels": time_slot_labels
+            "time_slot_labels": time_slot_labels,
+            "makeup_dates": makeup_dates,  # <-- Add this line
         })
 
     # Include the selected semester ID if available in POST
@@ -1713,11 +1714,20 @@ def download_routines(request):
                         slot_idx += 1
                 routine_table_rows.append({'date': date, 'day': day, 'cells': row_cells})
             
+            # Add makeup dates for this semester
+            makeup_dates = []
+            if semester.makeup_dates:
+                makeup_dates = [
+                    datetime.strptime(date.strip(), "%Y-%m-%d").date()
+                    for date in semester.makeup_dates.split(',')
+                    if date.strip()
+                ]
             semester_routines.append({
                 'semester': semester,
                 'routine_table_rows': routine_table_rows,
                 'time_slot_labels': [label for _, _, label in slot_ranges],
-                'routine_count': latest_routines.count()
+                'routine_count': latest_routines.count(),
+                'makeup_dates': makeup_dates,  # <-- Add this line
             })
     
     return render(request, 'bou_routines_app/download_routines.html', {
@@ -1814,7 +1824,7 @@ def export_to_pdf(request, semester_id):
             fontName='Helvetica-Bold',
             fontSize=12,  # Reduced from 15
             alignment=1,
-            leading=14,   # Reduced from 24
+            leading=15,   # Reduced from 24
             spaceAfter=0,
             spaceBefore=0,
         )
@@ -1842,37 +1852,89 @@ def export_to_pdf(request, semester_id):
         # Build right column (contact person box)
         contact_lines = []
         if selected_semester.contact_person:
-            contact_lines.append(f'<b><u>Contact Person</u></b>')
-            #contact_lines.append('&nbsp;')  # Minimal gap
-            contact_lines.append(selected_semester.contact_person)
+            contact_label = Paragraph(
+                'Contact Person',
+                ParagraphStyle(
+                    'ContactLabel',
+                    fontName='Helvetica-Bold',
+                    fontSize=11,
+                    alignment=0,  # Left align
+                    textColor=colors.white,
+                    spaceAfter=0,
+                    spaceBefore=0,
+                    leading=14,
+                )
+            )
+            # Add 4px gap below the label using a single-cell table row with bottom padding
+            contact_label_table = Table(
+                [[contact_label]],
+                colWidths=[180],
+                hAlign='RIGHT',
+                style=TableStyle([
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+                    ('TOPPADDING', (0,0), (-1,-1), -3),
+                    ('LEFTPADDING', (0,0), (-1,-1), 0),
+                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                ])
+            )
+            contact_info_lines = []
+            contact_info_lines.append(selected_semester.contact_person)
         if selected_semester.contact_person_designation:
-            contact_lines.append(selected_semester.contact_person_designation)
-        contact_lines.append('School of Science and Technology')
-        contact_lines.append('Bangladesh Open University')
+            contact_info_lines.append(selected_semester.contact_person_designation)
+        contact_info_lines.append('School of Science and Technology')
+        contact_info_lines.append('Bangladesh Open University')
         if selected_semester.contact_person_phone:
-            contact_lines.append(f'Telephone/Whatsapp: {selected_semester.contact_person_phone}')
+            contact_info_lines.append(f'Phone/Whatsapp: {selected_semester.contact_person_phone}')
         if selected_semester.contact_person_email:
-            contact_lines.append(f'email:{selected_semester.contact_person_email}')
-        contact_box = '<br/>'.join(contact_lines)
-        contact_box_para = Paragraph(contact_box, ParagraphStyle('ContactBox', fontSize=10, borderWidth=1, borderColor=colors.black, borderPadding=4, leading=10, spaceBefore=2, spaceAfter=2))  # fontSize and paddings reduced
-        contact_table = Table([[contact_box_para]], colWidths=[180], hAlign='RIGHT')
+            contact_info_lines.append(f'email:{selected_semester.contact_person_email}')
+        contact_info_para = Paragraph(
+            '<br/>'.join(contact_info_lines),
+            ParagraphStyle(
+                'ContactBox',
+                fontName='Helvetica',
+                fontSize=10,
+                alignment=0,  # Left align
+                textColor=colors.black,
+                leftIndent=2,
+                leading=10,
+                spaceBefore=0,
+                spaceAfter=0,
+            )
+        )
+        contact_table = Table(
+            [[contact_label_table], [contact_info_para]],
+            colWidths=[180],
+            hAlign='RIGHT',
+        )
         contact_table.setStyle(TableStyle([
-            ('BOX', (1, 1), (0, 0), 2, colors.black),
-            ('LEFTPADDING', (0, 0), (-1, -1), 4),  # Reduced from 8
-            ('RIGHTPADDING', (0, 0), (-1, -1), 4), # Reduced from 8
-            ('TOPPADDING', (0, 0), (-1, -1), 2),   # Reduced from 6
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),# Reduced from 6
+            ('BOX', (0, 0), (-1, -1), 1, colors.black),  # Single, lighter border
+            ('ROUNDED', (0, 0), (-1, -1), 6),  # Rounded corners
+            ('BACKGROUND', (0, 0), (0, 0), colors.HexColor('#2c3e50')),  # Label bg
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (0, 0), 6),  # Label row
+            ('BOTTOMPADDING', (0, 0), (0, 0), 4),  # Label row
+            ('TOPPADDING', (0, 1), (0, 1), 4),  # Info row
+            ('BOTTOMPADDING', (0, 1), (0, 1), 6),  # Info row
         ]))
 
-        # Combine into a two-column table with reduced contact box width, aligned to margins
+        # Vertically center the left header content to match the contact box
+        left_box_table = Table(
+            [[left_content]],
+            colWidths=[available_width-180],
+            hAlign='LEFT',
+            style=TableStyle([
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ])
+        )
         two_col_table = Table(
-            [[left_content, contact_table]],
+            [[left_box_table, contact_table]],
             colWidths=[available_width-180, 180],
             hAlign='LEFT'
         )
         two_col_table.setStyle(TableStyle([
-            ('VALIGN', (1, 0), (1, 0), 'TOP'),
-            ('VALIGN', (1, 0), (1, 0), 'TOP'),
+            ('VALIGN', (0, 0), (0, 0), 'MIDDLE'),
+            ('VALIGN', (1, 0), (1, 0), 'MIDDLE'),
             ('ALIGN', (0, 0), (0, 0), 'CENTER'),
             ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
         ]))
@@ -2057,7 +2119,21 @@ def export_to_pdf(request, semester_id):
                         found = True
                         break
                 if not found:
-                    row.append("")
+                    # If this is a makeup date, show 'Makeup Class'
+                    if date in makeup_dates:
+                        cell_content = Paragraph("Reserved Class", ParagraphStyle(
+                            'MakeupClass',
+                            fontName='Helvetica-Bold',
+                            fontSize=9,
+                            alignment=TA_CENTER,
+                            textColor=colors.blue,
+                            leading=10,
+                            spaceBefore=0,
+                            spaceAfter=0,
+                        ))
+                        row.append(cell_content)
+                    else:
+                        row.append("")
                     col_idx += 1
                     slot_idx += 1
             table_data.append(row)
@@ -2338,26 +2414,44 @@ def export_academic_calendar_pdf(request, semester_id):
         # Build right column (contact person box)
         contact_lines = []
         if selected_semester.contact_person:
-            contact_lines.append(f'<b><u>Contact Person</u></b>')
-            contact_lines.append(selected_semester.contact_person)
+            contact_label = Paragraph('<b><u>Contact Person</u></b>', ParagraphStyle('ContactLabel', fontSize=8, spaceAfter=0, spaceBefore=0))
+            # Add 4px gap below the label using a single-cell table row with bottom padding
+            contact_label_table = Table(
+                [[contact_label]],
+                colWidths=[180],
+                hAlign='RIGHT',
+                style=TableStyle([
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+                    ('TOPPADDING', (0,0), (-1,-1), 0),
+                    ('LEFTPADDING', (0,0), (-1,-1), 0),
+                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                ])
+            )
+            contact_info_lines = []
+            contact_info_lines.append(selected_semester.contact_person)
         if selected_semester.contact_person_designation:
-            contact_lines.append(selected_semester.contact_person_designation)
-        contact_lines.append('School of Science and Technology')
-        contact_lines.append('Bangladesh Open University')
+            contact_info_lines.append(selected_semester.contact_person_designation)
+        contact_info_lines.append('School of Science and Technology')
+        contact_info_lines.append('Bangladesh Open University')
         if selected_semester.contact_person_phone:
-            contact_lines.append(f'Telephone/Whatsapp: {selected_semester.contact_person_phone}')
+            contact_info_lines.append(f'Phone/Whatsapp: {selected_semester.contact_person_phone}')
         if selected_semester.contact_person_email:
-            contact_lines.append(f'email:{selected_semester.contact_person_email}')
-        contact_box = '<br/>'.join(contact_lines)
-        contact_box_para = Paragraph(contact_box, ParagraphStyle('ContactBox', fontSize=10, borderWidth=1, borderColor=colors.black, borderPadding=4, leading=10, spaceBefore=2, spaceAfter=2))
-        contact_table = Table([[contact_box_para]], colWidths=[180], hAlign='RIGHT')
+            contact_info_lines.append(f'email:{selected_semester.contact_person_email}')
+        contact_info_para = Paragraph('<br/>'.join(contact_info_lines), ParagraphStyle('ContactBox', fontSize=10, borderWidth=1, borderColor=colors.black, borderPadding=4, leading=10, spaceBefore=0, spaceAfter=0))
+        contact_table = Table(
+            [[contact_label_table], [contact_info_para]],
+            colWidths=[180],
+            hAlign='RIGHT',
+        )
         contact_table.setStyle(TableStyle([
-            ('BOX', (1, 1), (0, 0), 2, colors.black),
-            ('LEFTPADDING', (0, 0), (-1, -1), 4),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
-            ('TOPPADDING', (0, 0), (-1, -1), 2),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('BOX', (0, 0), (-1, -1), 2, colors.black),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),  # Reduced from 8
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4), # Reduced from 8
+            ('TOPPADDING', (0, 0), (-1, -1), 2),   # Reduced from 6
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),# Reduced from 6
         ]))
+
+        # Combine into a two-column table with reduced contact box width, aligned to margins
         two_col_table = Table(
             [[left_content, contact_table]],
             colWidths=[available_width-180, 180],

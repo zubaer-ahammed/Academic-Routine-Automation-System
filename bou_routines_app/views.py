@@ -2361,35 +2361,70 @@ def export_academic_calendar_pdf(request, semester_id):
         available_width = page_width - doc.leftMargin - doc.rightMargin
         elements = []
 
-        # --- HEADER IMAGE SECTION (same as export_to_pdf) ---
+             # --- HEADER IMAGE SECTION ---
         header_img_path = 'bou_routines_app/static/pdf_routine_top.png'
         try:
+            # Padding for the image cell (matching routine table cell padding of 2)
             padding_for_image = 2
+
+            # Create an Image object, scaled by width to fit within the available padded space
+            # Height will be auto-calculated to maintain aspect ratio.
             img_obj = Image(header_img_path, width=available_width - (2 * padding_for_image), height=45)
+
+            # Put the image in a single-cell table whose width spans the available area,
+            # and apply padding to the cell to align the image correctly.
             header_img_table = Table([[img_obj]], colWidths=[available_width])
             header_img_table.setStyle(TableStyle([
-                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'), # Center the image horizontally within its cell
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), # Center vertically
                 ('LEFTPADDING', (0,0), (-1, -1), padding_for_image),
                 ('RIGHTPADDING', (0,0), (-1, -1), padding_for_image),
-                ('TOPPADDING', (0,0), (-1, -1), 0),
-                ('BOTTOMPADDING', (0,0), (-1, -1), 0),
+                ('TOPPADDING', (0,0), (-1, -1), 0), # No vertical padding here, handled by spacer
+                ('BOTTOMPADDING', (0,0), (-1, -1), 0), # No vertical padding here, handled by spacer
             ]))
             elements.append(header_img_table)
         except Exception as e:
             print(f"Error loading header image: {e}")
-            pass
-        elements.append(Spacer(1, -4))
+            pass # If image not found, skip
+        elements.append(Spacer(1, -4))  # Minimal gap above program name
 
-        # --- HEADER TEXTS (same as export_to_pdf, but title is 'Academic Calendar') ---
+        # Build left column (program/session/term/commencement/study center)
         header_style = ParagraphStyle(
-            'HeaderStyle', fontName='Helvetica-Bold', fontSize=15, alignment=1, leading=18, spaceAfter=0, spaceBefore=0)
+            'HeaderStyle',
+            fontName='Helvetica-Bold',
+            fontSize=15,  # Reduced from 18
+            alignment=1,  # Center
+            leading=18,   # Reduced from 28
+            spaceAfter=0,
+            spaceBefore=0,
+        )
         header_style_small = ParagraphStyle(
-            'HeaderStyleSmall', fontName='Helvetica-Bold', fontSize=11, alignment=1, leading=14, spaceAfter=0, spaceBefore=0)
+            'HeaderStyleSmall',
+            fontName='Helvetica-Bold',
+            fontSize=11,  # Reduced from 14
+            alignment=1,
+            leading=14,   # Reduced from 22
+            spaceAfter=0,
+            spaceBefore=0,
+        )
         header_style_normal = ParagraphStyle(
-            'HeaderStyleNormal', fontName='Helvetica', fontSize=10, alignment=1, leading=11, spaceAfter=0, spaceBefore=0)
+            'HeaderStyleNormal',
+            fontName='Helvetica',
+            fontSize=10,   # Reduced from 12
+            alignment=1,
+            leading=11,   # Reduced from 20
+            spaceAfter=0,
+            spaceBefore=0,
+        )
         header_style_bold = ParagraphStyle(
-            'HeaderStyleBold', fontName='Helvetica-Bold', fontSize=12, alignment=1, leading=14, spaceAfter=0, spaceBefore=0)
+            'HeaderStyleBold',
+            fontName='Helvetica-Bold',
+            fontSize=12,  # Reduced from 15
+            alignment=1,
+            leading=15,   # Reduced from 24
+            spaceAfter=0,
+            spaceBefore=0,
+        )
 
         left_content = []
         program_name = 'B. Sc in Computer Science and Engineering Program'
@@ -2402,8 +2437,8 @@ def export_academic_calendar_pdf(request, semester_id):
         if term or semester_full_name:
             combined = f'{term} Term {semester_full_name}'.strip()
             left_content.append(Paragraph(combined, header_style_small))
-        left_content.append(Spacer(1, 2))
-        left_content.append(Paragraph('Academic Calendar', header_style_bold))
+        left_content.append(Spacer(1, 2))  # Reduced from 8
+        left_content.append(Paragraph('Academic Calender', header_style_bold))
         commencement = selected_semester.start_date.strftime('%d %B %Y') if selected_semester.start_date else ''
         study_center = selected_semester.study_center or ''
         if commencement:
@@ -2414,15 +2449,27 @@ def export_academic_calendar_pdf(request, semester_id):
         # Build right column (contact person box)
         contact_lines = []
         if selected_semester.contact_person:
-            contact_label = Paragraph('<b><u>Contact Person</u></b>', ParagraphStyle('ContactLabel', fontSize=8, spaceAfter=0, spaceBefore=0))
+            contact_label = Paragraph(
+                'Contact Person',
+                ParagraphStyle(
+                    'ContactLabel',
+                    fontName='Helvetica-Bold',
+                    fontSize=11,
+                    alignment=0,  # Left align
+                    textColor=colors.white,
+                    spaceAfter=0,
+                    spaceBefore=0,
+                    leading=14,
+                )
+            )
             # Add 4px gap below the label using a single-cell table row with bottom padding
             contact_label_table = Table(
                 [[contact_label]],
                 colWidths=[180],
                 hAlign='RIGHT',
                 style=TableStyle([
-                    ('BOTTOMPADDING', (0,0), (-1,-1), 2),
-                    ('TOPPADDING', (0,0), (-1,-1), 0),
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+                    ('TOPPADDING', (0,0), (-1,-1), -3),
                     ('LEFTPADDING', (0,0), (-1,-1), 0),
                     ('RIGHTPADDING', (0,0), (-1,-1), 0),
                 ])
@@ -2437,35 +2484,60 @@ def export_academic_calendar_pdf(request, semester_id):
             contact_info_lines.append(f'Phone/Whatsapp: {selected_semester.contact_person_phone}')
         if selected_semester.contact_person_email:
             contact_info_lines.append(f'email:{selected_semester.contact_person_email}')
-        contact_info_para = Paragraph('<br/>'.join(contact_info_lines), ParagraphStyle('ContactBox', fontSize=10, borderWidth=1, borderColor=colors.black, borderPadding=4, leading=10, spaceBefore=0, spaceAfter=0))
+        contact_info_para = Paragraph(
+            '<br/>'.join(contact_info_lines),
+            ParagraphStyle(
+                'ContactBox',
+                fontName='Helvetica',
+                fontSize=10,
+                alignment=0,  # Left align
+                textColor=colors.black,
+                leftIndent=2,
+                leading=10,
+                spaceBefore=0,
+                spaceAfter=0,
+            )
+        )
         contact_table = Table(
             [[contact_label_table], [contact_info_para]],
             colWidths=[180],
             hAlign='RIGHT',
         )
         contact_table.setStyle(TableStyle([
-            ('BOX', (0, 0), (-1, -1), 2, colors.black),
-            ('LEFTPADDING', (0, 0), (-1, -1), 4),  # Reduced from 8
-            ('RIGHTPADDING', (0, 0), (-1, -1), 4), # Reduced from 8
-            ('TOPPADDING', (0, 0), (-1, -1), 2),   # Reduced from 6
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),# Reduced from 6
+            ('BOX', (0, 0), (-1, -1), 1, colors.black),  # Single, lighter border
+            ('ROUNDED', (0, 0), (-1, -1), 6),  # Rounded corners
+            ('BACKGROUND', (0, 0), (0, 0), colors.HexColor('#2c3e50')),  # Label bg
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (0, 0), 6),  # Label row
+            ('BOTTOMPADDING', (0, 0), (0, 0), 4),  # Label row
+            ('TOPPADDING', (0, 1), (0, 1), 4),  # Info row
+            ('BOTTOMPADDING', (0, 1), (0, 1), 6),  # Info row
         ]))
 
-        # Combine into a two-column table with reduced contact box width, aligned to margins
+        # Vertically center the left header content to match the contact box
+        left_box_table = Table(
+            [[left_content]],
+            colWidths=[available_width-180],
+            hAlign='LEFT',
+            style=TableStyle([
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ])
+        )
         two_col_table = Table(
-            [[left_content, contact_table]],
+            [[left_box_table, contact_table]],
             colWidths=[available_width-180, 180],
             hAlign='LEFT'
         )
         two_col_table.setStyle(TableStyle([
-            ('VALIGN', (1, 0), (1, 0), 'TOP'),
-            ('VALIGN', (1, 0), (1, 0), 'TOP'),
+            ('VALIGN', (0, 0), (0, 0), 'MIDDLE'),
+            ('VALIGN', (1, 0), (1, 0), 'MIDDLE'),
             ('ALIGN', (0, 0), (0, 0), 'CENTER'),
             ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
         ]))
-        elements.append(Spacer(1, 4))
+        elements.append(Spacer(1, 4))  # Add slight gap before contact box
         elements.append(two_col_table)
-        elements.append(Spacer(1, 16))
+        elements.append(Spacer(1, 4))  # Reduced from 16
 
         # --- Academic Calendar Table ---
         # Calculate event dates

@@ -1426,6 +1426,22 @@ def export_to_excel(request, semester_id):
             'text_wrap': True
         })
 
+        # Add formats for even row background and even row class cell
+        even_row_bg_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1,
+            'bg_color': '#e3f0fa',
+        })
+        even_class_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1,
+            'bg_color': '#d0e6f7',
+            'font_color': 'black',
+            'text_wrap': True
+        })
+
         # Get the routines from the database
         routines = NewRoutine.objects.filter(semester=selected_semester).order_by('class_date', 'start_time')
 
@@ -1510,10 +1526,11 @@ def export_to_excel(request, semester_id):
         sorted_dates = sorted(all_dates)
         # Write data with merging
         row = 3
-        for date in sorted_dates:
+        for date_idx, date in enumerate(sorted_dates):
             day = routines_by_date.get(date, date.strftime('%A'))
-            worksheet.write(row, 0, date, date_format)
-            worksheet.write(row, 1, day, cell_format)
+            is_even_row = (date_idx % 2 == 1)
+            worksheet.write(row, 0, date, date_format if not is_even_row else even_row_bg_format)
+            worksheet.write(row, 1, day, cell_format if not is_even_row else even_row_bg_format)
             # Build routines for this row
             routines_for_row = []
             for r in routines:
@@ -1557,7 +1574,7 @@ def export_to_excel(request, semester_id):
                             format_to_use = lunch_format
                         else:
                             cell_content = f"{r['course_code']} ({r['teacher']})"
-                            format_to_use = course_format
+                            format_to_use = course_format if not is_even_row else even_class_format
                         # Write content and merge if needed
                         if colspan > 1:
                             worksheet.merge_range(row, col_idx, row, col_idx + colspan - 1, cell_content, format_to_use)
@@ -1570,9 +1587,9 @@ def export_to_excel(request, semester_id):
                 if not found:
                     # If this is a makeup/reserved date, show 'Reserved Class'
                     if date in makeup_dates:
-                        worksheet.write(row, col_idx, "Reserved Class", cell_format)
+                        worksheet.write(row, col_idx, "Reserved Class", cell_format if not is_even_row else even_row_bg_format)
                     else:
-                        worksheet.write(row, col_idx, "", cell_format)
+                        worksheet.write(row, col_idx, "", cell_format if not is_even_row else even_row_bg_format)
                     col_idx += 1
                     slot_idx += 1
             row += 1
@@ -2212,13 +2229,24 @@ def export_to_pdf(request, semester_id):
             # Text wrapping for all cells
             ('WORDWRAP', (0, 0), (-1, -1), True),
         ])
-        # Add background color for lunch breaks and classes
+        # Add background color for lunch breaks and classes, and alternate row colors
         for i, row in enumerate(table_data[1:], 1):
+            # Row background for non-class, non-break cells
+            even_row_bg = colors.HexColor('#e3f0fa')  # Even row background
+            odd_class_bg = colors.lightblue           # Odd row class cell
+            even_class_bg = colors.HexColor('#d0e6f7') # Even row class cell
+            row_bg = even_row_bg if i % 2 == 0 else None
+            # Set the background for the entire row if even (for non-class, non-break cells)
+            if row_bg:
+                style.add('BACKGROUND', (0, i), (-1, i), row_bg)
+            # Override with special colors for break and class cells
             for j, cell in enumerate(row[2:], 2):
                 if isinstance(cell, Paragraph) and hasattr(cell, 'text') and "BREAK" in cell.text:
                     style.add('BACKGROUND', (j, i), (j, i), colors.lightgrey)
                 elif cell:  # If there's content (a class)
-                    style.add('BACKGROUND', (j, i), (j, i), colors.lightblue)
+                    class_bg = odd_class_bg if i % 2 == 1 else even_class_bg
+                    style.add('BACKGROUND', (j, i), (j, i), class_bg)
+
         # After creating the TableStyle, add the span commands
         for cmd in span_commands:
             style.add(*cmd)

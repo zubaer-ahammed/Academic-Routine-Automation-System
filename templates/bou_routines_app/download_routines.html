@@ -130,9 +130,29 @@
             padding-bottom: 1em;
             padding-top: 1em;
         }
+
+        .download-buttons {
+            flex-wrap: wrap;
+            flex-direction: column;
+        }
+        .academic-calender {
+            flex: 1;
+            width: 100%;
+        }
+        .academic-calender a {
+            display: block;
+        }
+
         @media screen and (max-width: 480px) {
             .download-buttons {
                 margin-top: 1em;
+            }
+            .semester-header {
+                display: flex;
+                display: -webkit-flex;
+                display: -moz-flex;
+                align-items: center;
+                justify-content: center;
             }
         }
 
@@ -206,18 +226,26 @@
                             </div>
                         </div>
                         <div class="download-buttons">
-                            <a href="{% url 'export-to-excel' semester_data.semester.id %}" class="btn btn-success btn-sm">
-                                <i class="bi bi-file-earmark-excel"></i> Excel
-                            </a>
-                            <a href="{% url 'export-to-pdf' semester_data.semester.id %}?teacher_short_name_newline={% if semester_data.semester.teacher_short_name_newline %}1{% else %}0{% endif %}" class="btn btn-danger btn-sm">
-                                <i class="bi bi-file-earmark-pdf"></i> PDF
-                            </a>
-                            <a href="{% url 'generate-routine' %}?semester={{ semester_data.semester.id }}" class="btn btn-primary btn-sm">
-                                <i class="bi bi-pencil-square"></i> Edit
-                            </a>
-                            <button type="button" class="btn btn-secondary btn-sm ms-2 view-toggle-btn" data-bs-toggle="collapse" data-bs-target="#routine-table-{{ semester_data.semester.id }}" aria-expanded="false" aria-controls="routine-table-{{ semester_data.semester.id }}">
-                                <span class="toggle-text">View</span>
-                            </button>
+                            <div class="routine-buttons">
+                                <a href="{% url 'export-to-excel' semester_data.semester.id %}" class="btn btn-success btn-sm">
+                                    <i class="bi bi-file-earmark-excel"></i> Excel
+                                </a>
+                                <a href="{% url 'export-to-pdf' semester_data.semester.id %}?teacher_short_name_newline={% if semester_data.semester.teacher_short_name_newline %}1{% else %}0{% endif %}" class="btn btn-danger btn-sm">
+                                    <i class="bi bi-file-earmark-pdf"></i> PDF
+                                </a>
+                                <a href="{% url 'generate-routine' %}?semester={{ semester_data.semester.id }}" class="btn btn-primary btn-sm">
+                                    <i class="bi bi-pencil-square"></i> Edit
+                                </a>
+                                <button type="button" class="btn btn-secondary btn-sm view-toggle-btn" data-bs-toggle="collapse" data-bs-target="#routine-table-{{ semester_data.semester.id }}" aria-expanded="false" aria-controls="routine-table-{{ semester_data.semester.id }}">
+                                    <span class="toggle-text">View</span>
+                                </button>
+                            </div>
+
+                            <div class="academic-calender">
+                                <a href="{% url 'export-academic-calendar-pdf' semester_data.semester.id %}" class="btn btn-info btn-sm" style="background-color: #0dcaf0; color: #fff; min-width: 180px;">
+                                    <i class="bi bi-calendar-event"></i> Academic Calendar
+                                </a>
+                            </div>
                         </div>
                     </div>
                     

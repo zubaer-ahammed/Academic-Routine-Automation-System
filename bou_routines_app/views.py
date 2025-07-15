@@ -2230,7 +2230,7 @@ def export_to_pdf(request, semester_id):
 
         # Add the note section as a table for proper border and wrapping
         note_text = (
-            "N.B.  For any changes in the schedule, concerned coordinator/class teachers are requested to inform the students as well as the Dean, School of Science and Technology, BOU in advance."
+            "N.B.  For any changes in the schedule, concerned coordinator/class teachers are requested to inform the students as well as the Dean/Program Co-ordinator, School of Science and Technology, BOU in advance."
         )
         note_table = Table(
             [[note_text]],
@@ -2287,13 +2287,30 @@ def export_to_pdf(request, semester_id):
             spaceBefore=0,
             spaceAfter=0,
         )
+        signature_style_left = ParagraphStyle(
+            'SignatureStyleLeft',
+            fontName='Helvetica',
+            fontSize=10,
+            alignment=0,  # Left alignment
+            leading=6,
+            spaceBefore=0,
+            spaceAfter=0,
+        )
         dean_line = Paragraph("Dean", signature_style)
         school_line = Paragraph("School of Science and Technology", signature_style)
         bou_line = Paragraph("Bangladesh Open University", signature_style)
+        coordinator_line = Paragraph("Program Co-ordinator", signature_style_left)
+        school_line_left = Paragraph("School of Science and Technology", signature_style_left)
+        bou_line_left = Paragraph("Bangladesh Open University", signature_style_left)
         signature_data = [
             [dean_line],
             [school_line],
             [bou_line]
+        ]
+        signature_data_left = [
+            [coordinator_line],
+            [school_line_left],
+            [bou_line_left]
         ]
         signature_table_width = 250 # Adjust as needed
         signature_table = Table(signature_data, colWidths=[signature_table_width])
@@ -2302,10 +2319,17 @@ def export_to_pdf(request, semester_id):
             ('LINEABOVE', (0,0), (0,0), 1, colors.black),
             ('TOPPADDING', (0,0), (0,0), 4),
         ]))
-        wrapper_col_widths = [available_width - signature_table_width, signature_table_width]
-        signature_wrapper_table = Table([['', signature_table]], colWidths=wrapper_col_widths)
+        signature_table_left = Table(signature_data_left, colWidths=[signature_table_width])
+        signature_table_left.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
+            ('TOPPADDING', (0,0), (0,0), 4),
+        ]))
+        wrapper_col_widths = [available_width - signature_table_width * 2, signature_table_width, signature_table_width]
+        signature_wrapper_table = Table([[signature_table_left, '', signature_table]], colWidths=wrapper_col_widths)
         signature_wrapper_table.setStyle(TableStyle([
-            ('ALIGN', (1,0), (1,0), 'RIGHT'),
+            ('ALIGN', (0,0), (0,0), 'LEFT'),
+            ('ALIGN', (2,0), (2,0), 'RIGHT'),
             ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
             ('LEFTPADDING', (0,0), (-1,-1), 0),
             ('RIGHTPADDING', (0,0), (-1,-1), 0),
@@ -2618,13 +2642,30 @@ def export_academic_calendar_pdf(request, semester_id):
             spaceBefore=0,
             spaceAfter=0,
         )
+        signature_style_left = ParagraphStyle(
+            'SignatureStyleLeft',
+            fontName='Helvetica',
+            fontSize=10,
+            alignment=0,  # Left alignment
+            leading=6,
+            spaceBefore=0,
+            spaceAfter=0,
+        )
         dean_line = Paragraph("Dean", signature_style)
         school_line = Paragraph("School of Science and Technology", signature_style)
         bou_line = Paragraph("Bangladesh Open University", signature_style)
+        coordinator_line = Paragraph("Program Co-ordinator", signature_style_left)
+        school_line_left = Paragraph("School of Science and Technology", signature_style_left)
+        bou_line_left = Paragraph("Bangladesh Open University", signature_style_left)
         signature_data = [
             [dean_line],
             [school_line],
             [bou_line]
+        ]
+        signature_data_left = [
+            [coordinator_line],
+            [school_line_left],
+            [bou_line_left]
         ]
         signature_table_width = 250
         signature_table = Table(signature_data, colWidths=[signature_table_width])
@@ -2633,10 +2674,17 @@ def export_academic_calendar_pdf(request, semester_id):
             ('LINEABOVE', (0,0), (0,0), 1, colors.black),
             ('TOPPADDING', (0,0), (0,0), 4),
         ]))
-        wrapper_col_widths = [available_width - signature_table_width, signature_table_width]
-        signature_wrapper_table = Table([['', signature_table]], colWidths=wrapper_col_widths)
+        signature_table_left = Table(signature_data_left, colWidths=[signature_table_width])
+        signature_table_left.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
+            ('TOPPADDING', (0,0), (0,0), 4),
+        ]))
+        wrapper_col_widths = [available_width - signature_table_width * 2, signature_table_width, signature_table_width]
+        signature_wrapper_table = Table([[signature_table_left, '', signature_table]], colWidths=wrapper_col_widths)
         signature_wrapper_table.setStyle(TableStyle([
-            ('ALIGN', (1,0), (1,0), 'RIGHT'),
+            ('ALIGN', (0,0), (0,0), 'LEFT'),
+            ('ALIGN', (2,0), (2,0), 'RIGHT'),
             ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
             ('LEFTPADDING', (0,0), (-1,-1), 0),
             ('RIGHTPADDING', (0,0), (-1,-1), 0),

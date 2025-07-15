@@ -2561,11 +2561,11 @@ def export_academic_calendar_pdf(request, semester_id):
                 makeup_dates = []
         if start_date:
             events.append(("Semester Start", start_date.strftime('%d/%m/%Y')))
-            # 4th week: +21 days
-            first_class_test = start_date + timedelta(weeks=4)
+            # 6th week: +35 days
+            first_class_test = start_date + timedelta(weeks=6)
             events.append(("First Class Test", first_class_test.strftime('%d/%m/%Y')))
-            # 8th week: +7*8 days
-            second_class_test = start_date + timedelta(weeks=8)
+            # 10th week: +7*10 days
+            second_class_test = start_date + timedelta(weeks=10)
             events.append(("Second Class Test", second_class_test.strftime('%d/%m/%Y')))
             # Assignments
             first_assignment = start_date + timedelta(weeks=4)

@@ -1587,7 +1587,7 @@ def export_to_excel(request, semester_id):
                 if not found:
                     # If this is a makeup/reserved date, show 'Reserved Class'
                     if date in makeup_dates:
-                        worksheet.write(row, col_idx, "Reserved Class", cell_format if not is_even_row else even_row_bg_format)
+                        worksheet.write(row, col_idx, "Makeup Class", cell_format if not is_even_row else even_row_bg_format)
                     else:
                         worksheet.write(row, col_idx, "", cell_format if not is_even_row else even_row_bg_format)
                     col_idx += 1
@@ -2142,7 +2142,7 @@ def export_to_pdf(request, semester_id):
                 if not found:
                     # If this is a makeup date, show 'Makeup Class'
                     if date in makeup_dates:
-                        cell_content = Paragraph("Reserved Class", ParagraphStyle(
+                        cell_content = Paragraph("Makeup Class", ParagraphStyle(
                             'MakeupClass',
                             fontName='Helvetica-Bold',
                             fontSize=9,

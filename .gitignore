@@ -83,3 +83,4 @@ htmlcov/
 generate_docx_report.py
 *-old.sqlite3
 *.bak
+*.sqlite3-bak-*

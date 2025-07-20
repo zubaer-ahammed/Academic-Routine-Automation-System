@@ -250,7 +250,7 @@ def generate_routine(request):
                                     else:
                                         content = {
                                             'course_code': r['course_code'],
-                                            'teacher': r['teacher'],
+                                            'teacher': 'Supervisor' if r['course_code'] == 'CSE4246' else r['teacher'],
                                         }
                                         if 'id' in r and 'course_id' in r:
                                             content['routine_id'] = r['id']
@@ -804,7 +804,7 @@ def generate_routine(request):
                             else:
                                 content = {
                                     'course_code': r['course_code'],
-                                    'teacher': r['teacher'],
+                                    'teacher': 'Supervisor' if r['course_code'] == 'CSE4246' else r['teacher'],
                                 }
                                 if 'id' in r and 'course_id' in r:
                                     content['routine_id'] = r['id']
@@ -815,17 +815,14 @@ def generate_routine(request):
                             found = True
                             break
                     if not found:
-                        # Empty cell: attach start_time and end_time from slot_ranges
-                        cell = {
-                            'content': '',
-                            'colspan': 1,
-                            'is_lunch_break': False,
-                            'start_time': slot_start,
-                            'end_time': slot_end,
-                        }
-                        row_cells.append(cell)
+                        # If this is a makeup/reserved date, show 'Reserved Class'
+                        if date in makeup_dates:
+                            worksheet.write(row, col_idx, "Makeup Class", cell_format if not is_even_row else even_row_bg_format)
+                        else:
+                            worksheet.write(row, col_idx, "", cell_format if not is_even_row else even_row_bg_format)
+                        col_idx += 1
                         slot_idx += 1
-                routine_table_rows.append({'date': date, 'day': day, 'cells': row_cells})
+                row += 1
             # --- END NEW ---
             
             # Prepare data for the calendar view
@@ -1537,9 +1534,9 @@ def export_to_excel(request, semester_id):
                 if r.class_date == date and r.day == day:
                     routines_for_row.append({
                         'course_code': r.course.code,
-                        'teacher': r.course.teacher.short_name,
+                        'teacher': 'Supervisor' if r.course.code == 'CSE4246' else r.course.teacher.short_name,
                         'start_time': r.start_time.strftime('%H:%M'),
-                        'end_time': r.end_time.strftime('%H:%M'),
+                        'end_time': r.start_time.strftime('%H:%M'),
                         'is_lunch_break': False
                     })
             if selected_semester.lunch_break_start and selected_semester.lunch_break_end:
@@ -1687,7 +1684,7 @@ def download_routines(request):
                     if r.class_date == date and r.day == day:
                         routines_for_row.append({
                             'course_code': r.course.code,
-                            'teacher': r.course.teacher.short_name,
+                            'teacher': 'Supervisor' if r.course.code == 'CSE4246' else r.course.teacher.short_name,
                             'start_time': r.start_time.strftime('%H:%M'),
                             'end_time': r.end_time.strftime('%H:%M'),
                             'is_lunch_break': False
@@ -1720,7 +1717,7 @@ def download_routines(request):
                             else:
                                 content = {
                                     'course_code': r['course_code'],
-                                    'teacher': r['teacher'],
+                                    'teacher': 'Supervisor' if r['course_code'] == 'CSE4246' else r['teacher'],
                                 }
                                 if 'id' in r and 'course_id' in r:
                                     content['routine_id'] = r['id']
@@ -2067,7 +2064,7 @@ def export_to_pdf(request, semester_id):
                 if r.class_date == date:
                     routines_for_row.append({
                         'course_code': r.course.code,
-                        'teacher': r.course.teacher.short_name,
+                        'teacher': 'Supervisor' if r.course.code == 'CSE4246' else r.course.teacher.short_name,
                         'start_time': r.start_time.strftime('%H:%M'),
                         'end_time': r.end_time.strftime('%H:%M'),
                         'is_lunch_break': False

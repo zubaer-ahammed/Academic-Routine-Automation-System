@@ -2285,11 +2285,19 @@ def export_to_pdf(request, semester_id):
             'Course Code', 'Title', 'Number of Class', 'Course Teacher'
         ]]
         for sc in semester_courses:
+            teacher_full_name = sc.course.teacher.name + ' ('+sc.course.teacher.short_name+')'
+            if(sc.course.teacher.name == "N/A"):
+                teacher_full_name = ""
+            
+            if(sc.number_of_classes == 0):
+                sc.number_of_classes = ""
+            
+
             summary_data.append([
                 sc.course.code,
                 sc.course.name,
                 str(sc.number_of_classes),
-                sc.course.teacher.name + ' ('+sc.course.teacher.short_name+')'
+                teacher_full_name
             ])
         summary_col_widths = [0.12 * available_width, 0.38 * available_width, 0.14 * available_width, 0.36 * available_width]
         summary_table = Table(summary_data, colWidths=summary_col_widths)
@@ -2612,22 +2620,22 @@ def export_academic_calendar_pdf(request, semester_id):
             except Exception:
                 makeup_dates = []
         if start_date:
-            events.append(("Semester Start", start_date.strftime('%d/%m/%Y')))
+            events.append(("Semester Begins", start_date.strftime('%d/%m/%Y'), start_date))
             # 6th week: +35 days
             first_class_test = start_date + timedelta(weeks=6)
-            events.append(("First Class Test", first_class_test.strftime('%d/%m/%Y')))
+            events.append(("First Class Test", first_class_test.strftime('%d/%m/%Y'), first_class_test))
             # 10th week: +7*10 days
             second_class_test = start_date + timedelta(weeks=10)
-            events.append(("Second Class Test", second_class_test.strftime('%d/%m/%Y')))
+            events.append(("Second Class Test", second_class_test.strftime('%d/%m/%Y'), second_class_test))
             # Assignments
             first_assignment = start_date + timedelta(weeks=4)
-            events.append(("First Assignment", first_assignment.strftime('%d/%m/%Y')))
+            events.append(("First Assignment", first_assignment.strftime('%d/%m/%Y'), first_assignment))
             second_assignment = start_date + timedelta(weeks=8)
-            events.append(("Second Assignment", second_assignment.strftime('%d/%m/%Y')))
+            events.append(("Second Assignment", second_assignment.strftime('%d/%m/%Y'), second_assignment))
             third_assignment = start_date + timedelta(weeks=12)
-            events.append(("Third Assignment", third_assignment.strftime('%d/%m/%Y')))
+            events.append(("Third Assignment", third_assignment.strftime('%d/%m/%Y'), third_assignment))
         if end_date:
-            events.append(("Semester End", end_date.strftime('%d/%m/%Y')))
+            events.append(("Semester End", end_date.strftime('%d/%m/%Y'), end_date))
         # Tentative Semester Final Exam: 1 week after the latest makeup date, or 1 week after end_date
         if makeup_dates:
             latest_makeup = max(makeup_dates)
@@ -2637,7 +2645,12 @@ def export_academic_calendar_pdf(request, semester_id):
         else:
             tentative_final = None
         if tentative_final:
-            events.append(("Tentative Semester Final Exam", tentative_final.strftime('%d/%m/%Y')))
+            events.append(("Tentative Semester Final Exam", tentative_final.strftime('%d/%m/%Y'), tentative_final))
+
+        # Sort events by the date (3rd element)
+        events.sort(key=lambda x: x[2])
+        # Remove the date object from the tuple for table display
+        events = [(e[0], e[1]) for e in events]
 
         # Table data
         table_data = [["Events", "Date"]] + events

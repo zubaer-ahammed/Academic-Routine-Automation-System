@@ -817,14 +817,12 @@ def generate_routine(request):
                     if not found:
                         # If this is a makeup/reserved date, show 'Reserved Class'
                         if date in makeup_dates:
-                            worksheet.write(row, col_idx, "Makeup Class", cell_format if not is_even_row else even_row_bg_format)
+                            row_cells.append({'content': 'Makeup Class', 'colspan': 1, 'is_makeup_class': True})
                         else:
-                            worksheet.write(row, col_idx, "", cell_format if not is_even_row else even_row_bg_format)
-                        col_idx += 1
+                            row_cells.append({'content': '', 'colspan': 1, 'is_lunch_break': False})
                         slot_idx += 1
-                row += 1
-            # --- END NEW ---
-            
+                routine_table_rows.append({'date': date, 'day': day, 'cells': row_cells})
+
             # Prepare data for the calendar view
             if generated_routines:
                 # Get unique dates and days for column headers
@@ -1536,7 +1534,7 @@ def export_to_excel(request, semester_id):
                         'course_code': r.course.code,
                         'teacher': 'Supervisor' if r.course.code == 'CSE4246' else r.course.teacher.short_name,
                         'start_time': r.start_time.strftime('%H:%M'),
-                        'end_time': r.start_time.strftime('%H:%M'),
+                        'end_time': r.end_time.strftime('%H:%M'),
                         'is_lunch_break': False
                     })
             if selected_semester.lunch_break_start and selected_semester.lunch_break_end:
@@ -2605,6 +2603,48 @@ def export_academic_calendar_pdf(request, semester_id):
         events = []
         start_date = selected_semester.start_date
         end_date = selected_semester.end_date
+
+        # Parse holidays into a set for efficient lookup
+        holiday_dates = set()
+        if selected_semester.holidays:
+            try:
+                holiday_dates = {
+                    datetime.strptime(date.strip(), "%Y-%m-%d").date()
+                    for date in selected_semester.holidays.split(',')
+                    if date.strip()
+                }
+            except Exception:
+                # Silently ignore parsing errors, leaving holidays empty
+                holiday_dates = set()
+
+        def get_event_dates(base_date, holidays_set):
+            """
+            Calculates Friday and Saturday for the week of base_date.
+            If a date is a holiday, it finds the next available same day of week.
+            """
+            # isoweekday: Monday=1, ..., Friday=5, Saturday=6, Sunday=7
+            # Get Monday of the week of the base_date
+            monday_of_week = base_date - timedelta(days=base_date.isoweekday() - 1)
+            
+            friday = monday_of_week + timedelta(days=4)
+            saturday = monday_of_week + timedelta(days=5)
+
+            # If calculated date is a holiday, find the next non-holiday one.
+            while friday in holidays_set:
+                friday += timedelta(weeks=1)
+            
+            while saturday in holidays_set:
+                saturday += timedelta(weeks=1)
+
+            # Sort dates to ensure chronological order for display
+            sorted_dates = sorted([friday, saturday])
+            
+            # Return the formatted string (chronological) and the earliest date for sorting events
+            display_string = f"{sorted_dates[0].strftime('%d/%m/%Y')}, {sorted_dates[1].strftime('%d/%m/%Y')}"
+            sort_date = sorted_dates[0]
+
+            return display_string, sort_date
+
         # Find the latest makeup/extra class date (if any)
         makeup_dates = []
         if selected_semester.makeup_dates:
@@ -2616,23 +2656,39 @@ def export_academic_calendar_pdf(request, semester_id):
                 ]
             except Exception:
                 makeup_dates = []
+        
         if start_date:
             events.append(("Semester Begins", start_date.strftime('%d/%m/%Y'), start_date))
-            # 6th week: +35 days
-            first_class_test = start_date + timedelta(weeks=6)
-            events.append(("First Class Test", first_class_test.strftime('%d/%m/%Y'), first_class_test))
-            # 10th week: +7*10 days
-            second_class_test = start_date + timedelta(weeks=10)
-            events.append(("Second Class Test", second_class_test.strftime('%d/%m/%Y'), second_class_test))
+            
+            # 6th week
+            first_class_test_base = start_date + timedelta(weeks=6)
+            date_str, sort_date = get_event_dates(first_class_test_base, holiday_dates)
+            events.append(("First Class Test", date_str, sort_date))
+            
+            # 10th week
+            second_class_test_base = start_date + timedelta(weeks=10)
+            date_str, sort_date = get_event_dates(second_class_test_base, holiday_dates)
+            events.append(("Second Class Test", date_str, sort_date))
+
             # Assignments
-            first_assignment = start_date + timedelta(weeks=4)
-            events.append(("First Assignment", first_assignment.strftime('%d/%m/%Y'), first_assignment))
-            second_assignment = start_date + timedelta(weeks=8)
-            events.append(("Second Assignment", second_assignment.strftime('%d/%m/%Y'), second_assignment))
-            third_assignment = start_date + timedelta(weeks=12)
-            events.append(("Third Assignment", third_assignment.strftime('%d/%m/%Y'), third_assignment))
+            # 4th week
+            first_assignment_base = start_date + timedelta(weeks=4)
+            date_str, sort_date = get_event_dates(first_assignment_base, holiday_dates)
+            events.append(("First Assignment", date_str, sort_date))
+
+            # 8th week
+            second_assignment_base = start_date + timedelta(weeks=8)
+            date_str, sort_date = get_event_dates(second_assignment_base, holiday_dates)
+            events.append(("Second Assignment", date_str, sort_date))
+
+            # 12th week
+            third_assignment_base = start_date + timedelta(weeks=12)
+            date_str, sort_date = get_event_dates(third_assignment_base, holiday_dates)
+            events.append(("Third Assignment", date_str, sort_date))
+
         if end_date:
             events.append(("Semester End", end_date.strftime('%d/%m/%Y'), end_date))
+
         # Tentative Semester Final Exam: 1 week after the latest makeup date, or 1 week after end_date
         if makeup_dates:
             latest_makeup = max(makeup_dates)
@@ -2642,6 +2698,9 @@ def export_academic_calendar_pdf(request, semester_id):
         else:
             tentative_final = None
         if tentative_final:
+            # Advance date if it falls on a holiday
+            while tentative_final in holiday_dates:
+                tentative_final += timedelta(days=1)
             events.append(("Tentative Semester Final Exam", tentative_final.strftime('%d/%m/%Y'), tentative_final))
 
         # Sort events by the date (3rd element)
@@ -2650,7 +2709,7 @@ def export_academic_calendar_pdf(request, semester_id):
         events = [(e[0], e[1]) for e in events]
 
         # Table data
-        table_data = [["Events", "Date"]] + events
+        table_data = [["Events", "Dates"]] + events
         col_widths = [0.6 * available_width, 0.4 * available_width]
         table = Table(table_data, colWidths=col_widths)
         style = TableStyle([

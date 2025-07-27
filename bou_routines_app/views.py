@@ -2767,7 +2767,7 @@ def export_academic_calendar_pdf(request, semester_id):
                 # For the first month, create the overall header
                 if month_count == 0:
                     # Create the main header row (Friday, Saturday, Week, Remarks, Exams)
-                    header_row = ['Month / Day', 'F', 'S', 'Week', 'Remarks', 'Exams']
+                    header_row = ['Month / Day', 'F', 'S', 'Weeks', 'Remarks', 'Exams']
                     months_data.append([header_row])
                 
                 # Calculate how many week rows this month will have
@@ -2953,8 +2953,14 @@ def export_academic_calendar_pdf(request, semester_id):
                 ])
                 
                 # Check for events in this week and apply row coloring
-                if len(row_data) >= 3:  # Ensure we have day data (F and S columns)
+                if len(row_data) >= 6:  # Ensure we have all columns including exams
                     week_event_color = None
+                    has_exam_event = False
+                    
+                    # Check if this row has exam events by looking at the exams column (index 5)
+                    exams_column = row_data[5] if len(row_data) > 5 else ''
+                    if exams_column and exams_column.strip():
+                        has_exam_event = True
                     
                     # Extract month and year for this row
                     current_year = datetime.now().year  # Default fallback
@@ -2993,7 +2999,7 @@ def export_academic_calendar_pdf(request, semester_id):
                                     except (ValueError, IndexError):
                                         pass
                     
-                    # Check Friday and Saturday columns for events (columns 1 and 2)
+                    # Check Friday and Saturday columns for any events (columns 1 and 2) to get the color
                     for day_col in range(1, 3):  # Friday and Saturday are in columns 1-2
                         if day_col < len(row_data):
                             day_text = row_data[day_col]
@@ -3009,11 +3015,18 @@ def export_academic_calendar_pdf(request, semester_id):
                                 except (ValueError, TypeError):
                                     continue
                     
-                    # Apply background color to row if event found (excluding Month/Day column)
+                    # Apply background color based on event type
                     if week_event_color:
-                        calendar_style.append(
-                            ('BACKGROUND', (1, row_idx), (-1, row_idx), week_event_color)
-                        )
+                        if has_exam_event:
+                            # For exam events: highlight entire row including Exams column (columns 1-5)
+                            calendar_style.append(
+                                ('BACKGROUND', (1, row_idx), (-1, row_idx), week_event_color)
+                            )
+                        else:
+                            # For non-exam events: highlight only up to Remarks column (columns 1-4)
+                            calendar_style.append(
+                                ('BACKGROUND', (1, row_idx), (4, row_idx), week_event_color)
+                            )
             
             # Track months for cell spanning in first column
             month_ranges = []

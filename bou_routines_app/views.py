@@ -2423,15 +2423,17 @@ def export_academic_calendar_pdf(request, semester_id):
         elements = []
 
         # Calculate calendar width early for consistent alignment across all elements
-        month_day_width = 0.15 * available_width  # Month/Day column (increased since fewer day columns)
-        day_width = 0.12 * available_width        # Each day column (only F,S)
-        remarks_width = 0.35 * available_width    # Remarks column (increased)
-        exams_width = 0.26 * available_width      # Exams column (increased)
+        month_day_width = 0.12 * available_width  # Month/Day column
+        day_width = 0.10 * available_width        # Each day column (only F,S)
+        week_width = 0.12 * available_width       # Week column
+        remarks_width = 0.30 * available_width    # Remarks column
+        exams_width = 0.22 * available_width      # Exams column
         
         calendar_col_widths = [
             month_day_width,  # Month/Day
             day_width,        # F (Friday)
             day_width,        # S (Saturday)
+            week_width,       # Week
             remarks_width,    # Remarks
             exams_width       # Exams
         ]
@@ -2744,8 +2746,8 @@ def export_academic_calendar_pdf(request, semester_id):
                 
                 # For the first month, create the overall header
                 if month_count == 0:
-                    # Create the main header row (only Friday and Saturday)
-                    header_row = ['Month / Day', 'F', 'S', 'Remarks', 'Exams']
+                    # Create the main header row (Friday, Saturday, Week, Remarks, Exams)
+                    header_row = ['Month / Day', 'F', 'S', 'Week', 'Remarks', 'Exams']
                     months_data.append([header_row])
                 
                 # Calculate how many week rows this month will have
@@ -2798,6 +2800,33 @@ def export_academic_calendar_pdf(request, semester_id):
                                 
                                 week_data.append(day_str)
                     
+                    # Calculate week number based on semester start date
+                    week_number = ''
+                    try:
+                        # Find the Friday of this week to calculate week number
+                        friday_day = None
+                        for day_idx, day in enumerate(week):
+                            if day_idx == 4 and day != 0:  # Friday
+                                friday_day = day
+                                break
+                        
+                        if friday_day and selected_semester.start_date:
+                            friday_date = datetime(year, current_date.month, friday_day).date()
+                            # Calculate week number from semester start
+                            days_diff = (friday_date - selected_semester.start_date).days
+                            week_num = (days_diff // 7) + 1
+                            if week_num > 0:
+                                if week_num == 1:
+                                    week_number = '1st Week'
+                                elif week_num == 2:
+                                    week_number = '2nd Week'
+                                elif week_num == 3:
+                                    week_number = '3rd Week'
+                                else:
+                                    week_number = f'{week_num}th Week'
+                    except Exception:
+                        week_number = ''
+                    
                     # Add remarks and exams columns
                     remarks = ''
                     exams = ''
@@ -2824,7 +2853,7 @@ def export_academic_calendar_pdf(request, semester_id):
                         # If there's an error processing events for this week, continue
                         pass
                     
-                    week_data.extend([remarks, exams])
+                    week_data.extend([week_number, remarks, exams])
                     months_data.append([week_data])
                 
                 month_count += 1

@@ -2644,6 +2644,14 @@ def export_academic_calendar_pdf(request, semester_id):
         # Define academic events based on semester dates
         events_calendar = {}
         
+        def get_friday_saturday_of_week(target_date):
+            """Get Friday and Saturday dates for the week containing target_date"""
+            # Find the Friday of the week containing target_date
+            days_since_monday = target_date.weekday()
+            friday_date = target_date + timedelta(days=(4 - days_since_monday))
+            saturday_date = friday_date + timedelta(days=1)
+            return friday_date, saturday_date
+        
         try:
             if selected_semester.start_date and selected_semester.end_date:
                 semester_start = selected_semester.start_date
@@ -2656,30 +2664,40 @@ def export_academic_calendar_pdf(request, semester_id):
                 # Calculate key academic events based on weeks
                 duration_days = (semester_end - semester_start).days
                 
-                # First Class Test (6th week)
-                first_test_date = semester_start + timedelta(weeks=6)
-                if first_test_date <= semester_end:
-                    events_calendar[first_test_date] = ('class_test', 'First Class Test (6th week)')
+                # First Class Test (6th week) - mark both Friday and Saturday
+                first_test_week = semester_start + timedelta(weeks=6)
+                if first_test_week <= semester_end:
+                    friday, saturday = get_friday_saturday_of_week(first_test_week)
+                    events_calendar[friday] = ('class_test', 'First Class Test (6th week)')
+                    events_calendar[saturday] = ('class_test', 'First Class Test (6th week)')
                 
-                # Second Class Test (10th week)
-                second_test_date = semester_start + timedelta(weeks=10)
-                if second_test_date <= semester_end:
-                    events_calendar[second_test_date] = ('class_test', 'Second Class Test (10th week)')
+                # Second Class Test (10th week) - mark both Friday and Saturday
+                second_test_week = semester_start + timedelta(weeks=10)
+                if second_test_week <= semester_end:
+                    friday, saturday = get_friday_saturday_of_week(second_test_week)
+                    events_calendar[friday] = ('class_test', 'Second Class Test (10th week)')
+                    events_calendar[saturday] = ('class_test', 'Second Class Test (10th week)')
                 
-                # First Assignment (4th week)
-                first_assignment_date = semester_start + timedelta(weeks=4)
-                if first_assignment_date <= semester_end:
-                    events_calendar[first_assignment_date] = ('assignment', 'First Assignment (4th week)')
+                # First Assignment (4th week) - mark both Friday and Saturday
+                first_assignment_week = semester_start + timedelta(weeks=4)
+                if first_assignment_week <= semester_end:
+                    friday, saturday = get_friday_saturday_of_week(first_assignment_week)
+                    events_calendar[friday] = ('assignment', 'First Assignment (4th week)')
+                    events_calendar[saturday] = ('assignment', 'First Assignment (4th week)')
                 
-                # Second Assignment (8th week)
-                second_assignment_date = semester_start + timedelta(weeks=8)
-                if second_assignment_date <= semester_end:
-                    events_calendar[second_assignment_date] = ('assignment', 'Second Assignment (8th week)')
+                # Second Assignment (8th week) - mark both Friday and Saturday
+                second_assignment_week = semester_start + timedelta(weeks=8)
+                if second_assignment_week <= semester_end:
+                    friday, saturday = get_friday_saturday_of_week(second_assignment_week)
+                    events_calendar[friday] = ('assignment', 'Second Assignment (8th week)')
+                    events_calendar[saturday] = ('assignment', 'Second Assignment (8th week)')
                 
-                # Third Assignment (12th week)
-                third_assignment_date = semester_start + timedelta(weeks=12)
-                if third_assignment_date <= semester_end:
-                    events_calendar[third_assignment_date] = ('assignment', 'Third Assignment (12th week)')
+                # Third Assignment (12th week) - mark both Friday and Saturday
+                third_assignment_week = semester_start + timedelta(weeks=12)
+                if third_assignment_week <= semester_end:
+                    friday, saturday = get_friday_saturday_of_week(third_assignment_week)
+                    events_calendar[friday] = ('assignment', 'Third Assignment (12th week)')
+                    events_calendar[saturday] = ('assignment', 'Third Assignment (12th week)')
                 
                 # Add holidays from semester
                 if selected_semester.holidays:
@@ -2706,15 +2724,17 @@ def export_academic_calendar_pdf(request, semester_id):
                         if latest_makeup_date is None or makeup_date > latest_makeup_date:
                             latest_makeup_date = makeup_date
                 
-                # Set Tentative Semester Final Exam date
+                # Set Tentative Semester Final Exam date - mark both Friday and Saturday
                 if latest_makeup_date:
                     # If there are makeup classes, final exam is 1 week after the latest makeup date
-                    final_exam_date = latest_makeup_date + timedelta(weeks=1)
+                    final_exam_week = latest_makeup_date + timedelta(weeks=1)
                 else:
                     # If no makeup classes, final exam is 1 week after semester end
-                    final_exam_date = semester_end + timedelta(weeks=1)
+                    final_exam_week = semester_end + timedelta(weeks=1)
                 
-                events_calendar[final_exam_date] = ('final_exam', 'Tentative Semester Final Exam')
+                friday, saturday = get_friday_saturday_of_week(final_exam_week)
+                events_calendar[friday] = ('final_exam', 'Tentative Semester Final Exam')
+                events_calendar[saturday] = ('final_exam', 'Tentative Semester Final Exam')
                 
         except Exception as e:
             # If there's an error calculating events, continue with empty events
@@ -2828,8 +2848,8 @@ def export_academic_calendar_pdf(request, semester_id):
                         week_number = ''
                     
                     # Add remarks and exams columns
-                    remarks = ''
-                    exams = ''
+                    remarks_set = set()  # Use set to avoid duplicates
+                    exams_set = set()    # Use set to avoid duplicates
                     
                     # Check for special events in this week (only Friday and Saturday)
                     try:
@@ -2840,18 +2860,16 @@ def export_academic_calendar_pdf(request, semester_id):
                                 if date_obj in events_calendar:
                                     event_type, description = events_calendar[date_obj]
                                     if event_type in ['class_test', 'final_exam']:
-                                        if exams:
-                                            exams += ', ' + description
-                                        else:
-                                            exams = description
+                                        exams_set.add(description)
                                     else:
-                                        if remarks:
-                                            remarks += ', ' + description
-                                        else:
-                                            remarks = description
+                                        remarks_set.add(description)
                     except Exception:
                         # If there's an error processing events for this week, continue
                         pass
+                    
+                    # Convert sets to comma-separated strings
+                    remarks = ', '.join(sorted(remarks_set)) if remarks_set else ''
+                    exams = ', '.join(sorted(exams_set)) if exams_set else ''
                     
                     week_data.extend([week_number, remarks, exams])
                     months_data.append([week_data])
@@ -3100,17 +3118,7 @@ def export_academic_calendar_pdf(request, semester_id):
                     ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                 ])),
             ],
-            [
-                Table([['Note: Calendar shows Friday and Saturday only (university operating days). Entire week rows are highlighted for events']], style=TableStyle([
-                    ('FONTSIZE', (0,0), (-1,-1), 7),
-                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                    ('FONTNAME', (0,0), (-1,-1), 'Helvetica-Oblique'),
-                ])),
-                '',
-                '',
-                '',
-            ]
+            
         ]
         
         # Calculate column widths to match calendar width

@@ -7,10 +7,10 @@ Academic Routine Automation System for SST, BOU
 Watch the Video of BOU Routine Generator: https://drive.google.com/file/d/1M_A4g4liXs9aeMiJCesONcFcCOPL1Aqe/view
 
 ## Frontend
-<img width="1335" alt="generate_routine_page" src="https://github.com/user-attachments/assets/a2421317-e425-4282-bc5e-c8ff23564d09" />
+<img width="1339" height="824" alt="1  generate_routine_page_1" src="https://github.com/user-attachments/assets/54e605a3-8a30-4a5d-a0da-9e94683497bf" />
 
 ## Select Class Hours
-<img width="1274" alt="generate_routine_page_2" src="https://github.com/user-attachments/assets/e057516f-de5d-48c1-a680-06f83473c4cd" />
+<img width="1297" height="813" alt="2  generate_routine_page_2" src="https://github.com/user-attachments/assets/a37880d3-5eba-45c9-a0df-fa0f730ae52a" />
 
 ## Overlapping Protection
 <img width="1442" alt="Screenshot 2025-05-18 at 4 55 28 AM" src="https://github.com/user-attachments/assets/0ad768a4-c25e-4e78-a170-2d6a4a8e46f2" />
@@ -19,7 +19,9 @@ Watch the Video of BOU Routine Generator: https://drive.google.com/file/d/1M_A4g
 <img width="1198" alt="generated_routine" src="https://github.com/user-attachments/assets/134ec9aa-11a0-4aaa-8bb2-1d21ca8dc15f" />
 
 ## Sample Routine (PDF)
-<img width="1259" alt="sample_routine" src="https://github.com/user-attachments/assets/e7cac3ac-ce1a-43d8-bdb6-5dd04682cb72" />
+<img width="596" height="765" alt="6  bou_sample_routine" src="https://github.com/user-attachments/assets/e677f020-7225-4a27-b3ec-f1e6160642d4" />
+
+[Click to Download Sample Routine](https://github.com/user-attachments/files/21473238/Y3S2_Routine.pdf)
 
 ## Admin Backend
 <img width="1494" alt="bou_routine_generator_backend" src="https://github.com/user-attachments/assets/0845159b-d8a5-4848-b683-933ef9ec29de" />

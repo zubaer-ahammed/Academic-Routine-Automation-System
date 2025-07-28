@@ -1,6 +1,8 @@
 # Academic-Routine-Automation-System
 Academic Routine Automation System for SST, BOU
 
+## This Project is hosted and used by my university: https://routines.bousst.edu.bd/
+
 ## Video Demonstration
 Watch the Video of BOU Routine Generator: https://drive.google.com/file/d/1M_A4g4liXs9aeMiJCesONcFcCOPL1Aqe/view
 

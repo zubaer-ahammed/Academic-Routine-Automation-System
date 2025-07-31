@@ -2736,6 +2736,10 @@ def export_academic_calendar_pdf(request, semester_id):
                     # If no makeup classes, final exam is 1 week after semester end
                     final_exam_week = semester_end + timedelta(weeks=1)
                 
+                # Calculate the end of the 4-week final exam period
+                final_exam_end_week = final_exam_week + timedelta(weeks=3)  # 4 weeks total (0, 1, 2, 3)
+                final_exam_end_saturday = get_friday_saturday_of_week(final_exam_end_week)[1]  # Get Saturday of the last week
+                
                 # Mark 4 weeks for final exam period (both Friday and Saturday for each week)
                 for week_offset in range(4):
                     current_exam_week = final_exam_week + timedelta(weeks=week_offset)
@@ -2750,13 +2754,20 @@ def export_academic_calendar_pdf(request, semester_id):
         # Create monthly calendar grids with error handling
         months_data = []
         try:
-            # Extend calendar range to include all events (makeup dates and final exam)
-            extended_end = calendar_end
+            # Calculate the smart end date for calendar generation
+            # Use the end of the 4-week final exam period if it exists, otherwise use the regular extended_end
+            smart_calendar_end = calendar_end
             
-            # Find all event dates and extend calendar accordingly
-            for event_date, (event_type, _) in events_calendar.items():
-                if event_date > extended_end:
-                    extended_end = event_date
+            # Check if we have final exam events and find the actual end of the final exam period
+            final_exam_dates = [date for date, (event_type, _) in events_calendar.items() if event_type == 'final_exam']
+            if final_exam_dates:
+                # Use the latest final exam date as our smart cutoff
+                smart_calendar_end = max(final_exam_dates)
+            else:
+                # Fallback: extend calendar range to include all events (makeup dates, etc.)
+                for event_date, (event_type, _) in events_calendar.items():
+                    if event_date > smart_calendar_end:
+                        smart_calendar_end = event_date
             
             current_date = calendar_start.replace(day=1)  # Start from the 1st of the starting month
             
@@ -2764,7 +2775,7 @@ def export_academic_calendar_pdf(request, semester_id):
             max_months = 24  # Maximum 2 years
             month_count = 0
             
-            while current_date <= extended_end and month_count < max_months:
+            while current_date <= smart_calendar_end and month_count < max_months:
                 month_name = current_date.strftime('%B').upper()
                 year = current_date.year
                 
@@ -2782,8 +2793,46 @@ def export_academic_calendar_pdf(request, semester_id):
                 # Calculate how many week rows this month will have
                 num_weeks = len(cal)
                 
+                # Track if we've completed all necessary events in this month
+                month_has_relevant_events = False
+                first_week_of_month_added = False
+                
                 # Add month rows - first row has month name and year, others are empty in first column
                 for week_num, week in enumerate(cal):
+                    # Check if this week contains any dates we need to show
+                    week_has_relevant_events = False
+                    week_latest_relevant_date = None
+                    
+                    # Check Friday and Saturday of this week
+                    for day_idx, day in enumerate(week):
+                        if (day_idx == 4 or day_idx == 5) and day != 0:  # Friday and Saturday only
+                            date_obj = datetime(year, current_date.month, day).date()
+                            if date_obj <= smart_calendar_end:
+                                week_has_relevant_events = True
+                                if week_latest_relevant_date is None or date_obj > week_latest_relevant_date:
+                                    week_latest_relevant_date = date_obj
+                    
+                    # Skip this week if it has no relevant events and we're past our cutoff
+                    if not week_has_relevant_events:
+                        continue
+                    
+                    month_has_relevant_events = True
+                    
+                    if not first_week_of_month_added:
+                        # First week row added for this month - show month name and year using Paragraph for line breaks
+                        first_week_of_month_added = True
+                        month_style = ParagraphStyle(
+                            'MonthStyle',
+                            fontName='Helvetica-Bold',
+                            fontSize=10,
+                            alignment=1,  # Center
+                            leading=12,
+                        )
+                        month_year_para = Paragraph(f"{month_name}<br/>{year}", month_style)
+                        week_data = [month_year_para]
+                    else:
+                        # Other week rows for this month - empty first column
+                        week_data = ['']
                     if week_num == 0:
                         # First week row for this month - show month name and year using Paragraph for line breaks
                         month_style = ParagraphStyle(
@@ -2882,6 +2931,10 @@ def export_academic_calendar_pdf(request, semester_id):
                     
                     week_data.extend([week_number, remarks, exams])
                     months_data.append([week_data])
+                
+                # If this month had no relevant events, we can stop here
+                if not month_has_relevant_events:
+                    break
                 
                 month_count += 1
                 

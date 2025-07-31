@@ -2410,15 +2410,19 @@ def export_academic_calendar_pdf(request, semester_id):
     try:
         selected_semester = Semester.objects.get(id=semester_id)
         buffer = io.BytesIO()
+        
+        # Use custom page size - wider and taller than landscape A4 to fit content on one page
+        custom_page_size = (landscape(A4)[0], landscape(A4)[1] * 1.4)  # 40% taller
+        
         doc = SimpleDocTemplate(
             buffer,
-            pagesize=landscape(A4),
+            pagesize=custom_page_size,
             rightMargin=36,
             leftMargin=36,
             topMargin=36,
             bottomMargin=36
         )
-        page_width, page_height = landscape(A4)
+        page_width, page_height = custom_page_size
         available_width = page_width - doc.leftMargin - doc.rightMargin
         elements = []
 
@@ -2659,7 +2663,7 @@ def export_academic_calendar_pdf(request, semester_id):
                 
                 # Mark semester begin and end
                 events_calendar[semester_start] = ('semester_begin', 'Semester Begins')
-                events_calendar[semester_end] = ('semester_end', 'Semester End')
+                events_calendar[semester_end] = ('semester_end', 'Schedule Class Ends')
                 
                 # Calculate key academic events based on weeks
                 duration_days = (semester_end - semester_start).days
@@ -2766,9 +2770,11 @@ def export_academic_calendar_pdf(request, semester_id):
                 
                 # For the first month, create the overall header
                 if month_count == 0:
-                    # Create the main header row (Friday, Saturday, Week, Remarks, Exams)
-                    header_row = ['Month / Day', 'F', 'S', 'Weeks', 'Remarks', 'Exams']
-                    months_data.append([header_row])
+                    # Create the main header rows - two-row structure
+                    header_row_1 = ['Month', 'Day & Date', '', 'Weeks', 'Remarks', 'Exams']
+                    header_row_2 = ['', 'F', 'S', '', '', '']
+                    months_data.append([header_row_1])
+                    months_data.append([header_row_2])
                 
                 # Calculate how many week rows this month will have
                 num_weeks = len(cal)
@@ -2810,7 +2816,7 @@ def export_academic_calendar_pdf(request, semester_id):
                                     elif event_type == 'class_test':
                                         day_str += ' (CT)'
                                     elif event_type == 'assignment':
-                                        day_str += ' (A)'
+                                        day_str += ' (Assn.)'
                                     elif event_type == 'final_exam':
                                         day_str += ' (FE)'
                                     elif event_type == 'holiday':
@@ -2911,21 +2917,35 @@ def export_academic_calendar_pdf(request, semester_id):
         
         # Only add styling if we have actual calendar data
         if all_calendar_data:
-            # Style the main header row (first row: "Month / Day", "S", "M", etc.)
+            # Style the main header rows (first two rows)
             calendar_style.extend([
+                # First header row
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4472C4')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                 ('FONTSIZE', (0, 0), (-1, 0), 10),
                 ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
                 ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
+                # Second header row
+                ('BACKGROUND', (0, 1), (-1, 1), colors.HexColor('#4472C4')),
+                ('TEXTCOLOR', (0, 1), (-1, 1), colors.white),
+                ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 1), (-1, 1), 10),
+                ('ALIGN', (0, 1), (-1, 1), 'CENTER'),
+                ('VALIGN', (0, 1), (-1, 1), 'MIDDLE'),
+                # Merge cells for header structure
+                ('SPAN', (0, 0), (0, 1)),  # Month column spans both rows
+                ('SPAN', (1, 0), (2, 0)),  # Day spans across F and S in first row
+                ('SPAN', (3, 0), (3, 1)),  # Weeks column spans both rows
+                ('SPAN', (4, 0), (4, 1)),  # Remarks column spans both rows
+                ('SPAN', (5, 0), (5, 1)),  # Exams column spans both rows
             ])
             
-            # Process each row after the header
+            # Process each row after the header (starting from row 2 now)
             current_month_start_row = None
             current_month_rows = 0
             
-            for row_idx in range(1, len(all_calendar_data)):
+            for row_idx in range(2, len(all_calendar_data)):
                 row_data = all_calendar_data[row_idx]
                 
                 # Check if this is the start of a new month (first column has Paragraph object)
@@ -2950,6 +2970,7 @@ def export_academic_calendar_pdf(request, semester_id):
                     ('ALIGN', (1, row_idx), (2, row_idx), 'CENTER'),  # Only F and S columns (1,2)
                     ('VALIGN', (0, row_idx), (-1, row_idx), 'MIDDLE'),
                     ('GRID', (0, row_idx), (-1, row_idx), 0.5, colors.black),
+                    ('ROWHEIGHT', (0, row_idx), (-1, row_idx), 16),  # Reduced row height for compactness
                 ])
                 
                 # Check for events in this week and apply row coloring
@@ -3032,7 +3053,7 @@ def export_academic_calendar_pdf(request, semester_id):
             month_ranges = []
             current_month_start = None
             
-            for row_idx in range(1, len(all_calendar_data)):
+            for row_idx in range(2, len(all_calendar_data)):  # Start from row 2 due to two-row header
                 row_data = all_calendar_data[row_idx]
                 
                 # Check for month start (Paragraph object or text with newlines)
@@ -3069,74 +3090,65 @@ def export_academic_calendar_pdf(request, semester_id):
         calendar_table.setStyle(TableStyle(calendar_style))
         elements.append(calendar_table)
         
-        # Add legend
-        elements.append(Spacer(1, 20))
+        # Add legend with reduced spacing
+        elements.append(Spacer(1, 4))  # Reduced from 20 to 8
         
-        legend_data = [
-            [
-                Table([['Semester Begin']], style=TableStyle([
-                    ('BACKGROUND', (0,0), (-1,-1), colors_dict['semester_begin']),
-                    ('FONTSIZE', (0,0), (-1,-1), 8),
-                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                    ('BOX', (0,0), (-1,-1), 1, colors.black),
-                ])),
-                Table([['Class Test']], style=TableStyle([
-                    ('BACKGROUND', (0,0), (-1,-1), colors_dict['class_test']),
-                    ('FONTSIZE', (0,0), (-1,-1), 8),
-                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                    ('BOX', (0,0), (-1,-1), 1, colors.black),
-                ])),
-                Table([['Assignment']], style=TableStyle([
-                    ('BACKGROUND', (0,0), (-1,-1), colors_dict['assignment']),
-                    ('FONTSIZE', (0,0), (-1,-1), 8),
-                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                    ('BOX', (0,0), (-1,-1), 1, colors.black),
-                ])),
-                Table([['Semester End']], style=TableStyle([
-                    ('BACKGROUND', (0,0), (-1,-1), colors_dict['semester_end']),
-                    ('FONTSIZE', (0,0), (-1,-1), 8),
-                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                    ('BOX', (0,0), (-1,-1), 1, colors.black),
-                ])),
-            ],
-            [
-                Table([['Final Exam']], style=TableStyle([
-                    ('BACKGROUND', (0,0), (-1,-1), colors_dict['final_exam']),
-                    ('FONTSIZE', (0,0), (-1,-1), 8),
-                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                    ('BOX', (0,0), (-1,-1), 1, colors.black),
-                ])),
-                Table([['Holiday']], style=TableStyle([
-                    ('BACKGROUND', (0,0), (-1,-1), colors_dict['holiday']),
-                    ('FONTSIZE', (0,0), (-1,-1), 8),
-                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                    ('BOX', (0,0), (-1,-1), 1, colors.black),
-                ])),
-                Table([['Makeup Class']], style=TableStyle([
-                    ('BACKGROUND', (0,0), (-1,-1), colors_dict['makeup_class']),
-                    ('FONTSIZE', (0,0), (-1,-1), 8),
-                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                    ('BOX', (0,0), (-1,-1), 1, colors.black),
-                ])),
-                Table([['(SB, SE, CT, A, FE, H, MC)']], style=TableStyle([
-                    ('FONTSIZE', (0,0), (-1,-1), 8),
-                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                ])),
-            ],
-            
-        ]
+        # Create single-row legend with all items
+        legend_data = [[
+            Table([['Semester Begin (SB)']], style=TableStyle([
+                ('BACKGROUND', (0,0), (-1,-1), colors_dict['semester_begin']),
+                ('FONTSIZE', (0,0), (-1,-1), 8),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('BOX', (0,0), (-1,-1), 1, colors.black),
+            ])),
+            Table([['Class Test (CT)']], style=TableStyle([
+                ('BACKGROUND', (0,0), (-1,-1), colors_dict['class_test']),
+                ('FONTSIZE', (0,0), (-1,-1), 8),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('BOX', (0,0), (-1,-1), 1, colors.black),
+            ])),
+            Table([['Assignment (Assn.)']], style=TableStyle([
+                ('BACKGROUND', (0,0), (-1,-1), colors_dict['assignment']),
+                ('FONTSIZE', (0,0), (-1,-1), 8),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('BOX', (0,0), (-1,-1), 1, colors.black),
+            ])),
+            Table([['Semester End (SE)']], style=TableStyle([
+                ('BACKGROUND', (0,0), (-1,-1), colors_dict['semester_end']),
+                ('FONTSIZE', (0,0), (-1,-1), 8),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('BOX', (0,0), (-1,-1), 1, colors.black),
+            ])),
+            Table([['Final Exam (FE)']], style=TableStyle([
+                ('BACKGROUND', (0,0), (-1,-1), colors_dict['final_exam']),
+                ('FONTSIZE', (0,0), (-1,-1), 8),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('BOX', (0,0), (-1,-1), 1, colors.black),
+            ])),
+            Table([['Holiday (H)']], style=TableStyle([
+                ('BACKGROUND', (0,0), (-1,-1), colors_dict['holiday']),
+                ('FONTSIZE', (0,0), (-1,-1), 8),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('BOX', (0,0), (-1,-1), 1, colors.black),
+            ])),
+            Table([['Makeup Class (MC)']], style=TableStyle([
+                ('BACKGROUND', (0,0), (-1,-1), colors_dict['makeup_class']),
+                ('FONTSIZE', (0,0), (-1,-1), 8),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('BOX', (0,0), (-1,-1), 1, colors.black),
+            ])),
+        ]]
         
-        # Calculate column widths to match calendar width
-        legend_col_width = calendar_width / 4
-        legend_table = Table(legend_data, colWidths=[legend_col_width, legend_col_width, legend_col_width, legend_col_width])
+        # Calculate column widths to match calendar width - 7 columns now
+        legend_col_width = calendar_width / 7
+        legend_table = Table(legend_data, colWidths=[legend_col_width] * 7)
         legend_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),

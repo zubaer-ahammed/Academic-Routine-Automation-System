@@ -2663,7 +2663,7 @@ def export_academic_calendar_pdf(request, semester_id):
                 
                 # Mark semester begin and end
                 events_calendar[semester_start] = ('semester_begin', 'Semester Begins')
-                events_calendar[semester_end] = ('semester_end', 'Schedule Class Ends')
+                events_calendar[semester_end] = ('semester_end', 'Class Ends')
                 
                 # Calculate key academic events based on weeks
                 duration_days = (semester_end - semester_start).days
@@ -2728,7 +2728,7 @@ def export_academic_calendar_pdf(request, semester_id):
                         if latest_makeup_date is None or makeup_date > latest_makeup_date:
                             latest_makeup_date = makeup_date
                 
-                # Set Tentative Semester Final Exam date - mark both Friday and Saturday
+                # Set Tentative Semester Final Exam date - mark 4 weeks starting from the first exam week
                 if latest_makeup_date:
                     # If there are makeup classes, final exam is 1 week after the latest makeup date
                     final_exam_week = latest_makeup_date + timedelta(weeks=1)
@@ -2736,9 +2736,12 @@ def export_academic_calendar_pdf(request, semester_id):
                     # If no makeup classes, final exam is 1 week after semester end
                     final_exam_week = semester_end + timedelta(weeks=1)
                 
-                friday, saturday = get_friday_saturday_of_week(final_exam_week)
-                events_calendar[friday] = ('final_exam', 'Tentative Semester Final Exam')
-                events_calendar[saturday] = ('final_exam', 'Tentative Semester Final Exam')
+                # Mark 4 weeks for final exam period (both Friday and Saturday for each week)
+                for week_offset in range(4):
+                    current_exam_week = final_exam_week + timedelta(weeks=week_offset)
+                    friday, saturday = get_friday_saturday_of_week(current_exam_week)
+                    events_calendar[friday] = ('final_exam', 'Tentative Semester Final Exam')
+                    events_calendar[saturday] = ('final_exam', 'Tentative Semester Final Exam')
                 
         except Exception as e:
             # If there's an error calculating events, continue with empty events
@@ -2812,7 +2815,7 @@ def export_academic_calendar_pdf(request, semester_id):
                                     if event_type == 'semester_begin':
                                         day_str += ' (SB)'
                                     elif event_type == 'semester_end':
-                                        day_str += ' (SE)'
+                                        day_str += ' (CE)'
                                     elif event_type == 'class_test':
                                         day_str += ' (CT)'
                                     elif event_type == 'assignment':
@@ -3020,7 +3023,8 @@ def export_academic_calendar_pdf(request, semester_id):
                                     except (ValueError, IndexError):
                                         pass
                     
-                    # Check Friday and Saturday columns for any events (columns 1 and 2) to get the color
+                    # Check Friday and Saturday columns for any events (columns 1 and 2)
+                    non_holiday_event_color = None
                     for day_col in range(1, 3):  # Friday and Saturday are in columns 1-2
                         if day_col < len(row_data):
                             day_text = row_data[day_col]
@@ -3030,23 +3034,28 @@ def export_academic_calendar_pdf(request, semester_id):
                                     date_obj = datetime(current_year, current_month, day_num).date()
                                     if date_obj in events_calendar:
                                         event_type, _ = events_calendar[date_obj]
-                                        if event_type in colors_dict:
-                                            week_event_color = colors_dict[event_type]
-                                            break  # Use the first event found in the week
+                                        if event_type == 'holiday':
+                                            # For holidays, apply red color only to the specific date cell
+                                            calendar_style.append(
+                                                ('TEXTCOLOR', (day_col, row_idx), (day_col, row_idx), colors.HexColor('#FF0000'))
+                                            )
+                                        elif event_type in colors_dict and non_holiday_event_color is None:
+                                            # For non-holiday events, store color for row highlighting
+                                            non_holiday_event_color = colors_dict[event_type]
                                 except (ValueError, TypeError):
                                     continue
                     
-                    # Apply background color based on event type
-                    if week_event_color:
+                    # Apply background color for non-holiday events
+                    if non_holiday_event_color:
                         if has_exam_event:
                             # For exam events: highlight entire row including Exams column (columns 1-5)
                             calendar_style.append(
-                                ('BACKGROUND', (1, row_idx), (-1, row_idx), week_event_color)
+                                ('BACKGROUND', (1, row_idx), (-1, row_idx), non_holiday_event_color)
                             )
                         else:
                             # For non-exam events: highlight only up to Remarks column (columns 1-4)
                             calendar_style.append(
-                                ('BACKGROUND', (1, row_idx), (4, row_idx), week_event_color)
+                                ('BACKGROUND', (1, row_idx), (4, row_idx), non_holiday_event_color)
                             )
             
             # Track months for cell spanning in first column
@@ -3080,6 +3089,47 @@ def export_academic_calendar_pdf(request, semester_id):
                     calendar_style.append(
                         ('SPAN', (0, start_row), (0, end_row))
                     )
+            
+            # Track and merge cells for 4-week final exam period in Exams column
+            final_exam_rows = []
+            current_year = datetime.now().year  # Default fallback
+            current_month = 1  # Default fallback
+            current_month_start_row = None
+            
+            for row_idx in range(2, len(all_calendar_data)):  # Start from row 2 due to two-row header
+                row_data = all_calendar_data[row_idx]
+                
+                # Update current month context
+                if len(row_data) > 0 and row_data[0]:
+                    if hasattr(row_data[0], '__class__') and 'Paragraph' in str(type(row_data[0])):
+                        current_month_start_row = row_idx
+                        # Extract month and year from Paragraph
+                        para_text = str(row_data[0])
+                        month_match = re.search(r'(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)', para_text)
+                        year_match = re.search(r'(\d{4})', para_text)
+                        if month_match and year_match:
+                            month_name = month_match.group(1)
+                            current_year = int(year_match.group(1))
+                            month_names = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
+                                         'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER']
+                            if month_name in month_names:
+                                current_month = month_names.index(month_name) + 1
+                
+                # Check if this row has final exam events
+                if len(row_data) >= 6:  # Ensure we have all columns including exams
+                    exams_column = row_data[5] if len(row_data) > 5 else ''
+                    if exams_column and 'Tentative Semester Final Exam' in str(exams_column):
+                        final_exam_rows.append(row_idx)
+            
+            # Apply cell spanning for final exam period in Exams column (column 5)
+            if len(final_exam_rows) > 1:
+                # Sort rows to ensure correct spanning
+                final_exam_rows.sort()
+                start_row = final_exam_rows[0]
+                end_row = final_exam_rows[-1]
+                calendar_style.append(
+                    ('SPAN', (5, start_row), (5, end_row))  # Span column 5 (Exams) across all final exam rows
+                )
         
         # Add borders
         calendar_style.extend([
@@ -3116,7 +3166,7 @@ def export_academic_calendar_pdf(request, semester_id):
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                 ('BOX', (0,0), (-1,-1), 1, colors.black),
             ])),
-            Table([['Semester End (SE)']], style=TableStyle([
+            Table([['Class Ends (CE)']], style=TableStyle([
                 ('BACKGROUND', (0,0), (-1,-1), colors_dict['semester_end']),
                 ('FONTSIZE', (0,0), (-1,-1), 8),
                 ('ALIGN', (0,0), (-1,-1), 'CENTER'),
@@ -3152,6 +3202,10 @@ def export_academic_calendar_pdf(request, semester_id):
         legend_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),   # Uniform left padding
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),  # Uniform right padding
+            ('TOPPADDING', (0, 0), (-1, -1), 2),    # Uniform top padding
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2), # Uniform bottom padding
         ]))
         elements.append(legend_table)
 

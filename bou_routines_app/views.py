@@ -3058,7 +3058,7 @@ def export_academic_calendar_pdf(request, semester_id):
                 # Apply general row styling
                 calendar_style.extend([
                     ('FONTNAME', (1, row_idx), (-1, row_idx), 'Helvetica'),
-                    ('FONTSIZE', (1, row_idx), (-1, row_idx), 9),
+                    ('FONTSIZE', (1, row_idx), (-1, row_idx), 10),
                     ('ALIGN', (1, row_idx), (2, row_idx), 'CENTER'),  # Only F and S columns (1,2)
                     ('VALIGN', (0, row_idx), (-1, row_idx), 'MIDDLE'),
                     ('GRID', (0, row_idx), (-1, row_idx), 0.5, colors.black),

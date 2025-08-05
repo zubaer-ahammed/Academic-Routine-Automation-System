@@ -2672,36 +2672,36 @@ def export_academic_calendar_pdf(request, semester_id):
                 first_test_week = semester_start + timedelta(weeks=6)
                 if first_test_week <= semester_end:
                     friday, saturday = get_friday_saturday_of_week(first_test_week)
-                    events_calendar[friday] = ('class_test', 'First Class Test (6th week)')
-                    events_calendar[saturday] = ('class_test', 'First Class Test (6th week)')
+                    events_calendar[friday] = ('class_test', 'First Class Test')
+                    events_calendar[saturday] = ('class_test', 'First Class Test')
                 
                 # Second Class Test (10th week) - mark both Friday and Saturday
                 second_test_week = semester_start + timedelta(weeks=10)
                 if second_test_week <= semester_end:
                     friday, saturday = get_friday_saturday_of_week(second_test_week)
-                    events_calendar[friday] = ('class_test', 'Second Class Test (10th week)')
-                    events_calendar[saturday] = ('class_test', 'Second Class Test (10th week)')
+                    events_calendar[friday] = ('class_test', 'Second Class Test')
+                    events_calendar[saturday] = ('class_test', 'Second Class Test')
                 
                 # First Assignment (4th week) - mark both Friday and Saturday
                 first_assignment_week = semester_start + timedelta(weeks=4)
                 if first_assignment_week <= semester_end:
                     friday, saturday = get_friday_saturday_of_week(first_assignment_week)
-                    events_calendar[friday] = ('assignment', 'First Assignment (4th week)')
-                    events_calendar[saturday] = ('assignment', 'First Assignment (4th week)')
+                    events_calendar[friday] = ('assignment', 'First Assignment')
+                    events_calendar[saturday] = ('assignment', 'First Assignment')
                 
                 # Second Assignment (8th week) - mark both Friday and Saturday
                 second_assignment_week = semester_start + timedelta(weeks=8)
                 if second_assignment_week <= semester_end:
                     friday, saturday = get_friday_saturday_of_week(second_assignment_week)
-                    events_calendar[friday] = ('assignment', 'Second Assignment (8th week)')
-                    events_calendar[saturday] = ('assignment', 'Second Assignment (8th week)')
+                    events_calendar[friday] = ('assignment', 'Second Assignment')
+                    events_calendar[saturday] = ('assignment', 'Second Assignment')
                 
                 # Third Assignment (12th week) - mark both Friday and Saturday
                 third_assignment_week = semester_start + timedelta(weeks=12)
                 if third_assignment_week <= semester_end:
                     friday, saturday = get_friday_saturday_of_week(third_assignment_week)
-                    events_calendar[friday] = ('assignment', 'Third Assignment (12th week)')
-                    events_calendar[saturday] = ('assignment', 'Third Assignment (12th week)')
+                    events_calendar[friday] = ('assignment', 'Third Assignment')
+                    events_calendar[saturday] = ('assignment', 'Third Assignment')
                 
                 # Add holidays from semester
                 if selected_semester.holidays:
@@ -2785,7 +2785,7 @@ def export_academic_calendar_pdf(request, semester_id):
                 # For the first month, create the overall header
                 if month_count == 0:
                     # Create the main header rows - two-row structure
-                    header_row_1 = ['Month', 'Day & Date', '', 'Weeks', 'Remarks', 'Exams']
+                    header_row_1 = ['Month', 'Day & Date', '', 'Weeks', 'Events', 'Exams']
                     header_row_2 = ['', 'F', 'S', '', '', '']
                     months_data.append([header_row_1])
                     months_data.append([header_row_2])

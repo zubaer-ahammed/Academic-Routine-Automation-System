@@ -3389,7 +3389,7 @@ def export_academic_calendar_pdf(request, semester_id):
             fontName='Helvetica',
             fontSize=10,
             alignment=TA_RIGHT,  # Right alignment
-            leading=6, # Reduced line height for less gap
+            leading=4, # Reduced line height for less gap
             spaceBefore=0,
             spaceAfter=0,
         )
@@ -3398,7 +3398,7 @@ def export_academic_calendar_pdf(request, semester_id):
             fontName='Helvetica',
             fontSize=10,
             alignment=0,  # Left alignment
-            leading=6,
+            leading=4,
             spaceBefore=0,
             spaceAfter=0,
         )

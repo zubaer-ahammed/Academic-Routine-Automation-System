@@ -2411,18 +2411,16 @@ def export_academic_calendar_pdf(request, semester_id):
         selected_semester = Semester.objects.get(id=semester_id)
         buffer = io.BytesIO()
         
-        # Use custom page size - wider and taller than landscape A4 to fit content on one page
-        custom_page_size = (landscape(A4)[0], landscape(A4)[1] * 1.4)  # 40% taller
-        
+        # Use the same page size as the routine (landscape A4)
         doc = SimpleDocTemplate(
             buffer,
-            pagesize=custom_page_size,
-            rightMargin=36,
-            leftMargin=36,
-            topMargin=36,
-            bottomMargin=36
+            pagesize=landscape(A4),
+            rightMargin=54,  # 0.75 inch - same as routine
+            leftMargin=54,   # 0.75 inch - same as routine
+            topMargin=34,    # 0.75 inch - same as routine
+            bottomMargin=34  # Reduced from 54 - same as routine
         )
-        page_width, page_height = custom_page_size
+        page_width, page_height = landscape(A4)
         available_width = page_width - doc.leftMargin - doc.rightMargin
         elements = []
 

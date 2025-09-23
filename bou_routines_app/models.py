@@ -138,7 +138,7 @@ class LoginLog(models.Model):
 class Student(models.Model):
     id = models.CharField(max_length=20, primary_key=True, help_text="Student ID")
     name = models.CharField(max_length=100)
-    semester = models.ForeignKey(Semester, on_delete=models.CASCADE)
+    semesters = models.ManyToManyField(Semester, help_text="Semesters this student is enrolled in")
     session = models.CharField(max_length=20, help_text="Academic session (e.g., 2020-21)")
     roll_number = models.CharField(max_length=20, blank=True, null=True)
     email = models.EmailField(blank=True, null=True)

@@ -120,10 +120,15 @@ class LoginLogAdmin(admin.ModelAdmin):
 
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'semester', 'session', 'roll_number', 'email')
-    list_filter = ('semester', 'session')
+    list_display = ('id', 'name', 'get_semesters', 'session', 'roll_number', 'email')
+    list_filter = ('semesters', 'session')
     search_fields = ('id', 'name', 'roll_number', 'email')
-    ordering = ('semester', 'id')
+    ordering = ('id',)
+    filter_horizontal = ('semesters',)
+    
+    def get_semesters(self, obj):
+        return ", ".join([semester.name for semester in obj.semesters.all()])
+    get_semesters.short_description = 'Semesters'
 
 
 @admin.register(Attendance)

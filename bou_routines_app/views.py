@@ -3522,10 +3522,10 @@ def attendance_calendar(request):
             from django.db.models import Case, When, IntegerField
             from django.db.models.functions import Cast, Substr
             
-            students = Student.objects.filter(semester=semester).extra(
+            students = Student.objects.filter(semesters=semester).extra(
                 select={
-                    'first_two_digits': "CAST(SUBSTR(id, 1, 2) AS INTEGER)",
-                    'last_three_digits': "CAST(SUBSTR(id, -3) AS INTEGER)"
+                    'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
+                    'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
                 }
             ).order_by('-first_two_digits', 'last_three_digits')
             
@@ -3801,10 +3801,10 @@ def mark_attendance(request):
         
         # Get all students for this semester with custom sorting
         # Sort by first two digits (descending), then last three digits (ascending)
-        students = Student.objects.filter(semester=semester).extra(
+        students = Student.objects.filter(semesters=semester).extra(
             select={
-                'first_two_digits': "CAST(SUBSTR(id, 1, 2) AS INTEGER)",
-                'last_three_digits': "CAST(SUBSTR(id, -3) AS INTEGER)"
+                'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
+                'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
             }
         ).order_by('-first_two_digits', 'last_three_digits')
         
@@ -3886,10 +3886,10 @@ def attendance_report(request):
         
         # Get all students and their attendance records with custom sorting
         # Sort by first two digits (descending), then last three digits (ascending)
-        students = Student.objects.filter(semester=semester).extra(
+        students = Student.objects.filter(semesters=semester).extra(
             select={
-                'first_two_digits': "CAST(SUBSTR(id, 1, 2) AS INTEGER)",
-                'last_three_digits': "CAST(SUBSTR(id, -3) AS INTEGER)"
+                'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
+                'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
             }
         ).order_by('-first_two_digits', 'last_three_digits')
         

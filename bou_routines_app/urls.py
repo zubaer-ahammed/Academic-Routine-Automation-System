@@ -14,4 +14,5 @@ urlpatterns = [
     path('reset-routine/', views.reset_routine, name='reset-routine'),
     path('export-to-excel/<int:semester_id>/', views.export_to_excel, name='export-to-excel'),
     path('export-to-pdf/<int:semester_id>/', views.export_to_pdf, name='export-to-pdf'),
+    path('export-academic-calendar-pdf/<int:semester_id>/', views.export_academic_calendar_pdf, name='export-academic-calendar-pdf'),
 ]

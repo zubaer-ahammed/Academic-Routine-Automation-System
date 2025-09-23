@@ -6,7 +6,10 @@ from collections import defaultdict
 from django.contrib import messages
 from django.http import JsonResponse, HttpResponse, FileResponse
 import io
+import calendar
 import xlsxwriter
+import re
+import math
 from reportlab.lib.pagesizes import landscape, A4
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, KeepTogether
@@ -15,7 +18,6 @@ from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from django.urls import reverse
 from django.utils.http import urlencode
 from django.contrib.auth.decorators import login_required
-import math
 from django.views.decorators.http import require_POST
 from django.db.models import Q
 
@@ -2404,35 +2406,68 @@ def reset_routine(request):
 
 @login_required
 def export_academic_calendar_pdf(request, semester_id):
-    """Export the academic calendar as a PDF file"""
+    """Export the academic calendar as a PDF file with monthly grid layout"""
     try:
         selected_semester = Semester.objects.get(id=semester_id)
         buffer = io.BytesIO()
+        
+        # Use the same page size as the routine (landscape A4)
         doc = SimpleDocTemplate(
             buffer,
             pagesize=landscape(A4),
-            rightMargin=54,
-            leftMargin=54,
-            topMargin=34,
-            bottomMargin=34
+            rightMargin=54,  # 0.75 inch - same as routine
+            leftMargin=54,   # 0.75 inch - same as routine
+            topMargin=34,    # 0.75 inch - same as routine
+            bottomMargin=34  # Reduced from 54 - same as routine
         )
         page_width, page_height = landscape(A4)
         available_width = page_width - doc.leftMargin - doc.rightMargin
         elements = []
 
-             # --- HEADER IMAGE SECTION ---
+        # Calculate calendar width early for consistent alignment across all elements
+        month_day_width = 0.12 * available_width  # Month/Day column
+        day_width = 0.10 * available_width        # Each day column (only F,S)
+        week_width = 0.12 * available_width       # Week column
+        remarks_width = 0.30 * available_width    # Remarks column
+        exams_width = 0.22 * available_width      # Exams column
+        
+        calendar_col_widths = [
+            month_day_width,  # Month/Day
+            day_width,        # F (Friday)
+            day_width,        # S (Saturday)
+            week_width,       # Week
+            remarks_width,    # Remarks
+            exams_width       # Exams
+        ]
+        
+        # Calculate actual calendar width for consistent alignment
+        calendar_width = sum(calendar_col_widths)
+
+        # Define colors for different event types
+        colors_dict = {
+            'semester_begin': colors.HexColor('#90EE90'),  # Light Green
+            'class_test': colors.HexColor('#00CED1'),  # Dark Turquoise
+            'assignment': colors.HexColor('#FFA500'),  # Orange
+            'semester_end': colors.HexColor('#FFB6C1'),  # Light Pink
+            'final_exam': colors.HexColor('#D3D3D3'),  # Light Gray
+            'holiday': colors.HexColor('#FF6B6B'),  # Red
+            'makeup_class': colors.HexColor('#FFFF99'),  # Light Yellow
+            'tutorial': colors.HexColor('#DDA0DD'),  # Plum
+        }
+
+        # --- HEADER IMAGE SECTION ---
         header_img_path = 'bou_routines_app/static/pdf_routine_top.png'
         try:
             # Padding for the image cell (matching routine table cell padding of 2)
             padding_for_image = 2
 
-            # Create an Image object, scaled by width to fit within the available padded space
+            # Create an Image object, scaled by width to fit within the calendar padded space
             # Height will be auto-calculated to maintain aspect ratio.
-            img_obj = Image(header_img_path, width=available_width - (2 * padding_for_image), height=45)
+            img_obj = Image(header_img_path, width=calendar_width - (2 * padding_for_image), height=45)
 
-            # Put the image in a single-cell table whose width spans the available area,
+            # Put the image in a single-cell table whose width spans the calendar area,
             # and apply padding to the cell to align the image correctly.
-            header_img_table = Table([[img_obj]], colWidths=[available_width])
+            header_img_table = Table([[img_obj]], colWidths=[calendar_width])
             header_img_table.setStyle(TableStyle([
                 ('ALIGN', (0,0), (-1,-1), 'CENTER'), # Center the image horizontally within its cell
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), # Center vertically
@@ -2497,7 +2532,7 @@ def export_academic_calendar_pdf(request, semester_id):
             combined = f'{term} Term {semester_full_name}'.strip()
             left_content.append(Paragraph(combined, header_style_small))
         left_content.append(Spacer(1, 2))  # Reduced from 8
-        left_content.append(Paragraph('Academic Calender', header_style_bold))
+        left_content.append(Paragraph('Academic Calendar', header_style_bold))
         commencement = selected_semester.start_date.strftime('%d %B %Y') if selected_semester.start_date else ''
         study_center = selected_semester.study_center or ''
         if commencement:
@@ -2506,34 +2541,33 @@ def export_academic_calendar_pdf(request, semester_id):
             left_content.append(Paragraph(f'<b>Study Center:</b> {study_center}', header_style_normal))
 
         # Build right column (contact person box)
-        contact_lines = []
+        contact_label = Paragraph(
+            'Contact Person',
+            ParagraphStyle(
+                'ContactLabel',
+                fontName='Helvetica-Bold',
+                fontSize=11,
+                alignment=0,  # Left align
+                textColor=colors.white,
+                spaceAfter=0,
+                spaceBefore=0,
+                leading=14,
+            )
+        )
+        # Add 4px gap below the label using a single-cell table row with bottom padding
+        contact_label_table = Table(
+            [[contact_label]],
+            colWidths=[180],
+            hAlign='RIGHT',
+            style=TableStyle([
+                ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+                ('TOPPADDING', (0,0), (-1,-1), -3),
+                ('LEFTPADDING', (0,0), (-1,-1), 0),
+                ('RIGHTPADDING', (0,0), (-1,-1), 0),
+            ])
+        )
+        contact_info_lines = []
         if selected_semester.contact_person:
-            contact_label = Paragraph(
-                'Contact Person',
-                ParagraphStyle(
-                    'ContactLabel',
-                    fontName='Helvetica-Bold',
-                    fontSize=11,
-                    alignment=0,  # Left align
-                    textColor=colors.white,
-                    spaceAfter=0,
-                    spaceBefore=0,
-                    leading=14,
-                )
-            )
-            # Add 4px gap below the label using a single-cell table row with bottom padding
-            contact_label_table = Table(
-                [[contact_label]],
-                colWidths=[180],
-                hAlign='RIGHT',
-                style=TableStyle([
-                    ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-                    ('TOPPADDING', (0,0), (-1,-1), -3),
-                    ('LEFTPADDING', (0,0), (-1,-1), 0),
-                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
-                ])
-            )
-            contact_info_lines = []
             contact_info_lines.append(selected_semester.contact_person)
         if selected_semester.contact_person_designation:
             contact_info_lines.append(selected_semester.contact_person_designation)
@@ -2560,7 +2594,6 @@ def export_academic_calendar_pdf(request, semester_id):
         contact_table = Table(
             [[contact_label_table], [contact_info_para]],
             colWidths=[180],
-            hAlign='RIGHT',
         )
         contact_table.setStyle(TableStyle([
             ('BOX', (0, 0), (-1, -1), 1, colors.black),  # Single, lighter border
@@ -2577,165 +2610,784 @@ def export_academic_calendar_pdf(request, semester_id):
         # Vertically center the left header content to match the contact box
         left_box_table = Table(
             [[left_content]],
-            colWidths=[available_width-180],
-            hAlign='LEFT',
+            colWidths=[calendar_width-180],
             style=TableStyle([
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ])
         )
         two_col_table = Table(
             [[left_box_table, contact_table]],
-            colWidths=[available_width-180, 180],
-            hAlign='LEFT'
+            colWidths=[calendar_width-180, 180],
         )
         two_col_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (0, 0), 'MIDDLE'),
             ('VALIGN', (1, 0), (1, 0), 'MIDDLE'),
             ('ALIGN', (0, 0), (0, 0), 'CENTER'),
             ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
         ]))
         elements.append(Spacer(1, 4))  # Add slight gap before contact box
         elements.append(two_col_table)
         elements.append(Spacer(1, 4))  # Reduced from 16
 
-        # --- Academic Calendar Table ---
-        # Calculate event dates
-        events = []
-        start_date = selected_semester.start_date
-        end_date = selected_semester.end_date
-
-        # Parse holidays into a set for efficient lookup
-        holiday_dates = set()
-        if selected_semester.holidays:
-            try:
-                holiday_dates = {
-                    datetime.strptime(date.strip(), "%Y-%m-%d").date()
-                    for date in selected_semester.holidays.split(',')
-                    if date.strip()
-                }
-            except Exception:
-                # Silently ignore parsing errors, leaving holidays empty
-                holiday_dates = set()
-
-        def get_event_dates(base_date, holidays_set):
-            """
-            Calculates Friday and Saturday for the week of base_date.
-            If a date is a holiday, it finds the next available same day of week.
-            """
-            # isoweekday: Monday=1, ..., Friday=5, Saturday=6, Sunday=7
-            # Get Monday of the week of the base_date
-            monday_of_week = base_date - timedelta(days=base_date.isoweekday() - 1)
-            
-            friday = monday_of_week + timedelta(days=4)
-            saturday = monday_of_week + timedelta(days=5)
-
-            # If calculated date is a holiday, find the next non-holiday one.
-            while friday in holidays_set:
-                friday += timedelta(weeks=1)
-            
-            while saturday in holidays_set:
-                saturday += timedelta(weeks=1)
-
-            # Sort dates to ensure chronological order for display
-            sorted_dates = sorted([friday, saturday])
-            
-            # Return the formatted string (chronological) and the earliest date for sorting events
-            display_string = f"{sorted_dates[0].strftime('%d/%m/%Y')}, {sorted_dates[1].strftime('%d/%m/%Y')}"
-            sort_date = sorted_dates[0]
-
-            return display_string, sort_date
-
-        # Find the latest makeup/extra class date (if any)
-        makeup_dates = []
-        if selected_semester.makeup_dates:
-            try:
-                makeup_dates = [
-                    datetime.strptime(date.strip(), "%Y-%m-%d").date()
-                    for date in selected_semester.makeup_dates.split(',')
-                    if date.strip()
-                ]
-            except Exception:
-                makeup_dates = []
-        
-        if start_date:
-            events.append(("Semester Begins", start_date.strftime('%d/%m/%Y'), start_date))
-            
-            # 6th week
-            first_class_test_base = start_date + timedelta(weeks=6)
-            date_str, sort_date = get_event_dates(first_class_test_base, holiday_dates)
-            events.append(("First Class Test", date_str, sort_date))
-            
-            # 10th week
-            second_class_test_base = start_date + timedelta(weeks=10)
-            date_str, sort_date = get_event_dates(second_class_test_base, holiday_dates)
-            events.append(("Second Class Test", date_str, sort_date))
-
-            # Assignments
-            # 4th week
-            first_assignment_base = start_date + timedelta(weeks=4)
-            date_str, sort_date = get_event_dates(first_assignment_base, holiday_dates)
-            events.append(("First Assignment", date_str, sort_date))
-
-            # 8th week
-            second_assignment_base = start_date + timedelta(weeks=8)
-            date_str, sort_date = get_event_dates(second_assignment_base, holiday_dates)
-            events.append(("Second Assignment", date_str, sort_date))
-
-            # 12th week
-            third_assignment_base = start_date + timedelta(weeks=12)
-            date_str, sort_date = get_event_dates(third_assignment_base, holiday_dates)
-            events.append(("Third Assignment", date_str, sort_date))
-
-        if end_date:
-            events.append(("Semester End", end_date.strftime('%d/%m/%Y'), end_date))
-
-        # Tentative Semester Final Exam: 1 week after the latest makeup date, or 1 week after end_date
-        if makeup_dates:
-            latest_makeup = max(makeup_dates)
-            tentative_final = latest_makeup + timedelta(weeks=1)
-        elif end_date:
-            tentative_final = end_date + timedelta(weeks=1)
+        # Use semester's start and end dates as the date range
+        if selected_semester.start_date and selected_semester.end_date:
+            calendar_start = selected_semester.start_date
+            calendar_end = selected_semester.end_date
         else:
-            tentative_final = None
-        if tentative_final:
-            # Advance date if it falls on a holiday
-            while tentative_final in holiday_dates:
-                tentative_final += timedelta(days=1)
-            events.append(("Tentative Semester Final Exam", tentative_final.strftime('%d/%m/%Y'), tentative_final))
+            # Fallback to current academic year if semester dates not set
+            current_year = datetime.now().year
+            calendar_start = datetime(current_year, 7, 1).date()
+            calendar_end = datetime(current_year + 1, 6, 30).date()
 
-        # Sort events by the date (3rd element)
-        events.sort(key=lambda x: x[2])
-        # Remove the date object from the tuple for table display
-        events = [(e[0], e[1]) for e in events]
+        # Define academic events based on semester dates
+        events_calendar = {}
+        
+        def get_friday_saturday_of_week(target_date):
+            """Get Friday and Saturday dates for the week containing target_date"""
+            # Find the Friday of the week containing target_date
+            days_since_monday = target_date.weekday()
+            friday_date = target_date + timedelta(days=(4 - days_since_monday))
+            saturday_date = friday_date + timedelta(days=1)
+            return friday_date, saturday_date
+        
+        try:
+            if selected_semester.start_date and selected_semester.end_date:
+                semester_start = selected_semester.start_date
+                semester_end = selected_semester.end_date
+                
+                # Mark semester begin and end
+                events_calendar[semester_start] = ('semester_begin', 'Semester Begins')
+                events_calendar[semester_end] = ('semester_end', 'Class Ends')
+                
+                # Calculate key academic events based on weeks
+                duration_days = (semester_end - semester_start).days
+                
+                # First Class Test (6th week) - mark both Friday and Saturday
+                first_test_week = semester_start + timedelta(weeks=6)
+                if first_test_week <= semester_end:
+                    friday, saturday = get_friday_saturday_of_week(first_test_week)
+                    events_calendar[friday] = ('class_test', 'First Class Test')
+                    events_calendar[saturday] = ('class_test', 'First Class Test')
+                
+                # Second Class Test (10th week) - mark both Friday and Saturday
+                second_test_week = semester_start + timedelta(weeks=10)
+                if second_test_week <= semester_end:
+                    friday, saturday = get_friday_saturday_of_week(second_test_week)
+                    events_calendar[friday] = ('class_test', 'Second Class Test')
+                    events_calendar[saturday] = ('class_test', 'Second Class Test')
+                
+                # First Assignment (4th week) - mark both Friday and Saturday
+                first_assignment_week = semester_start + timedelta(weeks=4)
+                if first_assignment_week <= semester_end:
+                    friday, saturday = get_friday_saturday_of_week(first_assignment_week)
+                    events_calendar[friday] = ('assignment', 'First Assignment')
+                    events_calendar[saturday] = ('assignment', 'First Assignment')
+                
+                # Second Assignment (8th week) - mark both Friday and Saturday
+                second_assignment_week = semester_start + timedelta(weeks=8)
+                if second_assignment_week <= semester_end:
+                    friday, saturday = get_friday_saturday_of_week(second_assignment_week)
+                    events_calendar[friday] = ('assignment', 'Second Assignment')
+                    events_calendar[saturday] = ('assignment', 'Second Assignment')
+                
+                # Third Assignment (12th week) - mark both Friday and Saturday
+                third_assignment_week = semester_start + timedelta(weeks=12)
+                if third_assignment_week <= semester_end:
+                    friday, saturday = get_friday_saturday_of_week(third_assignment_week)
+                    events_calendar[friday] = ('assignment', 'Third Assignment')
+                    events_calendar[saturday] = ('assignment', 'Third Assignment')
+                
+                # Add holidays from semester
+                if selected_semester.holidays:
+                    holiday_dates = [
+                        datetime.strptime(date.strip(), "%Y-%m-%d").date()
+                        for date in selected_semester.holidays.split(',')
+                        if date.strip()
+                    ]
+                    for holiday_date in holiday_dates:
+                        if calendar_start <= holiday_date <= calendar_end:
+                            events_calendar[holiday_date] = ('holiday', 'Holiday')
+                
+                # Add makeup/extra classes from semester and determine final exam date
+                latest_makeup_date = None
+                if selected_semester.makeup_dates:
+                    makeup_dates = [
+                        datetime.strptime(date.strip(), "%Y-%m-%d").date()
+                        for date in selected_semester.makeup_dates.split(',')
+                        if date.strip()
+                    ]
+                    for makeup_date in makeup_dates:
+                        # Include makeup dates even if they're after semester end
+                        events_calendar[makeup_date] = ('makeup_class', 'Makeup/Extra Class')
+                        if latest_makeup_date is None or makeup_date > latest_makeup_date:
+                            latest_makeup_date = makeup_date
+                
+                # Set Tentative Semester Final Exam date - mark 4 weeks starting from the first exam week
+                if latest_makeup_date:
+                    # If there are makeup classes, final exam is 1 week after the latest makeup date
+                    final_exam_week = latest_makeup_date + timedelta(weeks=1)
+                else:
+                    # If no makeup classes, final exam is 1 week after semester end
+                    final_exam_week = semester_end + timedelta(weeks=1)
+                
+                # Calculate the end of the 4-week final exam period
+                final_exam_end_week = final_exam_week + timedelta(weeks=3)  # 4 weeks total (0, 1, 2, 3)
+                final_exam_end_saturday = get_friday_saturday_of_week(final_exam_end_week)[1]  # Get Saturday of the last week
+                
+                # Mark 4 weeks for final exam period (both Friday and Saturday for each week)
+                for week_offset in range(4):
+                    current_exam_week = final_exam_week + timedelta(weeks=week_offset)
+                    friday, saturday = get_friday_saturday_of_week(current_exam_week)
+                    events_calendar[friday] = ('final_exam', 'Tentative Semester Final Exam')
+                    events_calendar[saturday] = ('final_exam', 'Tentative Semester Final Exam')
+                
+        except Exception as e:
+            # If there's an error calculating events, continue with empty events
+            pass
 
-        # Table data
-        table_data = [["Events", "Dates"]] + events
-        col_widths = [0.6 * available_width, 0.4 * available_width]
-        table = Table(table_data, colWidths=col_widths)
-        style = TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 11),
+        # Create monthly calendar grids with error handling
+        months_data = []
+        cross_month_weeks = {}  # Track weeks that span across months
+        
+        try:
+            # Calculate the smart end date for calendar generation
+            # Use the end of the 4-week final exam period if it exists, otherwise use the regular extended_end
+            smart_calendar_end = calendar_end
+            
+            # Check if we have final exam events and find the actual end of the final exam period
+            final_exam_dates = [date for date, (event_type, _) in events_calendar.items() if event_type == 'final_exam']
+            if final_exam_dates:
+                # Use the latest final exam date as our smart cutoff
+                smart_calendar_end = max(final_exam_dates)
+            else:
+                # Fallback: extend calendar range to include all events (makeup dates, etc.)
+                for event_date, (event_type, _) in events_calendar.items():
+                    if event_date > smart_calendar_end:
+                        smart_calendar_end = event_date
+            
+            current_date = calendar_start.replace(day=1)  # Start from the 1st of the starting month
+            
+            # Safety check to prevent infinite loops
+            max_months = 24  # Maximum 2 years
+            month_count = 0
+            
+            while current_date <= smart_calendar_end and month_count < max_months:
+                month_name = current_date.strftime('%B').upper()
+                year = current_date.year
+                
+                # Get calendar for this month
+                cal = calendar.monthcalendar(year, current_date.month)
+                
+                # For the first month, create the overall header
+                if month_count == 0:
+                    # Create the main header rows - two-row structure
+                    header_row_1 = ['Month', 'Day & Date', '', 'Weeks', 'Events', 'Exams']
+                    header_row_2 = ['', 'F', 'S', '', '', '']
+                    months_data.append([header_row_1])
+                    months_data.append([header_row_2])
+                
+                # Calculate how many week rows this month will have
+                num_weeks = len(cal)
+                
+                # Track if we've completed all necessary events in this month
+                month_has_relevant_events = False
+                first_week_of_month_added = False
+                
+                # Add month rows - process weeks with cross-month awareness
+                for week_num, week in enumerate(cal):
+                    # Extract Friday and Saturday information
+                    friday_day = week[4] if len(week) > 4 and week[4] != 0 else None
+                    saturday_day = week[5] if len(week) > 5 and week[5] != 0 else None
+                    friday_date = None
+                    saturday_date = None
+                    
+                    # Check if this week contains any dates we need to show
+                    week_has_relevant_events = False
+                    if friday_day:
+                        friday_date = datetime(year, current_date.month, friday_day).date()
+                        if friday_date <= smart_calendar_end:
+                            week_has_relevant_events = True
+                    
+                    if saturday_day:
+                        saturday_date = datetime(year, current_date.month, saturday_day).date()
+                        if saturday_date <= smart_calendar_end:
+                            week_has_relevant_events = True
+                    
+                    # Skip this week if it has no relevant events
+                    if not week_has_relevant_events:
+                        continue
+                    
+                    month_has_relevant_events = True
+                    
+                    # Calculate week identifier for cross-month tracking
+                    week_id = None
+                    if friday_date and selected_semester.start_date:
+                        days_diff = (friday_date - selected_semester.start_date).days
+                        week_id = (days_diff // 7) + 1
+                    elif saturday_date and selected_semester.start_date:
+                        # If no Friday, calculate from Saturday (subtract 1 day to get Friday equivalent)
+                        adjusted_date = saturday_date - timedelta(days=1)
+                        days_diff = (adjusted_date - selected_semester.start_date).days
+                        week_id = (days_diff // 7) + 1
+                    
+                    # Determine if this is a cross-month week continuation
+                    is_cross_month_continuation = week_id and week_id in cross_month_weeks
+                    
+                    # Handle month column display
+                    if not first_week_of_month_added and not is_cross_month_continuation:
+                        # First week row added for this month - show month name and year
+                        first_week_of_month_added = True
+                        month_style = ParagraphStyle(
+                            'MonthStyle',
+                            fontName='Helvetica-Bold',
+                            fontSize=10,
+                            alignment=1,  # Center
+                            leading=12,
+                        )
+                        month_year_para = Paragraph(f"{month_name}<br/>{year}", month_style)
+                        week_data = [month_year_para]
+                    else:
+                        # Other week rows for this month - empty first column
+                        week_data = ['']
+                    
+                    # Add day numbers with event markers
+                    friday_str = ''
+                    saturday_str = ''
+                    
+                    if friday_day:
+                        friday_str = str(friday_day)
+                        if friday_date in events_calendar:
+                            event_type, description = events_calendar[friday_date]
+                            if event_type == 'semester_begin':
+                                friday_str += ' (SB)'
+                            elif event_type == 'semester_end':
+                                friday_str += ' (CE)'
+                            elif event_type == 'class_test':
+                                friday_str += ' (CT)'
+                            elif event_type == 'assignment':
+                                friday_str += ' (Assn.)'
+                            elif event_type == 'final_exam':
+                                friday_str += ' (FE)'
+                            elif event_type == 'holiday':
+                                friday_str += ' (H)'
+                            elif event_type == 'makeup_class':
+                                friday_str += ' (MC)'
+                    
+                    if saturday_day:
+                        saturday_str = str(saturday_day)
+                        if saturday_date in events_calendar:
+                            event_type, description = events_calendar[saturday_date]
+                            if event_type == 'semester_begin':
+                                saturday_str += ' (SB)'
+                            elif event_type == 'semester_end':
+                                saturday_str += ' (CE)'
+                            elif event_type == 'class_test':
+                                saturday_str += ' (CT)'
+                            elif event_type == 'assignment':
+                                saturday_str += ' (Assn.)'
+                            elif event_type == 'final_exam':
+                                saturday_str += ' (FE)'
+                            elif event_type == 'holiday':
+                                saturday_str += ' (H)'
+                            elif event_type == 'makeup_class':
+                                saturday_str += ' (MC)'
+                    
+                    week_data.extend([friday_str, saturday_str])
+                    
+                    # Calculate week number based on semester start date
+                    week_number = ''
+                    if week_id and week_id > 0:
+                        if week_id == 1:
+                            week_number = '1st Week'
+                        elif week_id == 2:
+                            week_number = '2nd Week'
+                        elif week_id == 3:
+                            week_number = '3rd Week'
+                        else:
+                            week_number = f'{week_id}th Week'
+                    
+                    # Collect remarks and exams for this week part
+                    remarks_set = set()
+                    exams_set = set()
+                    
+                    # Check events for Friday and Saturday
+                    for date_obj in [friday_date, saturday_date]:
+                        if date_obj and date_obj in events_calendar:
+                            event_type, description = events_calendar[date_obj]
+                            if event_type in ['class_test', 'final_exam']:
+                                exams_set.add(description)
+                            else:
+                                remarks_set.add(description)
+                    
+                    # Handle cross-month week logic
+                    if is_cross_month_continuation:
+                        # This is a continuation of a week from previous month
+                        prev_week_data = cross_month_weeks[week_id]
+                        
+                        # Merge events from both parts of the week
+                        remarks_set.update(prev_week_data['remarks_set'])
+                        exams_set.update(prev_week_data['exams_set'])
+                        
+                        # Mark the previous row for spanning
+                        prev_week_data['needs_spanning'] = True
+                        prev_week_data['span_end_row'] = len(months_data)  # Current row index
+                        
+                        # Use empty week number for continuation row (will be spanned)
+                        week_number = ''
+                    else:
+                        # Check if this week will continue into next month
+                        week_continues_next_month = False
+                        if friday_day and not saturday_day:
+                            # Friday exists but Saturday is missing - likely continues next month
+                            week_continues_next_month = True
+                        elif not friday_day and saturday_day:
+                            # Saturday exists but Friday is missing - this is a continuation from previous month
+                            # This should have been handled by is_cross_month_continuation, but just in case
+                            pass
+                        
+                        if week_continues_next_month and week_id:
+                            # Store this week data for merging with next month
+                            cross_month_weeks[week_id] = {
+                                'remarks_set': remarks_set.copy(),
+                                'exams_set': exams_set.copy(),
+                                'week_number': week_number,
+                                'start_row': len(months_data),  # Current row index
+                                'needs_spanning': False
+                            }
+                    
+                    # Convert sets to comma-separated strings
+                    remarks = ', '.join(sorted(remarks_set)) if remarks_set else ''
+                    exams = ', '.join(sorted(exams_set)) if exams_set else ''
+                    
+                    week_data.extend([week_number, remarks, exams])
+                    months_data.append([week_data])
+                
+                # If this month had no relevant events, we can stop here
+                if not month_has_relevant_events:
+                    break
+                
+                month_count += 1
+                
+                # Move to next month
+                try:
+                    if current_date.month == 12:
+                        current_date = current_date.replace(year=current_date.year + 1, month=1)
+                    else:
+                        current_date = current_date.replace(month=current_date.month + 1)
+                except Exception:
+                    # If there's an error moving to next month, break the loop
+                    break
+                    
+        except Exception as e:
+            # If there's any error in calendar generation, create a fallback
+            months_data = []
+
+        # Create the main calendar table - flatten the structure
+        all_calendar_data = []
+        for month_week_data in months_data:
+            all_calendar_data.extend(month_week_data)
+
+        # Use pre-calculated column widths for consistent alignment
+        col_widths = calendar_col_widths
+        
+        # Ensure we have data to create the table
+        if not all_calendar_data:
+            # If no calendar data, create a simple message
+            all_calendar_data = [['No calendar data available for the selected semester date range.']]
+            col_widths = [calendar_width]
+        
+        calendar_table = Table(all_calendar_data, colWidths=col_widths)
+        
+        # Style the calendar table with event colors
+        calendar_style = []
+        
+        # Only add styling if we have actual calendar data
+        if all_calendar_data:
+            # Style the main header rows (first two rows)
+            calendar_style.extend([
+                # First header row
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4472C4')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
+                # Second header row
+                ('BACKGROUND', (0, 1), (-1, 1), colors.HexColor('#4472C4')),
+                ('TEXTCOLOR', (0, 1), (-1, 1), colors.white),
+                ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 1), (-1, 1), 10),
+                ('ALIGN', (0, 1), (-1, 1), 'CENTER'),
+                ('VALIGN', (0, 1), (-1, 1), 'MIDDLE'),
+                # Merge cells for header structure
+                ('SPAN', (0, 0), (0, 1)),  # Month column spans both rows
+                ('SPAN', (1, 0), (2, 0)),  # Day spans across F and S in first row
+                ('SPAN', (3, 0), (3, 1)),  # Weeks column spans both rows
+                ('SPAN', (4, 0), (4, 1)),  # Remarks column spans both rows
+                ('SPAN', (5, 0), (5, 1)),  # Exams column spans both rows
+            ])
+            
+            # Process each row after the header (starting from row 2 now)
+            current_month_start_row = None
+            current_month_rows = 0
+            
+            for row_idx in range(2, len(all_calendar_data)):
+                row_data = all_calendar_data[row_idx]
+                
+                # Check if this is the start of a new month (first column has Paragraph object)
+                if len(row_data) > 0 and row_data[0] and hasattr(row_data[0], '__class__') and 'Paragraph' in str(type(row_data[0])):
+                    # This is a month header row with Paragraph
+                    current_month_start_row = row_idx
+                    current_month_rows = 1
+                    
+                    # Style month/year cell specially (Paragraph objects don't need font styling)
+                    calendar_style.extend([
+                        ('VALIGN', (0, row_idx), (0, row_idx), 'MIDDLE'),
+                        ('BACKGROUND', (0, row_idx), (0, row_idx), colors.HexColor('#E7E6E6')),
+                    ])
+                elif current_month_start_row is not None:
+                    # This is a continuation row for the current month
+                    current_month_rows += 1
+                
+                # Apply general row styling
+                calendar_style.extend([
+                    ('FONTNAME', (1, row_idx), (-1, row_idx), 'Helvetica'),
+                    ('FONTSIZE', (1, row_idx), (-1, row_idx), 10),
+                    ('ALIGN', (1, row_idx), (2, row_idx), 'CENTER'),  # Only F and S columns (1,2)
+                    ('VALIGN', (0, row_idx), (-1, row_idx), 'MIDDLE'),
+                    ('GRID', (0, row_idx), (-1, row_idx), 0.5, colors.black),
+                    ('ROWHEIGHT', (0, row_idx), (-1, row_idx), 16),  # Reduced row height for compactness
+                ])
+                
+                # Check for events in this week and apply row coloring
+                if len(row_data) >= 6:  # Ensure we have all columns including exams
+                    week_event_color = None
+                    has_exam_event = False
+                    
+                    # Check if this row has exam events by looking at the exams column (index 5)
+                    exams_column = row_data[5] if len(row_data) > 5 else ''
+                    if exams_column and exams_column.strip():
+                        has_exam_event = True
+                    
+                    # Extract month and year for this row
+                    current_year = datetime.now().year  # Default fallback
+                    current_month = 1  # Default fallback
+                    
+                    # Find the month/year from current or previous month header
+                    if current_month_start_row is not None:
+                        month_header_data = all_calendar_data[current_month_start_row]
+                        if len(month_header_data) > 0 and month_header_data[0]:
+                            # Handle Paragraph objects
+                            if hasattr(month_header_data[0], '__class__') and 'Paragraph' in str(type(month_header_data[0])):
+                                # Extract text from Paragraph object
+                                para_text = str(month_header_data[0])
+                                # Look for month and year in the paragraph text
+                                month_match = re.search(r'(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)', para_text)
+                                year_match = re.search(r'(\d{4})', para_text)
+                                if month_match and year_match:
+                                    month_name = month_match.group(1)
+                                    current_year = int(year_match.group(1))
+                                    month_names = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
+                                                 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER']
+                                    if month_name in month_names:
+                                        current_month = month_names.index(month_name) + 1
+                            elif '\n' in str(month_header_data[0]):
+                                # Handle plain text with newlines
+                                month_year_text = str(month_header_data[0])
+                                parts = month_year_text.split('\n')
+                                if len(parts) == 2:
+                                    try:
+                                        month_name = parts[0].strip()
+                                        current_year = int(parts[1].strip())
+                                        month_names = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
+                                                     'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER']
+                                        if month_name in month_names:
+                                            current_month = month_names.index(month_name) + 1
+                                    except (ValueError, IndexError):
+                                        pass
+                    
+                    # Check Friday and Saturday columns for any events (columns 1 and 2)
+                    non_holiday_event_color = None
+                    for day_col in range(1, 3):  # Friday and Saturday are in columns 1-2
+                        if day_col < len(row_data):
+                            day_text = row_data[day_col]
+                            if day_text and day_text.strip():
+                                try:
+                                    day_num = int(str(day_text).split()[0])  # Get day number before any markers
+                                    date_obj = datetime(current_year, current_month, day_num).date()
+                                    if date_obj in events_calendar:
+                                        event_type, _ = events_calendar[date_obj]
+                                        if event_type == 'holiday':
+                                            # For holidays, apply red color only to the specific date cell
+                                            calendar_style.append(
+                                                ('TEXTCOLOR', (day_col, row_idx), (day_col, row_idx), colors.HexColor('#FF0000'))
+                                            )
+                                        elif event_type in colors_dict and non_holiday_event_color is None:
+                                            # For non-holiday events, store color for row highlighting
+                                            non_holiday_event_color = colors_dict[event_type]
+                                except (ValueError, TypeError):
+                                    continue
+                    
+                    # Apply background color for non-holiday events
+                    if non_holiday_event_color:
+                        if has_exam_event:
+                            # For exam events: highlight entire row including Exams column (columns 1-5)
+                            calendar_style.append(
+                                ('BACKGROUND', (1, row_idx), (-1, row_idx), non_holiday_event_color)
+                            )
+                        else:
+                            # For non-exam events: highlight only up to Remarks column (columns 1-4)
+                            calendar_style.append(
+                                ('BACKGROUND', (1, row_idx), (4, row_idx), non_holiday_event_color)
+                            )
+                    
+                    # Store color for potential cross-month week matching
+                    if non_holiday_event_color:
+                        # Store the row's color information for cross-month spanning
+                        all_calendar_data[row_idx].append(non_holiday_event_color)
+                        all_calendar_data[row_idx].append(has_exam_event)
+            
+            # Track months for cell spanning in first column
+            month_ranges = []
+            current_month_start = None
+            
+            for row_idx in range(2, len(all_calendar_data)):  # Start from row 2 due to two-row header
+                row_data = all_calendar_data[row_idx]
+                
+                # Check for month start (Paragraph object or text with newlines)
+                is_month_start = False
+                if len(row_data) > 0 and row_data[0]:
+                    if hasattr(row_data[0], '__class__') and 'Paragraph' in str(type(row_data[0])):
+                        is_month_start = True
+                    elif '\n' in str(row_data[0]):
+                        is_month_start = True
+                
+                if is_month_start:
+                    # This is a month start - close previous month if exists
+                    if current_month_start is not None:
+                        month_ranges.append((current_month_start, row_idx - 1))
+                    current_month_start = row_idx
+            
+            # Close the last month
+            if current_month_start is not None:
+                month_ranges.append((current_month_start, len(all_calendar_data) - 1))
+            
+            # Apply cell spanning for months (only if month spans multiple rows)
+            for start_row, end_row in month_ranges:
+                if end_row > start_row:  # Only span if more than one row
+                    calendar_style.append(
+                        ('SPAN', (0, start_row), (0, end_row))
+                    )
+            
+            # Apply cell spanning for cross-month weeks
+            for week_id, week_data in cross_month_weeks.items():
+                if week_data.get('needs_spanning', False):
+                    start_row = week_data['start_row']
+                    end_row = week_data['span_end_row']
+                    
+                    # Span the week number column (column 3)
+                    calendar_style.append(
+                        ('SPAN', (3, start_row), (3, end_row))
+                    )
+                    
+                    # Span the remarks column (column 4) if both rows have the same remarks
+                    start_row_data = all_calendar_data[start_row]
+                    end_row_data = all_calendar_data[end_row]
+                    if (len(start_row_data) > 4 and len(end_row_data) > 4 and 
+                        start_row_data[4] == end_row_data[4]):
+                        calendar_style.append(
+                            ('SPAN', (4, start_row), (4, end_row))
+                        )
+                    
+                    # Span the exams column (column 5) if both rows have the same exams
+                    if (len(start_row_data) > 5 and len(end_row_data) > 5 and 
+                        start_row_data[5] == end_row_data[5]):
+                        calendar_style.append(
+                            ('SPAN', (5, start_row), (5, end_row))
+                        )
+                    
+                    # Apply same background color to both parts of cross-month weeks
+                    start_row_color = None
+                    start_row_has_exam = False
+                    end_row_color = None
+                    end_row_has_exam = False
+                    
+                    # Check if rows have color information stored
+                    if len(start_row_data) > 7:  # Color info at index 6, exam info at index 7
+                        start_row_color = start_row_data[6]
+                        start_row_has_exam = start_row_data[7]
+                    if len(end_row_data) > 7:
+                        end_row_color = end_row_data[6]
+                        end_row_has_exam = end_row_data[7]
+                    
+                    # Use color from either row that has an event (priority to exam events)
+                    final_color = None
+                    final_has_exam = False
+                    
+                    if start_row_has_exam and start_row_color:
+                        final_color = start_row_color
+                        final_has_exam = True
+                    elif end_row_has_exam and end_row_color:
+                        final_color = end_row_color
+                        final_has_exam = True
+                    elif start_row_color:
+                        final_color = start_row_color
+                        final_has_exam = start_row_has_exam
+                    elif end_row_color:
+                        final_color = end_row_color
+                        final_has_exam = end_row_has_exam
+                    
+                    # Apply the same background color to both rows
+                    if final_color:
+                        if final_has_exam:
+                            # For exam events: highlight entire row including Exams column (columns 1-5)
+                            calendar_style.append(
+                                ('BACKGROUND', (1, start_row), (-1, start_row), final_color)
+                            )
+                            calendar_style.append(
+                                ('BACKGROUND', (1, end_row), (-1, end_row), final_color)
+                            )
+                        else:
+                            # For non-exam events: highlight only up to Remarks column (columns 1-4)
+                            calendar_style.append(
+                                ('BACKGROUND', (1, start_row), (4, start_row), final_color)
+                            )
+                            calendar_style.append(
+                                ('BACKGROUND', (1, end_row), (4, end_row), final_color)
+                            )
+            
+            # Track and merge cells for 4-week final exam period in Exams column
+            final_exam_rows = []
+            current_year = datetime.now().year  # Default fallback
+            current_month = 1  # Default fallback
+            current_month_start_row = None
+            
+            for row_idx in range(2, len(all_calendar_data)):  # Start from row 2 due to two-row header
+                row_data = all_calendar_data[row_idx]
+                
+                # Update current month context
+                if len(row_data) > 0 and row_data[0]:
+                    if hasattr(row_data[0], '__class__') and 'Paragraph' in str(type(row_data[0])):
+                        current_month_start_row = row_idx
+                        # Extract month and year from Paragraph
+                        para_text = str(row_data[0])
+                        month_match = re.search(r'(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)', para_text)
+                        year_match = re.search(r'(\d{4})', para_text)
+                        if month_match and year_match:
+                            month_name = month_match.group(1)
+                            current_year = int(year_match.group(1))
+                            month_names = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
+                                         'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER']
+                            if month_name in month_names:
+                                current_month = month_names.index(month_name) + 1
+                
+                # Check if this row has final exam events
+                if len(row_data) >= 6:  # Ensure we have all columns including exams
+                    exams_column = row_data[5] if len(row_data) > 5 else ''
+                    if exams_column and 'Tentative Semester Final Exam' in str(exams_column):
+                        final_exam_rows.append(row_idx)
+            
+            # Apply cell spanning for final exam period in Exams column (column 5)
+            if len(final_exam_rows) > 1:
+                # Sort rows to ensure correct spanning
+                final_exam_rows.sort()
+                start_row = final_exam_rows[0]
+                end_row = final_exam_rows[-1]
+                calendar_style.append(
+                    ('SPAN', (5, start_row), (5, end_row))  # Span column 5 (Exams) across all final exam rows
+                )
+        
+        # Add borders
+        calendar_style.extend([
+            ('BOX', (0, 0), (-1, -1), 1, colors.black),
+            ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.black),
+        ])
+        
+        calendar_table.setStyle(TableStyle(calendar_style))
+        elements.append(calendar_table)
+        
+        # Add legend with reduced spacing
+        elements.append(Spacer(1, 4))  # Reduced from 20 to 8
+        
+        # Create single-row legend with all items
+        legend_data = [[
+            Table([['Semester Begin (SB)']], style=TableStyle([
+                ('BACKGROUND', (0,0), (-1,-1), colors_dict['semester_begin']),
+                ('FONTSIZE', (0,0), (-1,-1), 9),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('BOX', (0,0), (-1,-1), 1, colors.black),
+            ])),
+            Table([['Class Test (CT)']], style=TableStyle([
+                ('BACKGROUND', (0,0), (-1,-1), colors_dict['class_test']),
+                ('FONTSIZE', (0,0), (-1,-1), 9),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('BOX', (0,0), (-1,-1), 1, colors.black),
+            ])),
+            Table([['Assignment (Assn.)']], style=TableStyle([
+                ('BACKGROUND', (0,0), (-1,-1), colors_dict['assignment']),
+                ('FONTSIZE', (0,0), (-1,-1), 9),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('BOX', (0,0), (-1,-1), 1, colors.black),
+            ])),
+            Table([['Class Ends (CE)']], style=TableStyle([
+                ('BACKGROUND', (0,0), (-1,-1), colors_dict['semester_end']),
+                ('FONTSIZE', (0,0), (-1,-1), 9),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('BOX', (0,0), (-1,-1), 1, colors.black),
+            ])),
+            Table([['Final Exam (FE)']], style=TableStyle([
+                ('BACKGROUND', (0,0), (-1,-1), colors_dict['final_exam']),
+                ('FONTSIZE', (0,0), (-1,-1), 9),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('BOX', (0,0), (-1,-1), 1, colors.black),
+            ])),
+            Table([['Holiday (H)']], style=TableStyle([
+                ('BACKGROUND', (0,0), (-1,-1), colors_dict['holiday']),
+                ('FONTSIZE', (0,0), (-1,-1), 9),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('BOX', (0,0), (-1,-1), 1, colors.black),
+            ])),
+            Table([['Makeup Class (MC)']], style=TableStyle([
+                ('BACKGROUND', (0,0), (-1,-1), colors_dict['makeup_class']),
+                ('FONTSIZE', (0,0), (-1,-1), 9),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('BOX', (0,0), (-1,-1), 1, colors.black),
+            ])),
+        ]]
+        
+        # Calculate column widths to match calendar width - 7 columns now
+        legend_col_width = calendar_width / 7
+        legend_table = Table(legend_data, colWidths=[legend_col_width] * 7)
+        legend_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 6),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-            ('TOPPADDING', (0, 0), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-            ('BOX', (0, 0), (-1, -1), 1, colors.black),
-        ])
-        table.setStyle(style)
-        elements.append(table)
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),   # Uniform left padding
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),  # Uniform right padding
+            ('TOPPADDING', (0, 0), (-1, -1), 2),    # Uniform top padding
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2), # Uniform bottom padding
+        ]))
+        elements.append(legend_table)
 
-        # Add dean's signature block at the bottom (like export_to_pdf)
+        # --- SIGNATURE FIELD SECTION (same as routine) ---
+        elements.append(Spacer(1, 48)) # Gap before signature
+        
         signature_style = ParagraphStyle(
             'SignatureStyle',
             fontName='Helvetica',
             fontSize=10,
-            alignment=TA_RIGHT,
-            leading=6,
+            alignment=TA_RIGHT,  # Right alignment
+            leading=4, # Reduced line height for less gap
             spaceBefore=0,
             spaceAfter=0,
         )
@@ -2744,7 +3396,7 @@ def export_academic_calendar_pdf(request, semester_id):
             fontName='Helvetica',
             fontSize=10,
             alignment=0,  # Left alignment
-            leading=6,
+            leading=4,
             spaceBefore=0,
             spaceAfter=0,
         )
@@ -2764,7 +3416,7 @@ def export_academic_calendar_pdf(request, semester_id):
             [school_line_left],
             [bou_line_left]
         ]
-        signature_table_width = 250
+        signature_table_width = 250 # Adjust as needed
         signature_table = Table(signature_data, colWidths=[signature_table_width])
         signature_table.setStyle(TableStyle([
             ('ALIGN', (0,0), (-1,-1), 'RIGHT'),
@@ -2777,7 +3429,7 @@ def export_academic_calendar_pdf(request, semester_id):
             ('LINEABOVE', (0,0), (0,0), 1, colors.black),
             ('TOPPADDING', (0,0), (0,0), 4),
         ]))
-        wrapper_col_widths = [available_width - signature_table_width * 2, signature_table_width, signature_table_width]
+        wrapper_col_widths = [calendar_width - signature_table_width * 2, signature_table_width, signature_table_width]
         signature_wrapper_table = Table([[signature_table_left, '', signature_table]], colWidths=wrapper_col_widths)
         signature_wrapper_table.setStyle(TableStyle([
             ('ALIGN', (0,0), (0,0), 'LEFT'),
@@ -2788,9 +3440,9 @@ def export_academic_calendar_pdf(request, semester_id):
             ('TOPPADDING', (0,0), (-1,-1), 0),
             ('BOTTOMPADDING', (0,0), (-1,-1), 0),
         ]))
-        elements.append(Spacer(1, 48))
         elements.append(signature_wrapper_table)
 
+        # Build the PDF
         doc.build(elements)
         buffer.seek(0)
         response = HttpResponse(buffer.getvalue(), content_type='application/pdf')

@@ -615,6 +615,45 @@
         z-index: 10;
     }
 
+    /* Current week highlighting */
+    .current-week-column {
+        background-color: rgba(0, 123, 255, 0.2) !important;
+        border: 2px solid #007bff;
+        position: relative;
+    }
+
+    .current-week-column .date-header {
+        background: rgba(0, 123, 255, 0.3);
+        border-radius: 4px;
+        font-weight: bold;
+        color: #0056b3;
+    }
+
+    .current-week-cell {
+        background-color: rgba(0, 123, 255, 0.1) !important;
+        border-left: 2px solid #007bff;
+        border-right: 2px solid #007bff;
+    }
+
+    .current-week-column::before {
+        content: "Current";
+        position: absolute;
+        top: 50%;
+        left: -8px;
+        transform: translateY(-50%) rotate(-90deg);
+        transform-origin: center;
+        background: #007bff;
+        color: #fff;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-size: 9px;
+        font-weight: bold;
+        z-index: 10;
+        white-space: nowrap;
+        text-align: center;
+        line-height: 1;
+    }
+
 
     .day-name {
         font-size: 10px;
@@ -889,9 +928,9 @@
             </div>
             
             <!-- Top Scrollbar -->
-            <div class="top-scrollbar-container" id="top-scrollbar">
+            <!-- <div class="top-scrollbar-container" id="top-scrollbar">
                 <div class="top-scrollbar-content" id="top-scrollbar-content"></div>
-            </div>
+            </div> -->
             
             <!-- Attendance Table -->
             <div class="table-responsive" id="main-table-container">
@@ -902,7 +941,7 @@
                             <th class="student-id-column">Student ID</th>
                             <th class="student-name-column">Name</th>
                             {% for date in semester_dates %}
-                            <th class="date-column{% if date|date:'Y-m-d' == today|date:'Y-m-d' %} current-date-column{% endif %}{% if date in makeup_dates %} makeup-date-column{% endif %}" data-date="{{ date|date:'Y-m-d' }}">
+                            <th class="date-column{% if date|date:'Y-m-d' == today|date:'Y-m-d' %} current-date-column{% endif %}{% if date|date:'Y-m-d' == current_week_date|date:'Y-m-d' %} current-week-column{% endif %}{% if date in makeup_dates %} makeup-date-column{% endif %}" data-date="{{ date|date:'Y-m-d' }}">
                                 <div class="date-header">
                                     <div class="day-name">{{ date|date:"D" }}</div>
                                     <div class="date-number">{{ date|date:"d" }}</div>
@@ -923,7 +962,7 @@
                                 <div class="student-name">{{ student.name }}</div>
                             </td>
                             {% for date in semester_dates %}
-                            <td class="attendance-cell{% if date|date:'Y-m-d' == today|date:'Y-m-d' %} current-date-cell{% endif %}{% if date in makeup_dates %} makeup-date-cell{% endif %}" data-date="{{ date|date:'Y-m-d' }}" data-student="{{ student.id }}">
+                                <td class="attendance-cell{% if date|date:'Y-m-d' == today|date:'Y-m-d' %} current-date-cell{% endif %}{% if date|date:'Y-m-d' == current_week_date|date:'Y-m-d' %} current-week-cell{% endif %}{% if date in makeup_dates %} makeup-date-cell{% endif %}" data-date="{{ date|date:'Y-m-d' }}" data-student="{{ student.id }}">
                                 {% with attendance_status|default_if_none:""|dict_key:student.id|default_if_none:""|dict_key:date as status %}
                                 <div class="attendance-checkbox-container">
                                     <input type="checkbox" 

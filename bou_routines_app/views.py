@@ -3641,6 +3641,22 @@ def attendance_calendar(request):
                     attendance_data[record.student.id] = record.is_present
             
             from datetime import date
+            # Find the current week column (closest upcoming date to today)
+            current_week_date = None
+            today = date.today()
+            
+            # Find the closest upcoming date (including today if it's a class day)
+            for semester_date in semester_dates:
+                if semester_date >= today:
+                    current_week_date = semester_date
+                    break
+            
+            # If no upcoming date found, use the last date in the semester
+            if not current_week_date and semester_dates:
+                current_week_date = semester_dates[-1]
+            
+            print(f"DEBUG: Current week date selected: {current_week_date}")
+
             context.update({
                 'semester': semester,
                 'course': course,
@@ -3649,7 +3665,8 @@ def attendance_calendar(request):
                 'attendance_matrix': attendance_matrix,
                 'attendance_status': attendance_status,
                 'attendance_data': attendance_data,
-                'today': date.today(),
+                'today': today,
+                'current_week_date': current_week_date,
                 'holiday_dates': holiday_dates,
                 'makeup_dates': makeup_dates,
             })

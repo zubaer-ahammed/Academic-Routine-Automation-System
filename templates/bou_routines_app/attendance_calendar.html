@@ -170,38 +170,6 @@
         opacity: 1;
     }
 
-    /* Smooth scroll shadows */
-    .table-responsive::before,
-    .table-responsive::after {
-        content: '';
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        width: 10px;
-        z-index: 25;
-        pointer-events: none;
-        transition: opacity 0.3s ease;
-    }
-
-    .table-responsive::before {
-        left: 0;
-        background: linear-gradient(to right, rgba(0, 0, 0, 0.1), transparent);
-        opacity: 0;
-    }
-
-    .table-responsive::after {
-        right: 0;
-        background: linear-gradient(to left, rgba(0, 0, 0, 0.1), transparent);
-        opacity: 0;
-    }
-
-    .table-responsive.scroll-left::before {
-        opacity: 1;
-    }
-
-    .table-responsive.scroll-right::after {
-        opacity: 1;
-    }
 
     .attendance-table {
         width: max-content;

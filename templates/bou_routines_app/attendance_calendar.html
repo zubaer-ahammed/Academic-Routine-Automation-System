@@ -184,7 +184,7 @@
 
     .attendance-table th,
     .attendance-table td {
-        padding: 8px 12px;
+        padding: 4px;
         text-align: center;
         border: 1px solid #dee2e6;
         vertical-align: middle;
@@ -200,9 +200,9 @@
     }
 
     .student-id-column {
-        min-width: 170px !important;
-        max-width: 170px !important;
-        width: 170px !important;
+        min-width: 160px !important;
+        max-width: 160px !important;
+        width: 160px !important;
         text-align: left !important;
         position: -webkit-sticky !important;
         position: sticky !important;
@@ -222,7 +222,7 @@
         text-align: left !important;
         position: -webkit-sticky !important;
         position: sticky !important;
-        left: 170px !important;
+        left: 160px !important;
         background: #dc3545 !important;
         z-index: 19 !important;
         border-right: 2px solid #fff !important;
@@ -232,14 +232,14 @@
     }
 
     .date-column {
-        min-width: 100px;
-        max-width: 100px;
+        min-width: 70px;
+        max-width: 70px;
     }
 
     .summary-column {
-        min-width: 80px !important;
-        max-width: 80px !important;
-        width: 80px !important;
+        min-width: 70px !important;
+        max-width: 70px !important;
+        width: 70px !important;
         background: #dc3545 !important;
         color: white !important;
         font-weight: bold !important;
@@ -255,9 +255,9 @@
     }
 
     .summary-cell {
-        min-width: 80px !important;
-        max-width: 80px !important;
-        width: 80px !important;
+        min-width: 70px !important;
+        max-width: 70px !important;
+        width: 70px !important;
         background: #f8f9fa !important;
         text-align: center !important;
         position: -webkit-sticky !important;
@@ -278,9 +278,9 @@
         left: 0px !important;
         z-index: 15 !important;
         border-right: 2px solid #dee2e6 !important;
-        min-width: 170px !important;
-        max-width: 170px !important;
-        width: 170px !important;
+        min-width: 160px !important;
+        max-width: 160px !important;
+        width: 160px !important;
         box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15) !important;
         /* Force sticky positioning */
         transform: translateZ(0) !important;
@@ -291,12 +291,12 @@
         text-align: left !important;
         position: -webkit-sticky !important;
         position: sticky !important;
-        left: 170px !important;
+        left: 160px !important;
         z-index: 14 !important;
         border-right: 2px solid #dee2e6 !important;
-        min-width: 180px !important;
-        max-width: 180px !important;
-        width: 180px !important;
+        min-width: 190px !important;
+        max-width: 190px !important;
+        width: 190px !important;
         box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15) !important;
         /* Force sticky positioning */
         transform: translateZ(0) !important;
@@ -335,7 +335,7 @@
 
     .attendance-table thead th:nth-child(2),
     .attendance-table tbody td:nth-child(2) {
-        left: 170px !important;
+        left: 160px !important;
         z-index: 24 !important;
         position: -webkit-sticky !important;
         position: sticky !important;
@@ -388,6 +388,11 @@
     .attendance-cell.selected {
         background-color: #007bff !important;
         color: white;
+    }
+
+    .attendance-table .student-id-column,
+    .attendance-table .student-name-column {
+        padding: 4px 8px;
     }
 
     .attendance-checkbox-container {
@@ -461,7 +466,7 @@
                     content: "Makeup";
                     position: absolute;
                     top: 50%;
-                    left: -2px;
+                    left: -17px;
                     transform: translateY(-50%) rotate(-90deg);
                     transform-origin: center;
                     background: #28a745;
@@ -562,7 +567,7 @@
     }
 
     .attendance-summary {
-        font-size: 12px;
+        font-size: 15px;
         font-weight: bold;
     }
 
@@ -639,7 +644,7 @@
         content: "Current";
         position: absolute;
         top: 50%;
-        left: -8px;
+        left: -17px;
         transform: translateY(-50%) rotate(-90deg);
         transform-origin: center;
         background: #007bff;
@@ -789,6 +794,10 @@
 
     td.student-id-cell, td.student-name-cell {
         background: #fff;
+    }
+
+    .attendance-table td {
+        padding: 4px;
     }
 
     @media (max-width: 768px) {
@@ -1558,13 +1567,13 @@ document.addEventListener('DOMContentLoaded', function() {
         studentIdColumns.forEach(element => {
             element.style.left = '0px';
             element.style.zIndex = '999';
-            element.style.width = '170px';
-            element.style.minWidth = '170px';
-            element.style.maxWidth = '170px';
+            element.style.width = '160px';
+            element.style.minWidth = '160px';
+            element.style.maxWidth = '160px';
         });
         
         studentNameColumns.forEach(element => {
-            element.style.left = '170px';
+            element.style.left = '160px';
             element.style.zIndex = '999';
             element.style.width = '180px';
             element.style.minWidth = '180px';

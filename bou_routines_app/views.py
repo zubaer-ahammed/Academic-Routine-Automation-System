@@ -3529,8 +3529,18 @@ def attendance_calendar(request):
                 }
             ).order_by('-first_two_digits', 'last_three_digits')
             
-            # Generate all Friday and Saturday dates for the semester, excluding holidays and including makeup dates
+            # Get actual course schedule dates from NewRoutine table for this specific course
             from datetime import datetime, timedelta
+            from bou_routines_app.models import NewRoutine
+            
+            # Get the course's scheduled days from NewRoutine table
+            course_routines = NewRoutine.objects.filter(
+                course=course,
+                semester=semester
+            ).values_list('day', flat=True).distinct()
+            
+            print(f"DEBUG: Course {course.name} is scheduled on days: {list(course_routines)}")
+            
             semester_dates = []
             current_date = semester.start_date
             end_date = semester.end_date
@@ -3557,10 +3567,11 @@ def attendance_calendar(request):
                         except ValueError:
                             pass  # Skip invalid date formats
             
-            # Generate regular Friday and Saturday dates (excluding holidays)
+            # Generate dates based on the course's actual scheduled days
             while current_date <= end_date:
-                # Check if it's Friday (weekday() == 4) or Saturday (weekday() == 5)
-                if current_date.weekday() in [4, 5]:  # Friday=4, Saturday=5
+                # Check if it's one of the course's scheduled days
+                day_name = current_date.strftime('%A')  # Get day name (Monday, Tuesday, etc.)
+                if day_name in course_routines:
                     # Only add if not a holiday
                     if current_date not in holiday_dates:
                         semester_dates.append(current_date)
@@ -3574,6 +3585,10 @@ def attendance_calendar(request):
             
             # Sort all dates chronologically
             semester_dates.sort()
+            
+            print(f"DEBUG: Generated {len(semester_dates)} dates for course {course.name}")
+            print(f"DEBUG: First 5 dates: {semester_dates[:5]}")
+            print(f"DEBUG: Last 5 dates: {semester_dates[-5:]}")
             
             # Get all attendance data for this course and semester
             attendance_records = Attendance.objects.filter(

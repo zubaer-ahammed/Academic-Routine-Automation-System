@@ -62,6 +62,9 @@ a:hover {
 .academic-calender a {
     display: block;
 }
+.container-box-bou.attendance-container {
+    max-width: 90%;
+}
 
 @media screen and (max-width: 480px) {
     .container {

@@ -1,0 +1,1592 @@
+{% extends 'bou_routines_app/base.html' %}
+{% load static %}
+{% load attendance_tags %}
+
+{% block title %}Attendance Management - BOUSST CSE Routine Generator{% endblock %}
+
+{% block extra_head %}
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .container-box-bou {
+        background: white;
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-top: 20px;
+        margin-bottom: 20px;
+    }
+
+    .attendance-table-section {
+        margin-top: 20px;
+    }
+
+    .table-header {
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #e9ecef;
+    }
+
+    .table-header h4 {
+        color: #dc3545;
+        margin-bottom: 10px;
+    }
+
+    .table-responsive {
+        overflow-x: auto;
+        overflow-y: visible;
+        margin-bottom: 20px;
+        position: relative;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        -webkit-overflow-scrolling: touch;
+        /* Ensure sticky positioning works properly */
+        contain: layout style paint;
+        /* Force hardware acceleration for better sticky positioning */
+        transform: translateZ(0);
+        will-change: scroll-position;
+    }
+    
+    /* Ensure sticky positioning works */
+    .table-responsive::-webkit-scrollbar {
+        height: 8px;
+    }
+    
+    .table-responsive::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+    
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 4px;
+    }
+    
+    .table-responsive::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+    }
+
+    /* Top scrollbar container */
+    .top-scrollbar-container {
+        overflow-x: auto;
+        overflow-y: hidden;
+        margin-bottom: 0px;
+        border: 1px solid #dee2e6;
+        border-bottom: none;
+        border-radius: 8px 8px 0 0;
+        background: linear-gradient(135deg, #e3f2fd 0%, #f8f9fa 100%);
+        position: relative;
+        min-height: 30px;
+        display: flex;
+        align-items: center;
+        scroll-behavior: smooth;
+    }
+
+    .top-scrollbar-container::before {
+        content: "📜 Scroll horizontally to view all dates";
+        position: absolute;
+        left: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 12px;
+        color: #6c757d;
+        font-weight: 500;
+        pointer-events: none;
+        z-index: 1;
+        background: rgba(255, 255, 255, 0.9);
+        padding: 2px 6px;
+        border-radius: 4px;
+    }
+
+    .top-scrollbar-content {
+        height: 20px;
+        background: transparent;
+        /* This will be set dynamically to match table width */
+    }
+
+    /* Hide the instruction when scrolling */
+    .top-scrollbar-container.scrolling::before {
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+
+    .top-scrollbar-container::-webkit-scrollbar {
+        height: 8px;
+    }
+
+    .top-scrollbar-container::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+
+    .top-scrollbar-container::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 4px;
+    }
+
+    .top-scrollbar-container::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+    }
+
+    /* Adjust main table container */
+    .table-responsive {
+        border-radius: 0 0 8px 8px;
+        border-top: none;
+        scroll-behavior: smooth;
+        position: relative;
+    }
+
+    /* Scroll indicators */
+    .scroll-indicator {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        background: rgba(0, 123, 255, 0.8);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: bold;
+        z-index: 30;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        pointer-events: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .scroll-indicator.left {
+        left: 10px;
+    }
+
+    .scroll-indicator.right {
+        right: 10px;
+    }
+
+    .scroll-indicator.show {
+        opacity: 1;
+    }
+
+    /* Smooth scroll shadows */
+    .table-responsive::before,
+    .table-responsive::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 10px;
+        z-index: 25;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+    }
+
+    .table-responsive::before {
+        left: 0;
+        background: linear-gradient(to right, rgba(0, 0, 0, 0.1), transparent);
+        opacity: 0;
+    }
+
+    .table-responsive::after {
+        right: 0;
+        background: linear-gradient(to left, rgba(0, 0, 0, 0.1), transparent);
+        opacity: 0;
+    }
+
+    .table-responsive.scroll-left::before {
+        opacity: 1;
+    }
+
+    .table-responsive.scroll-right::after {
+        opacity: 1;
+    }
+
+    .attendance-table {
+        width: max-content;
+        min-width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        background: white;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        border-radius: 8px;
+        position: relative;
+    }
+
+    .attendance-table th,
+    .attendance-table td {
+        padding: 8px 12px;
+        text-align: center;
+        border: 1px solid #dee2e6;
+        vertical-align: middle;
+    }
+
+    .attendance-table th {
+        background: #dc3545;
+        color: white;
+        font-weight: bold;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+
+    .student-id-column {
+        min-width: 170px !important;
+        max-width: 170px !important;
+        width: 170px !important;
+        text-align: left !important;
+        position: -webkit-sticky !important;
+        position: sticky !important;
+        left: 0px !important;
+        background: #dc3545 !important;
+        z-index: 20 !important;
+        border-right: 2px solid #fff !important;
+        box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15) !important;
+        /* Force sticky positioning */
+        transform: translateZ(0) !important;
+    }
+    
+    .student-name-column {
+        min-width: 180px !important;
+        max-width: 180px !important;
+        width: 180px !important;
+        text-align: left !important;
+        position: -webkit-sticky !important;
+        position: sticky !important;
+        left: 170px !important;
+        background: #dc3545 !important;
+        z-index: 19 !important;
+        border-right: 2px solid #fff !important;
+        box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15) !important;
+        /* Force sticky positioning */
+        transform: translateZ(0) !important;
+    }
+
+    .date-column {
+        min-width: 100px;
+        max-width: 100px;
+    }
+
+    .summary-column {
+        min-width: 80px !important;
+        max-width: 80px !important;
+        width: 80px !important;
+        background: #dc3545 !important;
+        color: white !important;
+        font-weight: bold !important;
+        text-align: center !important;
+        position: -webkit-sticky !important;
+        position: sticky !important;
+        right: 0px !important;
+        z-index: 18 !important;
+        border-left: 2px solid #fff !important;
+        box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15) !important;
+        /* Force sticky positioning */
+        transform: translateZ(0) !important;
+    }
+
+    .summary-cell {
+        min-width: 80px !important;
+        max-width: 80px !important;
+        width: 80px !important;
+        background: #f8f9fa !important;
+        text-align: center !important;
+        position: -webkit-sticky !important;
+        position: sticky !important;
+        right: 0px !important;
+        z-index: 13 !important;
+        border-left: 2px solid #dee2e6 !important;
+        box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15) !important;
+        /* Force sticky positioning */
+        transform: translateZ(0) !important;
+    }
+
+    .student-id-cell {
+        background: #f8f9fa !important;
+        text-align: left !important;
+        position: -webkit-sticky !important;
+        position: sticky !important;
+        left: 0px !important;
+        z-index: 15 !important;
+        border-right: 2px solid #dee2e6 !important;
+        min-width: 170px !important;
+        max-width: 170px !important;
+        width: 170px !important;
+        box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15) !important;
+        /* Force sticky positioning */
+        transform: translateZ(0) !important;
+    }
+    
+    .student-name-cell {
+        background: #f8f9fa !important;
+        text-align: left !important;
+        position: -webkit-sticky !important;
+        position: sticky !important;
+        left: 170px !important;
+        z-index: 14 !important;
+        border-right: 2px solid #dee2e6 !important;
+        min-width: 180px !important;
+        max-width: 180px !important;
+        width: 180px !important;
+        box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15) !important;
+        /* Force sticky positioning */
+        transform: translateZ(0) !important;
+    }
+
+    .student-details {
+        text-align: left;
+        padding: 4px;
+        line-height: 1.4;
+        width: 100%;
+        max-width: 185px;
+    }
+
+    /* Additional CSS to ensure sticky positioning works correctly */
+    .attendance-table thead th:first-child,
+    .attendance-table thead th:nth-child(2) {
+        position: sticky !important;
+        background-color: #dc3545 !important;
+    }
+
+    .attendance-table tbody td:first-child,
+    .attendance-table tbody td:nth-child(2) {
+        position: sticky !important;
+        background-color: #f8f9fa !important;
+    }
+
+    /* Ensure sticky elements stay on top during scroll */
+    .attendance-table thead th:first-child,
+    .attendance-table tbody td:first-child {
+        left: 0px !important;
+        z-index: 25 !important;
+        position: -webkit-sticky !important;
+        position: sticky !important;
+        transform: translateZ(0) !important;
+    }
+
+    .attendance-table thead th:nth-child(2),
+    .attendance-table tbody td:nth-child(2) {
+        left: 170px !important;
+        z-index: 24 !important;
+        position: -webkit-sticky !important;
+        position: sticky !important;
+        transform: translateZ(0) !important;
+    }
+
+    .student-id {
+        font-weight: bold;
+        color: #dc3545;
+        font-size: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: left;
+        height: 100%;
+        white-space: normal;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 160px;
+        margin: 0;
+        padding: 4px;
+    }
+
+    .student-name {
+        font-weight: bold;
+        font-size: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: left;
+        height: 100%;
+        white-space: normal;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 170px;
+        margin: 0;
+        padding: 4px;
+    }
+
+
+    .attendance-cell {
+        cursor: pointer;
+        transition: background-color 0.2s;
+        position: relative;
+        padding: 4px !important;
+    }
+
+    .attendance-cell:hover {
+        background-color: #e9ecef;
+    }
+
+    .attendance-cell.selected {
+        background-color: #007bff !important;
+        color: white;
+    }
+
+    .attendance-checkbox-container {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        height: 100% !important;
+        min-height: 60px !important;
+        padding: 6px !important;
+        cursor: pointer !important;
+        transition: background-color 0.2s ease;
+        border-radius: 8px;
+        user-select: none;
+    }
+
+    .attendance-checkbox-container:hover {
+        background-color: rgba(0, 123, 255, 0.1);
+    }
+
+    .attendance-checkbox-container:active {
+        background-color: rgba(0, 123, 255, 0.2);
+        transform: scale(0.98);
+    }
+
+                .attendance-checkbox-container:focus {
+                    outline: 2px solid #007bff;
+                    outline-offset: 2px;
+                    background-color: rgba(0, 123, 255, 0.05);
+                }
+
+                /* Header drag scroll styling */
+                .table-header {
+                    cursor: grab;
+                    user-select: none;
+                }
+
+                .table-header.dragging {
+                    cursor: grabbing;
+                }
+
+                .date-column {
+                    cursor: grab;
+                    user-select: none;
+                }
+
+                .date-column.dragging {
+                    cursor: grabbing;
+                }
+
+                /* Makeup class date styling */
+                .makeup-date-column {
+                    background-color: rgba(40, 167, 69, 0.2) !important;
+                    border: 2px solid #28a745;
+                    position: relative;
+                }
+
+                .makeup-date-column .date-header {
+                    background: rgba(40, 167, 69, 0.3);
+                    border-radius: 4px;
+                    font-weight: bold;
+                    color: #155724;
+                }
+
+                .makeup-date-cell {
+                    background-color: rgba(40, 167, 69, 0.1) !important;
+                    border-left: 2px solid #28a745;
+                    border-right: 2px solid #28a745;
+                }
+
+                .makeup-date-column::before {
+                    content: "Makeup";
+                    position: absolute;
+                    top: 50%;
+                    left: -2px;
+                    transform: translateY(-50%) rotate(-90deg);
+                    transform-origin: center;
+                    background: #28a745;
+                    color: #fff;
+                    padding: 3px 6px;
+                    border-radius: 6px;
+                    font-size: 9px;
+                    font-weight: bold;
+                    z-index: 10;
+                    white-space: nowrap;
+                    text-align: center;
+                    line-height: 1;
+                    opacity: 0.9;
+                }
+
+    /* Hide the default checkbox completely */
+    .attendance-checkbox {
+        position: absolute !important;
+        opacity: 0 !important;
+        width: 0 !important;
+        height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        background: none !important;
+    }
+
+    /* Create custom checkbox appearance using label */
+    .checkbox-label {
+        display: inline-block !important;
+        width: 40px !important;
+        height: 40px !important;
+        border: 3px solid #dee2e6 !important;
+        border-radius: 12px !important;
+        background-color: white !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
+        cursor: pointer !important;
+        position: relative !important;
+    }
+
+    .checkbox-label:hover {
+        border-color: #28a745 !important;
+        box-shadow: 0 6px 16px rgba(40, 167, 69, 0.4) !important;
+        transform: translateY(-2px) !important;
+    }
+
+    .attendance-checkbox:checked + .checkbox-label {
+        background-color: #28a745 !important;
+        border-color: #28a745 !important;
+        box-shadow: 0 8px 20px rgba(40, 167, 69, 0.5) !important;
+        transform: scale(1.1) !important;
+    }
+
+    .attendance-checkbox:checked:hover + .checkbox-label {
+        background-color: #218838 !important;
+        border-color: #218838 !important;
+        box-shadow: 0 10px 24px rgba(40, 167, 69, 0.6) !important;
+        transform: scale(1.15) !important;
+    }
+
+    .attendance-checkbox:focus + .checkbox-label {
+        outline: none !important;
+        box-shadow: 0 0 0 4px rgba(40, 167, 69, 0.3) !important;
+    }
+
+    .attendance-checkbox:disabled + .checkbox-label {
+        opacity: 0.5 !important;
+        cursor: not-allowed !important;
+        transform: none !important;
+    }
+
+    .attendance-checkbox:disabled:hover + .checkbox-label {
+        border-color: #dee2e6 !important;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
+        transform: none !important;
+    }
+
+    /* Custom checkmark */
+    .checkbox-label::after {
+        content: '✓' !important;
+        position: absolute !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) scale(0) !important;
+        width: auto !important;
+        height: auto !important;
+        color: white !important;
+        font-size: 20px !important;
+        font-weight: bold !important;
+        line-height: 1 !important;
+        transform-origin: center !important;
+        transition: transform 0.2s ease !important;
+    }
+
+    .attendance-checkbox:checked + .checkbox-label::after {
+        transform: translate(-50%, -50%) scale(1) !important;
+    }
+
+    .attendance-summary {
+        font-size: 12px;
+        font-weight: bold;
+    }
+
+    .present-count {
+        color: #28a745;
+    }
+
+    .total-count {
+        color: #6c757d;
+    }
+
+    .date-header {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        position: relative;
+    }
+
+    /* Current date highlighting */
+    .current-date-column {
+        background-color: rgba(255, 193, 7, 0.2) !important;
+        border: 2px solid #ffc107;
+        position: relative;
+    }
+
+    .current-date-column .date-header {
+        background: rgba(255, 193, 7, 0.3);
+        border-radius: 4px;
+        font-weight: bold;
+    }
+
+    .current-date-cell {
+        background-color: rgba(255, 193, 7, 0.1) !important;
+        border-left: 2px solid #ffc107;
+        border-right: 2px solid #ffc107;
+    }
+
+    .current-date-column::before {
+        content: "Today";
+        position: absolute;
+        top: -10px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #ffc107;
+        color: #000;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 10px;
+        font-weight: bold;
+        z-index: 10;
+    }
+
+
+    .day-name {
+        font-size: 10px;
+        font-weight: bold;
+        margin-bottom: 2px;
+    }
+
+    .date-number {
+        font-size: 14px;
+        font-weight: bold;
+    }
+
+    .month-name {
+        font-size: 9px;
+        color: rgba(255, 255, 255, 0.8);
+        margin-top: 2px;
+    }
+
+    .quick-actions {
+        margin-top: 20px;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        text-align: center;
+    }
+
+    .quick-actions .btn {
+        margin: 0 5px;
+    }
+
+    .alert {
+        padding: 10px 15px;
+        margin-bottom: 15px;
+        border: 1px solid transparent;
+        border-radius: 4px;
+    }
+
+    .alert-info {
+        color: #0c5460;
+        background-color: #d1ecf1;
+        border-color: #bee5eb;
+    }
+
+    .btn {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        text-align: center;
+        font-size: 14px;
+        transition: background-color 0.2s;
+        margin: 2px;
+    }
+
+    .btn-success {
+        background: #28a745;
+        color: white;
+    }
+
+    .btn-success:hover {
+        background: #218838;
+    }
+
+    .btn-warning {
+        background: #ffc107;
+        color: #212529;
+    }
+
+    .btn-warning:hover {
+        background: #e0a800;
+    }
+
+    .btn-info {
+        background: #17a2b8;
+        color: white;
+    }
+
+    .btn-info:hover {
+        background: #138496;
+    }
+
+    .btn-primary {
+        background: #007bff;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #0056b3;
+    }
+
+    .form-group {
+        margin-bottom: 15px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+        color: #333;
+    }
+
+    select {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+
+    .row {
+        display: flex;
+        flex-wrap: wrap;
+        margin: 0 -15px;
+    }
+
+    .col-md-4 {
+        flex: 0 0 33.333333%;
+        max-width: 33.333333%;
+        padding: 0 15px;
+    }
+
+    .col-md-12 {
+        flex: 0 0 100%;
+        max-width: 100%;
+        padding: 0 15px;
+    }
+
+    .container.container-box-bou.attendance-container {
+        max-width: 90%;
+    }
+
+    td.student-id-cell, td.student-name-cell {
+        background: #fff;
+    }
+
+    @media (max-width: 768px) {
+        .col-md-4 {
+            flex: 0 0 100%;
+            max-width: 100%;
+        }
+        
+        .attendance-table {
+            font-size: 12px;
+        }
+        
+        .attendance-table th,
+        .attendance-table td {
+            padding: 4px 6px;
+        }
+        
+        .student-id-column {
+            min-width: 100px;
+            max-width: 100px;
+        }
+        
+        .student-name-column {
+            min-width: 120px;
+            max-width: 120px;
+            left: 100px;
+        }
+        
+        .student-id-cell {
+            min-width: 100px;
+            max-width: 100px;
+        }
+        
+        .student-name-cell {
+            min-width: 120px;
+            max-width: 120px;
+            left: 100px;
+        }
+        
+        .date-column {
+            min-width: 70px;
+            max-width: 70px;
+        }
+        
+        .attendance-checkbox {
+            width: 28px;
+            height: 28px;
+            border: 2px solid #dee2e6;
+        }
+        
+        .attendance-checkbox-container {
+            min-height: 60px;
+            padding: 6px;
+        }
+        
+        .attendance-checkbox:checked::after {
+            font-size: 16px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container container-box-bou attendance-container">
+    <div class="page-header">
+        <h2><i class="fas fa-calendar-check"></i> Attendance Management</h2>
+    </div>
+
+    <!-- Semester and Course Selection -->
+    <div class="selection-form">
+        <form method="get" action="{% url 'attendance-calendar' %}">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="semester">Select Semester:</label>
+                        <select name="semester" id="semester" onchange="loadCoursesForSemester(this.value)">
+                            <option value="">-- Select Semester --</option>
+                            {% for sem in semesters %}
+                                <option value="{{ sem.id }}" {% if selected_semester_id == sem.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ sem.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="course">Select Course:</label>
+                        <select name="course" id="course" onchange="loadStudentsForCourse()">
+                            <option value="">-- Select Course --</option>
+                            {% for course in courses %}
+                                <option value="{{ course.id }}" {% if selected_course_id == course.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ course.code }} - {{ course.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label>&nbsp;</label>
+                        <div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search"></i> Load Students
+                            </button>
+                            {% if selected_semester_id and selected_course_id %}
+                                <a href="{% url 'attendance-report' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}" class="btn btn-info">
+                                    <i class="fas fa-chart-bar"></i> View Report
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    {% if not selected_semester_id or not selected_course_id %}
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i>
+            Please select a semester and course to view students and mark attendance.
+        </div>
+    {% endif %}
+
+    {% if semester and course and students %}
+        <!-- Comprehensive Attendance Table -->
+        <div class="attendance-table-section">
+            <div class="table-header">
+                <h4>Attendance Management - {{ semester.name }}</h4>
+                <p><strong>Course:</strong> {{ course.code }} - {{ course.name }}</p>
+                {% if is_admin and not teacher %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> 
+                        <strong>Admin Access:</strong> You are viewing all courses as an administrator.
+                    </div>
+                {% endif %}
+            </div>
+            
+            <!-- Top Scrollbar -->
+            <div class="top-scrollbar-container" id="top-scrollbar">
+                <div class="top-scrollbar-content" id="top-scrollbar-content"></div>
+            </div>
+            
+            <!-- Attendance Table -->
+            <div class="table-responsive" id="main-table-container">
+                
+                <table class="attendance-table" id="attendance-table" style="position: relative;">
+                    <thead>
+                        <tr>
+                            <th class="student-id-column">Student ID</th>
+                            <th class="student-name-column">Name</th>
+                            {% for date in semester_dates %}
+                            <th class="date-column{% if date|date:'Y-m-d' == today|date:'Y-m-d' %} current-date-column{% endif %}{% if date in makeup_dates %} makeup-date-column{% endif %}" data-date="{{ date|date:'Y-m-d' }}">
+                                <div class="date-header">
+                                    <div class="day-name">{{ date|date:"D" }}</div>
+                                    <div class="date-number">{{ date|date:"d" }}</div>
+                                    <div class="month-name">{{ date|date:"M" }}</div>
+                                </div>
+                            </th>
+                            {% endfor %}
+                            <th class="summary-column">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for student in students %}
+                        <tr class="student-row" data-student-id="{{ student.id }}">
+                            <td class="student-id-cell">
+                                <div class="student-id">{{ student.id }}</div>
+                            </td>
+                            <td class="student-name-cell">
+                                <div class="student-name">{{ student.name }}</div>
+                            </td>
+                            {% for date in semester_dates %}
+                            <td class="attendance-cell{% if date|date:'Y-m-d' == today|date:'Y-m-d' %} current-date-cell{% endif %}{% if date in makeup_dates %} makeup-date-cell{% endif %}" data-date="{{ date|date:'Y-m-d' }}" data-student="{{ student.id }}">
+                                {% with attendance_status|default_if_none:""|dict_key:student.id|default_if_none:""|dict_key:date as status %}
+                                <div class="attendance-checkbox-container">
+                                    <input type="checkbox" 
+                                           class="attendance-checkbox" 
+                                           id="attendance_{{ student.id }}_{{ date|date:'Y-m-d' }}"
+                                           data-student="{{ student.id }}" 
+                                           data-date="{{ date|date:'Y-m-d' }}"
+                                           data-semester="{{ semester.id }}"
+                                           data-course="{{ course.id }}"
+                                           {% if status == True %}checked{% endif %}
+                                           title="Click to mark present/absent">
+                                    <label for="attendance_{{ student.id }}_{{ date|date:'Y-m-d' }}" class="checkbox-label"></label>
+                                </div>
+                                {% endwith %}
+                            </td>
+                            {% endfor %}
+                            <td class="summary-cell">
+                                <div class="attendance-summary">
+                                    <span class="present-count">0</span>/<span class="total-count">{{ semester_dates|length }}</span>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Quick Actions -->
+            <div class="quick-actions">
+                <button type="button" class="btn btn-success" id="mark-all-present-date">
+                    <i class="fas fa-check"></i> Mark All Present for Selected Date
+                </button>
+                <button type="button" class="btn btn-warning" id="mark-all-absent-date">
+                    <i class="fas fa-times"></i> Mark All Absent for Selected Date
+                </button>
+                <button type="button" class="btn btn-info" id="clear-date">
+                    <i class="fas fa-eraser"></i> Clear Selected Date
+                </button>
+            </div>
+            
+            <!-- Hidden Form for AJAX Submission -->
+            <form method="post" action="{% url 'mark-attendance' %}" id="attendance-form" style="display: none;">
+                {% csrf_token %}
+                <input type="hidden" name="semester_id" value="{{ semester.id }}">
+                <input type="hidden" name="course_id" value="{{ course.id }}">
+                <input type="hidden" name="attendance_date" id="form-attendance-date">
+                <div id="attendance-inputs"></div>
+            </form>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+// Function to load courses for a selected semester
+function loadCoursesForSemester(semesterId) {
+    const courseSelect = document.getElementById('course');
+    
+    // Clear existing options except the first one
+    courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
+    
+    if (!semesterId) {
+        return;
+    }
+    
+    // Show loading state
+    courseSelect.innerHTML = '<option value="">Loading courses...</option>';
+    
+    // Make AJAX request to get courses for the semester
+    fetch(`{% url 'get-courses-for-semester' %}?semester_id=${semesterId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                courseSelect.innerHTML = '<option value="">Error loading courses</option>';
+                return;
+            }
+            
+            // Clear and populate course options
+            courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
+            data.courses.forEach(course => {
+                const option = document.createElement('option');
+                option.value = course.id;
+                option.textContent = course.display_name;
+                courseSelect.appendChild(option);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading courses:', error);
+            courseSelect.innerHTML = '<option value="">Error loading courses</option>';
+        });
+}
+
+// Function to load students when course is selected
+function loadStudentsForCourse() {
+    const semesterSelect = document.getElementById('semester');
+    const courseSelect = document.getElementById('course');
+    
+    const semesterId = semesterSelect.value;
+    const courseId = courseSelect.value;
+    
+    if (semesterId && courseId) {
+        // Redirect to attendance calendar with selected semester and course
+        window.location.href = `{% url 'attendance-calendar' %}?semester=${semesterId}&course=${courseId}`;
+    }
+}
+
+function setupHeaderDragScroll() {
+    // Set up drag-to-scroll functionality on the table header
+    const mainContainer = document.getElementById('main-table-container');
+    const topScrollbar = document.getElementById('top-scrollbar');
+    const tableHeader = document.querySelector('thead');
+    const dateColumns = document.querySelectorAll('.date-column');
+    
+    if (!mainContainer || !tableHeader) {
+        console.warn('Table elements not found for header drag scroll');
+        return;
+    }
+
+    let isDragging = false;
+    let startX = 0;
+    let scrollLeft = 0;
+    let startScrollLeft = 0;
+
+    // Function to start dragging
+    function startDrag(e) {
+        isDragging = true;
+        tableHeader.classList.add('dragging');
+        dateColumns.forEach(col => col.classList.add('dragging'));
+        
+        // Get the starting position
+        startX = e.type === 'mousedown' ? e.pageX : e.touches[0].pageX;
+        startScrollLeft = mainContainer.scrollLeft;
+        
+        // Prevent text selection and default behaviors
+        e.preventDefault();
+        e.stopPropagation();
+        
+        console.log('Started header drag scroll at position:', startX);
+    }
+
+    // Function to handle dragging
+    function drag(e) {
+        if (!isDragging) return;
+        
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Get current position
+        const currentX = e.type === 'mousemove' ? e.pageX : e.touches[0].pageX;
+        
+        // Calculate the distance moved
+        const deltaX = currentX - startX;
+        
+        // Calculate new scroll position (invert delta for natural scrolling)
+        const newScrollLeft = startScrollLeft - deltaX;
+        
+        // Apply scroll to both containers
+        mainContainer.scrollLeft = newScrollLeft;
+        if (topScrollbar) {
+            topScrollbar.scrollLeft = newScrollLeft;
+        }
+    }
+
+    // Function to end dragging
+    function endDrag(e) {
+        if (!isDragging) return;
+        
+        isDragging = false;
+        tableHeader.classList.remove('dragging');
+        dateColumns.forEach(col => col.classList.remove('dragging'));
+        
+        console.log('Ended header drag scroll');
+    }
+
+    // Mouse events for desktop
+    tableHeader.addEventListener('mousedown', startDrag);
+    document.addEventListener('mousemove', drag);
+    document.addEventListener('mouseup', endDrag);
+    
+    // Touch events for mobile devices
+    tableHeader.addEventListener('touchstart', startDrag, { passive: false });
+    document.addEventListener('touchmove', drag, { passive: false });
+    document.addEventListener('touchend', endDrag);
+    
+    // Prevent context menu on right-click during drag
+    tableHeader.addEventListener('contextmenu', (e) => {
+        if (isDragging) {
+            e.preventDefault();
+        }
+    });
+    
+    // Handle mouse leave to end drag if mouse leaves the window
+    document.addEventListener('mouseleave', endDrag);
+    
+    console.log('Header drag scroll functionality initialized');
+}
+
+function setupContainerClicks() {
+    // Add click event listeners to all attendance checkbox containers
+    const containers = document.querySelectorAll('.attendance-checkbox-container');
+    
+    containers.forEach(container => {
+        container.addEventListener('click', function(e) {
+            // Prevent event if clicking directly on the checkbox or label
+            if (e.target.classList.contains('attendance-checkbox') || 
+                e.target.classList.contains('checkbox-label')) {
+                return;
+            }
+            
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Find the checkbox within this container
+            const checkbox = container.querySelector('.attendance-checkbox');
+            
+            if (checkbox) {
+                // Toggle the checkbox
+                checkbox.checked = !checkbox.checked;
+                
+                // Trigger change event to update attendance
+                checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+                
+                // Add visual feedback
+                container.style.transform = 'scale(0.95)';
+                setTimeout(() => {
+                    container.style.transform = '';
+                }, 150);
+            }
+        });
+        
+        // Add keyboard support (Enter or Space)
+        container.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                container.click();
+            }
+        });
+        
+        // Make container focusable for keyboard navigation
+        container.setAttribute('tabindex', '0');
+        
+        // Add accessibility attributes
+        container.setAttribute('role', 'checkbox');
+        container.setAttribute('aria-label', 'Toggle attendance');
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    let selectedDate = null;
+    let selectedStudent = null;
+    
+    // Initialize attendance counts
+    updateAttendanceCounts();
+    
+    // Setup header drag scroll functionality
+    setupHeaderDragScroll();
+    
+    // Setup container click functionality
+    setupContainerClicks();
+
+    
+    // Force sticky positioning to work properly
+    setTimeout(function() {
+        const stickyElements = document.querySelectorAll('.student-id-column, .student-name-column, .student-id-cell, .student-name-cell');
+        stickyElements.forEach(element => {
+            element.style.position = 'sticky';
+        });
+        
+        // Force checkbox styling refresh
+        const checkboxes = document.querySelectorAll('.attendance-checkbox');
+        checkboxes.forEach(checkbox => {
+            // Force style recalculation
+            checkbox.style.transform = 'scale(1)';
+            checkbox.offsetHeight; // Trigger reflow
+            checkbox.style.transform = '';
+        });
+    }, 100);
+    
+    // Handle attendance checkbox clicks
+    document.querySelectorAll('.attendance-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            markIndividualAttendance(this);
+        });
+    });
+    
+    // Handle attendance cell clicks for bulk actions
+    document.querySelectorAll('.attendance-cell').forEach(cell => {
+        cell.addEventListener('click', function(e) {
+            // Don't trigger if clicking on checkbox
+            if (e.target.type === 'checkbox') {
+                return;
+            }
+            
+            const date = this.dataset.date;
+            const student = this.dataset.student;
+            
+            // Toggle selection
+            if (selectedDate === date && selectedStudent === student) {
+                selectedDate = null;
+                selectedStudent = null;
+                clearSelection();
+            } else {
+                selectedDate = date;
+                selectedStudent = student;
+                clearSelection();
+                this.classList.add('selected');
+            }
+        });
+    });
+    
+    // Mark all present for selected date
+    document.getElementById('mark-all-present-date').addEventListener('click', function() {
+        if (!selectedDate) {
+            alert('Please select a date by clicking on any attendance cell.');
+            return;
+        }
+        
+        if (confirm(`Mark all students present for ${selectedDate}?`)) {
+            markAttendanceForDate(selectedDate, true);
+        }
+    });
+    
+    // Mark all absent for selected date
+    document.getElementById('mark-all-absent-date').addEventListener('click', function() {
+        if (!selectedDate) {
+            alert('Please select a date by clicking on any attendance cell.');
+            return;
+        }
+        
+        if (confirm(`Mark all students absent for ${selectedDate}?`)) {
+            markAttendanceForDate(selectedDate, false);
+        }
+    });
+    
+    // Clear selected date
+    document.getElementById('clear-date').addEventListener('click', function() {
+        clearSelection();
+        selectedDate = null;
+        selectedStudent = null;
+    });
+    
+    function clearSelection() {
+        document.querySelectorAll('.attendance-cell.selected').forEach(cell => {
+            cell.classList.remove('selected');
+        });
+    }
+    
+    function markAttendanceForDate(date, isPresent) {
+        const form = document.getElementById('attendance-form');
+        const dateInput = document.getElementById('form-attendance-date');
+        const inputsContainer = document.getElementById('attendance-inputs');
+        
+        // Clear previous inputs
+        inputsContainer.innerHTML = '';
+        
+        // Set the date
+        dateInput.value = date;
+        
+        // Add student inputs
+        document.querySelectorAll('.student-row').forEach(row => {
+            const studentId = row.dataset.studentId;
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = `student_${studentId}`;
+            input.value = isPresent ? 'on' : '';
+            inputsContainer.appendChild(input);
+        });
+        
+        // Submit form
+        form.submit();
+    }
+    
+    function markIndividualAttendance(checkbox) {
+        const studentId = checkbox.dataset.student;
+        const date = checkbox.dataset.date;
+        const semesterId = checkbox.dataset.semester;
+        const courseId = checkbox.dataset.course;
+        const isPresent = checkbox.checked;
+        
+        // Disable checkbox during save
+        checkbox.disabled = true;
+        
+        // Make AJAX request
+        fetch('{% url "mark-individual-attendance" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: new URLSearchParams({
+                'student_id': studentId,
+                'attendance_date': date,
+                'semester_id': semesterId,
+                'course_id': courseId,
+                'is_present': isPresent
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update attendance counts
+                updateAttendanceCounts();
+                
+                // Show success message briefly
+                showMessage('Attendance marked successfully!', 'success');
+            } else {
+                // Revert checkbox state
+                checkbox.checked = !isPresent;
+                showMessage(data.error || 'Failed to mark attendance', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            // Revert checkbox state
+            checkbox.checked = !isPresent;
+            showMessage('Network error. Please try again.', 'error');
+        })
+        .finally(() => {
+            // Re-enable checkbox
+            checkbox.disabled = false;
+        });
+    }
+    
+    function updateAttendanceCounts() {
+        document.querySelectorAll('.student-row').forEach(row => {
+            const checkedBoxes = row.querySelectorAll('.attendance-checkbox:checked').length;
+            const totalBoxes = row.querySelectorAll('.attendance-checkbox').length;
+            const presentSpan = row.querySelector('.present-count');
+            const totalSpan = row.querySelector('.total-count');
+            
+            if (presentSpan) presentSpan.textContent = checkedBoxes;
+            if (totalSpan) totalSpan.textContent = totalBoxes;
+        });
+    }
+    
+    function showMessage(message, type) {
+        // Create a temporary message element
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show`;
+        messageDiv.style.position = 'fixed';
+        messageDiv.style.top = '20px';
+        messageDiv.style.right = '20px';
+        messageDiv.style.zIndex = '9999';
+        messageDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        document.body.appendChild(messageDiv);
+        
+        // Auto-remove after 3 seconds
+        setTimeout(() => {
+            if (messageDiv.parentNode) {
+                messageDiv.parentNode.removeChild(messageDiv);
+            }
+        }, 3000);
+    }
+
+    // Force CSS refresh and apply styles
+    function forceStyleRefresh() {
+        const studentIdColumns = document.querySelectorAll('.student-id-column, .student-id-cell');
+        const studentNameColumns = document.querySelectorAll('.student-name-column, .student-name-cell');
+        const totalColumns = document.querySelectorAll('.summary-column, .summary-cell');
+        
+        studentIdColumns.forEach(element => {
+            element.style.left = '0px';
+            element.style.zIndex = '999';
+            element.style.width = '170px';
+            element.style.minWidth = '170px';
+            element.style.maxWidth = '170px';
+        });
+        
+        studentNameColumns.forEach(element => {
+            element.style.left = '170px';
+            element.style.zIndex = '999';
+            element.style.width = '180px';
+            element.style.minWidth = '180px';
+            element.style.maxWidth = '180px';
+        });
+        
+        totalColumns.forEach(element => {
+            element.style.right = '0px';
+            element.style.zIndex = '999';
+            element.style.width = '80px';
+            element.style.minWidth = '80px';
+            element.style.maxWidth = '80px';
+            element.style.position = 'sticky';
+        });
+        
+        // Force reflow
+        document.body.offsetHeight;
+    }
+
+    // Apply styles immediately when DOM is ready
+    forceStyleRefresh();
+    
+    // Also apply after a short delay to ensure everything is loaded
+    setTimeout(forceStyleRefresh, 100);
+
+    // Enhanced dual scrollbar functionality with intuitive UX
+    function setupDualScrollbars() {
+        const topScrollbar = document.getElementById('top-scrollbar');
+        const mainContainer = document.getElementById('main-table-container');
+        const topScrollbarContent = document.getElementById('top-scrollbar-content');
+        const attendanceTable = document.getElementById('attendance-table');
+        const leftIndicator = document.getElementById('scroll-left-indicator');
+        const rightIndicator = document.getElementById('scroll-right-indicator');
+
+        if (!topScrollbar || !mainContainer || !topScrollbarContent || !attendanceTable) {
+            return;
+        }
+
+        // Set the width of the top scrollbar content to match the table width
+        function updateTopScrollbarWidth() {
+            const tableWidth = attendanceTable.scrollWidth;
+            topScrollbarContent.style.width = tableWidth + 'px';
+            updateScrollIndicators();
+        }
+
+        // Update scroll indicators and shadows
+        function updateScrollIndicators() {
+            const scrollLeft = mainContainer.scrollLeft;
+            const maxScrollLeft = mainContainer.scrollWidth - mainContainer.clientWidth;
+            
+            // Update visual shadows
+            mainContainer.classList.toggle('scroll-left', scrollLeft > 0);
+            mainContainer.classList.toggle('scroll-right', scrollLeft < maxScrollLeft);
+            
+            // Update scroll indicators
+            if (leftIndicator && rightIndicator) {
+                leftIndicator.classList.toggle('show', scrollLeft > 50);
+                rightIndicator.classList.toggle('show', scrollLeft < maxScrollLeft - 50);
+            }
+            
+            // Update top scrollbar instruction visibility
+            topScrollbar.classList.toggle('scrolling', scrollLeft > 0);
+        }
+
+        // Smooth scroll function
+        function smoothScrollTo(targetScrollLeft) {
+            const startScrollLeft = mainContainer.scrollLeft;
+            const distance = targetScrollLeft - startScrollLeft;
+            const duration = 300;
+            let startTime = null;
+
+            function animation(currentTime) {
+                if (startTime === null) startTime = currentTime;
+                const timeElapsed = currentTime - startTime;
+                const progress = Math.min(timeElapsed / duration, 1);
+                
+                // Easing function for smooth animation
+                const ease = 1 - Math.pow(1 - progress, 3);
+                
+                const currentScrollLeft = startScrollLeft + (distance * ease);
+                mainContainer.scrollLeft = currentScrollLeft;
+                topScrollbar.scrollLeft = currentScrollLeft;
+
+                if (progress < 1) {
+                    requestAnimationFrame(animation);
+                }
+            }
+            requestAnimationFrame(animation);
+        }
+
+        // Sync scrolling from top scrollbar to main container
+        topScrollbar.addEventListener('scroll', function() {
+            if (!mainContainer._syncing) {
+                topScrollbar._syncing = true;
+                mainContainer.scrollLeft = topScrollbar.scrollLeft;
+                updateScrollIndicators();
+                setTimeout(() => {
+                    topScrollbar._syncing = false;
+                }, 10);
+            }
+        });
+
+        // Sync scrolling from main container to top scrollbar
+        mainContainer.addEventListener('scroll', function() {
+            if (!topScrollbar._syncing) {
+                mainContainer._syncing = true;
+                topScrollbar.scrollLeft = mainContainer.scrollLeft;
+                updateScrollIndicators();
+                setTimeout(() => {
+                    mainContainer._syncing = false;
+                }, 10);
+            }
+        });
+
+        // Keyboard navigation
+        document.addEventListener('keydown', function(e) {
+            if (e.target.closest('.attendance-table')) {
+                if (e.key === 'ArrowLeft' && e.ctrlKey) {
+                    e.preventDefault();
+                    smoothScrollTo(Math.max(0, mainContainer.scrollLeft - 200));
+                } else if (e.key === 'ArrowRight' && e.ctrlKey) {
+                    e.preventDefault();
+                    const maxScroll = mainContainer.scrollWidth - mainContainer.clientWidth;
+                    smoothScrollTo(Math.min(maxScroll, mainContainer.scrollLeft + 200));
+                } else if (e.key === 'Home' && e.ctrlKey) {
+                    e.preventDefault();
+                    smoothScrollTo(0);
+                } else if (e.key === 'End' && e.ctrlKey) {
+                    e.preventDefault();
+                    smoothScrollTo(mainContainer.scrollWidth - mainContainer.clientWidth);
+                }
+            }
+        });
+
+        // Mouse wheel horizontal scrolling
+        mainContainer.addEventListener('wheel', function(e) {
+            if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+                e.preventDefault();
+                const scrollAmount = e.deltaY || e.deltaX;
+                smoothScrollTo(mainContainer.scrollLeft + scrollAmount);
+            }
+        });
+
+        // Update top scrollbar width on load and resize
+        updateTopScrollbarWidth();
+        window.addEventListener('resize', updateTopScrollbarWidth);
+        
+        // Update width when content changes
+        setTimeout(updateTopScrollbarWidth, 500);
+        setTimeout(updateScrollIndicators, 600);
+    }
+
+    // Initialize dual scrollbars
+    setupDualScrollbars();
+    setTimeout(setupDualScrollbars, 200);
+    
+    // Initialize header drag scroll
+    setupHeaderDragScroll();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,431 @@
+{% extends 'bou_routines_app/base.html' %}
+{% load static %}
+
+{% block title %}Teacher Registration{% endblock %}
+
+{% block extra_css %}
+<style>
+    .registration-container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 40px 20px;
+    }
+    
+    .registration-card {
+        background: white;
+        padding: 40px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    .registration-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+    
+    .registration-header h2 {
+        color: #007bff;
+        margin-bottom: 10px;
+    }
+    
+    .registration-header p {
+        color: #6c757d;
+        margin-bottom: 0;
+    }
+    
+    .form-section {
+        margin-bottom: 30px;
+    }
+    
+    .section-title {
+        color: #495057;
+        font-size: 1.1em;
+        font-weight: 600;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #e9ecef;
+    }
+    
+    .form-group {
+        margin-bottom: 20px;
+    }
+    
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 500;
+        color: #495057;
+    }
+    
+    .form-group .required {
+        color: #dc3545;
+    }
+    
+    .form-control {
+        width: 100%;
+        padding: 12px 16px;
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        font-size: 16px;
+        transition: border-color 0.3s ease;
+    }
+    
+    .form-control:focus {
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+    }
+    
+    .form-text {
+        font-size: 0.875em;
+        color: #6c757d;
+        margin-top: 5px;
+    }
+    
+    .errorlist {
+        list-style: none;
+        padding: 0;
+        margin: 5px 0 0 0;
+    }
+    
+    .errorlist li {
+        color: #dc3545;
+        font-size: 0.875em;
+        margin-bottom: 5px;
+    }
+    
+    .btn-register {
+        width: 100%;
+        padding: 15px;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+    
+    .btn-register:hover {
+        background: #0056b3;
+    }
+    
+    .login-link {
+        text-align: center;
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid #e9ecef;
+    }
+    
+    .login-link a {
+        color: #007bff;
+        text-decoration: none;
+        font-weight: 500;
+    }
+    
+    .login-link a:hover {
+        text-decoration: underline;
+    }
+    
+    .alert {
+        padding: 15px;
+        margin-bottom: 20px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+    }
+    
+    .alert-success {
+        color: #155724;
+        background-color: #d4edda;
+        border-color: #c3e6cb;
+    }
+    
+    .alert-error {
+        color: #721c24;
+        background-color: #f8d7da;
+        border-color: #f5c6cb;
+    }
+    
+    .row {
+        display: flex;
+        gap: 20px;
+    }
+    
+    .col-md-6 {
+        flex: 1;
+    }
+    
+    @media (max-width: 768px) {
+        .row {
+            flex-direction: column;
+            gap: 0;
+        }
+        
+        .registration-container {
+            padding: 20px 10px;
+        }
+        
+        .registration-card {
+            padding: 20px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="registration-container">
+    <div class="registration-card">
+        <div class="registration-header">
+            <h2><i class="fas fa-user-plus"></i> Teacher Registration</h2>
+            <p>Create your account to access the BOU Routines Generator system</p>
+        </div>
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <form method="post">
+            {% csrf_token %}
+            
+            <!-- User Account Section -->
+            <div class="form-section">
+                <h3 class="section-title">Account Information</h3>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="{{ form.username.id_for_label }}">
+                                Username <span class="required">*</span>
+                            </label>
+                            {{ form.username }}
+                            {% if form.username.help_text %}
+                                <div class="form-text">{{ form.username.help_text }}</div>
+                            {% endif %}
+                            {% if form.username.errors %}
+                                <ul class="errorlist">
+                                    {% for error in form.username.errors %}
+                                        <li>{{ error }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="{{ form.email.id_for_label }}">
+                                Email Address <span class="required">*</span>
+                            </label>
+                            {{ form.email }}
+                            {% if form.email.help_text %}
+                                <div class="form-text">{{ form.email.help_text }}</div>
+                            {% endif %}
+                            {% if form.email.errors %}
+                                <ul class="errorlist">
+                                    {% for error in form.email.errors %}
+                                        <li>{{ error }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="{{ form.first_name.id_for_label }}">
+                                First Name <span class="required">*</span>
+                            </label>
+                            {{ form.first_name }}
+                            {% if form.first_name.errors %}
+                                <ul class="errorlist">
+                                    {% for error in form.first_name.errors %}
+                                        <li>{{ error }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="{{ form.last_name.id_for_label }}">
+                                Last Name <span class="required">*</span>
+                            </label>
+                            {{ form.last_name }}
+                            {% if form.last_name.errors %}
+                                <ul class="errorlist">
+                                    {% for error in form.last_name.errors %}
+                                        <li>{{ error }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="{{ form.password1.id_for_label }}">
+                                Password <span class="required">*</span>
+                            </label>
+                            {{ form.password1 }}
+                            {% if form.password1.help_text %}
+                                <div class="form-text">{{ form.password1.help_text }}</div>
+                            {% endif %}
+                            {% if form.password1.errors %}
+                                <ul class="errorlist">
+                                    {% for error in form.password1.errors %}
+                                        <li>{{ error }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="{{ form.password2.id_for_label }}">
+                                Confirm Password <span class="required">*</span>
+                            </label>
+                            {{ form.password2 }}
+                            {% if form.password2.errors %}
+                                <ul class="errorlist">
+                                    {% for error in form.password2.errors %}
+                                        <li>{{ error }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Teacher Profile Section -->
+            <div class="form-section">
+                <h3 class="section-title">Teacher Profile</h3>
+                
+                <div class="form-group">
+                    <label for="{{ form.teacher_name.id_for_label }}">
+                        Full Name <span class="required">*</span>
+                    </label>
+                    {{ form.teacher_name }}
+                    {% if form.teacher_name.help_text %}
+                        <div class="form-text">{{ form.teacher_name.help_text }}</div>
+                    {% endif %}
+                    {% if form.teacher_name.errors %}
+                        <ul class="errorlist">
+                            {% for error in form.teacher_name.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="{{ form.short_name.id_for_label }}">Short Name</label>
+                            {{ form.short_name }}
+                            {% if form.short_name.help_text %}
+                                <div class="form-text">{{ form.short_name.help_text }}</div>
+                            {% endif %}
+                            {% if form.short_name.errors %}
+                                <ul class="errorlist">
+                                    {% for error in form.short_name.errors %}
+                                        <li>{{ error }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="{{ form.phone.id_for_label }}">Phone Number</label>
+                            {{ form.phone }}
+                            {% if form.phone.errors %}
+                                <ul class="errorlist">
+                                    {% for error in form.phone.errors %}
+                                        <li>{{ error }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="{{ form.designation.id_for_label }}">Designation</label>
+                            {{ form.designation }}
+                            {% if form.designation.help_text %}
+                                <div class="form-text">{{ form.designation.help_text }}</div>
+                            {% endif %}
+                            {% if form.designation.errors %}
+                                <ul class="errorlist">
+                                    {% for error in form.designation.errors %}
+                                        <li>{{ error }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="{{ form.department.id_for_label }}">Department</label>
+                            {{ form.department }}
+                            {% if form.department.help_text %}
+                                <div class="form-text">{{ form.department.help_text }}</div>
+                            {% endif %}
+                            {% if form.department.errors %}
+                                <ul class="errorlist">
+                                    {% for error in form.department.errors %}
+                                        <li>{{ error }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="{{ form.address.id_for_label }}">Address</label>
+                    {{ form.address }}
+                    {% if form.address.errors %}
+                        <ul class="errorlist">
+                            {% for error in form.address.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    <label for="{{ form.join_date.id_for_label }}">Join Date</label>
+                    {{ form.join_date }}
+                    {% if form.join_date.errors %}
+                        <ul class="errorlist">
+                            {% for error in form.join_date.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            </div>
+
+            <button type="submit" class="btn-register">
+                <i class="fas fa-user-plus"></i> Register as Teacher
+            </button>
+        </form>
+
+        <div class="login-link">
+            <p>Already have an account? <a href="{% url 'login' %}">Login here</a></p>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -8,11 +8,32 @@ DAYS = [
 
 class Teacher(models.Model):
     id = models.AutoField(primary_key=True)
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
     name = models.CharField(max_length=100, unique=True)
     short_name = models.CharField(max_length=50, blank=True, null=True, unique=True)
+    address = models.TextField(blank=True, null=True)
+    phone = models.CharField(max_length=15, blank=True, null=True)
+    designation = models.CharField(max_length=100, blank=True, null=True)
+    department = models.CharField(max_length=100, blank=True, null=True)
+    join_date = models.DateField(null=True, blank=True)
+    
+    class Meta:
+        permissions = [
+            ("can_mark_attendance", "Can mark class attendance"),
+            ("can_manage_ca", "Can manage continuous assessment"),
+            ("can_manage_final_marks", "Can manage semester final marks"),
+        ]
 
     def __str__(self):
         return self.name
+    
+    @property
+    def email(self):
+        return self.user.email if self.user else ""
+    
+    @property
+    def username(self):
+        return self.user.username if self.user else ""
 
 class Semester(models.Model):
     id = models.AutoField(primary_key=True)
@@ -113,3 +134,37 @@ class LoginLog(models.Model):
 
     class Meta:
         ordering = ['-login_time']
+
+class Student(models.Model):
+    id = models.CharField(max_length=20, primary_key=True, help_text="Student ID")
+    name = models.CharField(max_length=100)
+    semester = models.ForeignKey(Semester, on_delete=models.CASCADE)
+    session = models.CharField(max_length=20, help_text="Academic session (e.g., 2020-21)")
+    roll_number = models.CharField(max_length=20, blank=True, null=True)
+    email = models.EmailField(blank=True, null=True)
+    phone = models.CharField(max_length=15, blank=True, null=True)
+    
+    def __str__(self):
+        return f"{self.id} - {self.name}"
+    
+    class Meta:
+        ordering = ['id']
+
+
+class Attendance(models.Model):
+    student = models.ForeignKey(Student, on_delete=models.CASCADE)
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    semester = models.ForeignKey(Semester, on_delete=models.CASCADE)
+    attendance_date = models.DateField()
+    is_present = models.BooleanField(default=False)
+    marked_by = models.ForeignKey(Teacher, on_delete=models.CASCADE)
+    marked_at = models.DateTimeField(auto_now_add=True)
+    notes = models.TextField(blank=True, null=True)
+    
+    class Meta:
+        unique_together = ('student', 'course', 'semester', 'attendance_date')
+        ordering = ['attendance_date', 'student__id']
+    
+    def __str__(self):
+        status = "Present" if self.is_present else "Absent"
+        return f"{self.student.id} - {self.course.code} - {self.attendance_date} - {status}"

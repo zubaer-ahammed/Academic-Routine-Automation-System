@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect
-from .models import CurrentRoutine, Teacher, Semester, Course, NewRoutine, SemesterCourse
-from .forms import RoutineForm
+from .models import CurrentRoutine, Teacher, Semester, Course, NewRoutine, SemesterCourse, Student, Attendance
+from .forms import RoutineForm, TeacherRegistrationForm
 from datetime import datetime, timedelta, date
 from collections import defaultdict
 from django.contrib import messages
@@ -20,6 +20,7 @@ from django.utils.http import urlencode
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.db.models import Q
+from django.utils import timezone
 
 
 @login_required
@@ -52,7 +53,7 @@ def routine_entry(request):
                 routine.save()
                 messages.success(request, f'Created new routine for {course.code}')
             
-            return redirect('routine-entry')
+            return redirect('generate-routine')
     else:
         form = RoutineForm()
     return render(request, 'bou_routines_app/routine_entry.html', {
@@ -3450,3 +3451,479 @@ def export_academic_calendar_pdf(request, semester_id):
         return response
     except Exception as e:
         return HttpResponse(f"Error generating Academic Calendar PDF: {str(e)}", status=500)
+
+# Attendance Management Views
+
+def check_teacher_permission(user, permission_codename):
+    """Check if a user has a specific permission"""
+    return user.has_perm(f'bou_routines_app.{permission_codename}')
+
+def get_teacher_from_user(user):
+    """Get teacher profile from user"""
+    try:
+        return user.teacher
+    except Teacher.DoesNotExist:
+        return None
+
+@login_required
+def attendance_calendar(request):
+    """Display attendance calendar for marking attendance"""
+    # Check if user is admin/superuser or has attendance permission
+    if not (request.user.is_superuser or request.user.is_staff or check_teacher_permission(request.user, 'can_mark_attendance')):
+        messages.error(request, "You don't have permission to access attendance management.")
+        return redirect('generate-routine')
+    
+    # Get teacher from logged-in user (optional for admin users)
+    teacher = get_teacher_from_user(request.user)
+    if not teacher and not (request.user.is_superuser or request.user.is_staff):
+        messages.error(request, "You don't have a teacher profile. Please contact administrator.")
+        return redirect('generate-routine')
+    
+    # Get semester and course from request
+    semester_id = request.GET.get('semester')
+    course_id = request.GET.get('course')
+    selected_date = request.GET.get('date')
+    
+    # Filter courses by semester and teacher
+    courses_queryset = Course.objects.none()  # Default to empty queryset
+    if semester_id:
+        if teacher:
+            # For teachers, show only their courses in the selected semester
+            courses_queryset = Course.objects.filter(
+                teacher=teacher,
+                semestercourse__semester_id=semester_id
+            ).distinct()
+        else:
+            # For admin users, show all courses in the selected semester
+            courses_queryset = Course.objects.filter(
+                semestercourse__semester_id=semester_id
+            ).distinct()
+    
+    context = {
+        'teacher': teacher,
+        'is_admin': request.user.is_superuser or request.user.is_staff,
+        'semesters': Semester.objects.all().order_by('order', 'name'),
+        'courses': courses_queryset.order_by('code'),
+        'selected_semester_id': semester_id,
+        'selected_course_id': course_id,
+        'selected_date': selected_date,
+    }
+    
+    if semester_id and course_id:
+        try:
+            semester = Semester.objects.get(id=semester_id)
+            if teacher:
+                course = Course.objects.get(id=course_id, teacher=teacher)
+            else:
+                course = Course.objects.get(id=course_id)
+            
+            # Get students for this semester with custom sorting
+            # Sort by first two digits (descending), then last three digits (ascending)
+            from django.db.models import Case, When, IntegerField
+            from django.db.models.functions import Cast, Substr
+            
+            students = Student.objects.filter(semester=semester).extra(
+                select={
+                    'first_two_digits': "CAST(SUBSTR(id, 1, 2) AS INTEGER)",
+                    'last_three_digits': "CAST(SUBSTR(id, -3) AS INTEGER)"
+                }
+            ).order_by('-first_two_digits', 'last_three_digits')
+            
+            # Generate all Friday and Saturday dates for the semester, excluding holidays and including makeup dates
+            from datetime import datetime, timedelta
+            semester_dates = []
+            current_date = semester.start_date
+            end_date = semester.end_date
+            
+            # Parse holiday dates from semester
+            holiday_dates = set()
+            if semester.holidays:
+                for date_str in semester.holidays.split(','):
+                    if date_str.strip():
+                        try:
+                            holiday_date = datetime.strptime(date_str.strip(), "%Y-%m-%d").date()
+                            holiday_dates.add(holiday_date)
+                        except ValueError:
+                            pass  # Skip invalid date formats
+            
+            # Parse makeup dates from semester
+            makeup_dates = set()
+            if semester.makeup_dates:
+                for date_str in semester.makeup_dates.split(','):
+                    if date_str.strip():
+                        try:
+                            makeup_date = datetime.strptime(date_str.strip(), "%Y-%m-%d").date()
+                            makeup_dates.add(makeup_date)
+                        except ValueError:
+                            pass  # Skip invalid date formats
+            
+            # Generate regular Friday and Saturday dates (excluding holidays)
+            while current_date <= end_date:
+                # Check if it's Friday (weekday() == 4) or Saturday (weekday() == 5)
+                if current_date.weekday() in [4, 5]:  # Friday=4, Saturday=5
+                    # Only add if not a holiday
+                    if current_date not in holiday_dates:
+                        semester_dates.append(current_date)
+                current_date += timedelta(days=1)
+            
+            # Add makeup dates to the semester dates
+            for makeup_date in makeup_dates:
+                # Allow makeup dates both within and outside semester range (makeup classes can extend beyond normal semester)
+                if makeup_date not in semester_dates:
+                    semester_dates.append(makeup_date)
+            
+            # Sort all dates chronologically
+            semester_dates.sort()
+            
+            # Get all attendance data for this course and semester
+            attendance_records = Attendance.objects.filter(
+                course=course,
+                semester=semester
+            ).select_related('student')
+            
+            # Create attendance matrix: {student_id: {date: is_present}}
+            attendance_matrix = {}
+            for record in attendance_records:
+                student_id = record.student.id
+                if student_id not in attendance_matrix:
+                    attendance_matrix[student_id] = {}
+                attendance_matrix[student_id][record.attendance_date] = record.is_present
+            
+            # Create a simpler attendance status lookup for template
+            attendance_status = {}
+            for student in students:
+                attendance_status[student.id] = {}
+                for date in semester_dates:
+                    if student.id in attendance_matrix and date in attendance_matrix[student.id]:
+                        attendance_status[student.id][date] = attendance_matrix[student.id][date]
+                    else:
+                        attendance_status[student.id][date] = None
+            
+            # Get attendance data for the selected date if provided (for backward compatibility)
+            attendance_data = {}
+            if selected_date:
+                for record in attendance_records.filter(attendance_date=selected_date):
+                    attendance_data[record.student.id] = record.is_present
+            
+            from datetime import date
+            context.update({
+                'semester': semester,
+                'course': course,
+                'students': students,
+                'semester_dates': semester_dates,
+                'attendance_matrix': attendance_matrix,
+                'attendance_status': attendance_status,
+                'attendance_data': attendance_data,
+                'today': date.today(),
+                'holiday_dates': holiday_dates,
+                'makeup_dates': makeup_dates,
+            })
+            
+        except (Semester.DoesNotExist, Course.DoesNotExist):
+            messages.error(request, "Invalid semester or course selected.")
+    
+    return render(request, 'bou_routines_app/attendance_calendar.html', context)
+
+@login_required
+def get_courses_for_semester(request):
+    """AJAX endpoint to get courses for a specific semester"""
+    # Check if user is admin/superuser or has attendance permission
+    if not (request.user.is_superuser or request.user.is_staff or check_teacher_permission(request.user, 'can_mark_attendance')):
+        return JsonResponse({'error': 'Permission denied'}, status=403)
+    
+    semester_id = request.GET.get('semester_id')
+    if not semester_id:
+        return JsonResponse({'error': 'Semester ID required'}, status=400)
+    
+    # Get teacher from logged-in user (optional for admin users)
+    teacher = get_teacher_from_user(request.user)
+    
+    # Filter courses by semester and teacher
+    if teacher:
+        courses = Course.objects.filter(
+            teacher=teacher,
+            semestercourse__semester_id=semester_id
+        ).distinct().order_by('code')
+    else:
+        courses = Course.objects.filter(
+            semestercourse__semester_id=semester_id
+        ).distinct().order_by('code')
+    
+    courses_data = []
+    for course in courses:
+        courses_data.append({
+            'id': course.id,
+            'code': course.code,
+            'name': course.name,
+            'display_name': f"{course.code} - {course.name}"
+        })
+    
+    return JsonResponse({'courses': courses_data})
+
+@login_required
+def mark_individual_attendance(request):
+    """AJAX endpoint to mark individual student attendance"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST requests allowed'}, status=405)
+    
+    # Check permissions
+    if not (request.user.is_superuser or request.user.is_staff or check_teacher_permission(request.user, 'can_mark_attendance')):
+        return JsonResponse({'error': 'Permission denied'}, status=403)
+    
+    try:
+        teacher = get_teacher_from_user(request.user)
+        # For admin users, use the first teacher or create a default one
+        if not teacher:
+            teacher = Teacher.objects.first()
+            if not teacher:
+                return JsonResponse({'error': 'No teacher found in system'}, status=400)
+        
+        student_id = request.POST.get('student_id')
+        course_id = request.POST.get('course_id')
+        semester_id = request.POST.get('semester_id')
+        attendance_date = request.POST.get('attendance_date')
+        is_present = request.POST.get('is_present') == 'true'
+        
+        if not all([student_id, course_id, semester_id, attendance_date]):
+            return JsonResponse({'error': 'Missing required parameters'}, status=400)
+        
+        # Get objects
+        student = Student.objects.get(id=student_id)
+        semester = Semester.objects.get(id=semester_id)
+        
+        if get_teacher_from_user(request.user):
+            course = Course.objects.get(id=course_id, teacher=teacher)
+        else:
+            course = Course.objects.get(id=course_id)
+        
+        # Create or update attendance record
+        attendance, created = Attendance.objects.update_or_create(
+            student=student,
+            course=course,
+            semester=semester,
+            attendance_date=attendance_date,
+            defaults={
+                'is_present': is_present,
+                'marked_by': teacher,
+                'marked_at': timezone.now()
+            }
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'created': created,
+            'is_present': is_present,
+            'message': 'Attendance marked successfully'
+        })
+        
+    except (Student.DoesNotExist, Course.DoesNotExist, Semester.DoesNotExist) as e:
+        return JsonResponse({'error': f'Invalid data: {str(e)}'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': f'Server error: {str(e)}'}, status=500)
+
+@login_required
+@require_POST
+def mark_attendance(request):
+    """Mark attendance for students on a specific date"""
+    try:
+        # Check permissions
+        if not (request.user.is_superuser or request.user.is_staff or check_teacher_permission(request.user, 'can_mark_attendance')):
+            return JsonResponse({'success': False, 'message': 'Permission denied'})
+        
+        teacher = get_teacher_from_user(request.user)
+        # For admin users, use the first teacher or create a default one
+        if not teacher:
+            teacher = Teacher.objects.first()
+            if not teacher:
+                return JsonResponse({'success': False, 'message': 'No teacher found in system'})
+        
+        semester_id = request.POST.get('semester_id')
+        course_id = request.POST.get('course_id')
+        attendance_date = request.POST.get('attendance_date')
+        
+        semester = Semester.objects.get(id=semester_id)
+        if get_teacher_from_user(request.user):
+            course = Course.objects.get(id=course_id, teacher=teacher)
+        else:
+            course = Course.objects.get(id=course_id)
+        
+        # Get all students for this semester with custom sorting
+        # Sort by first two digits (descending), then last three digits (ascending)
+        students = Student.objects.filter(semester=semester).extra(
+            select={
+                'first_two_digits': "CAST(SUBSTR(id, 1, 2) AS INTEGER)",
+                'last_three_digits': "CAST(SUBSTR(id, -3) AS INTEGER)"
+            }
+        ).order_by('-first_two_digits', 'last_three_digits')
+        
+        attendance_count = 0
+        for student in students:
+            is_present = request.POST.get(f'student_{student.id}') == 'on'
+            
+            # Create or update attendance record
+            attendance, created = Attendance.objects.update_or_create(
+                student=student,
+                course=course,
+                semester=semester,
+                attendance_date=attendance_date,
+                defaults={
+                    'is_present': is_present,
+                    'marked_by': teacher,
+                }
+            )
+            attendance_count += 1
+        
+        messages.success(request, f'Attendance marked for {attendance_count} students on {attendance_date}')
+        return JsonResponse({'success': True, 'message': f'Attendance marked for {attendance_count} students'})
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)})
+
+@login_required
+def get_attendance_data(request):
+    """AJAX endpoint to get attendance data for a specific date"""
+    try:
+        semester_id = request.GET.get('semester_id')
+        course_id = request.GET.get('course_id')
+        attendance_date = request.GET.get('attendance_date')
+        
+        if not all([semester_id, course_id, attendance_date]):
+            return JsonResponse({'error': 'Missing parameters'}, status=400)
+        
+        semester = Semester.objects.get(id=semester_id)
+        course = Course.objects.get(id=course_id)
+        
+        attendance_records = Attendance.objects.filter(
+            course=course,
+            semester=semester,
+            attendance_date=attendance_date
+        )
+        
+        data = {record.student.id: record.is_present for record in attendance_records}
+        return JsonResponse(data)
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+def attendance_report(request):
+    """Generate attendance report for a course"""
+    try:
+        # Check permissions
+        if not (request.user.is_superuser or request.user.is_staff or check_teacher_permission(request.user, 'can_mark_attendance')):
+            messages.error(request, "You don't have permission to access attendance reports.")
+            return redirect('generate-routine')
+        
+        teacher = get_teacher_from_user(request.user)
+        if not teacher and not (request.user.is_superuser or request.user.is_staff):
+            messages.error(request, "You don't have a teacher profile.")
+            return redirect('generate-routine')
+        
+        semester_id = request.GET.get('semester')
+        course_id = request.GET.get('course')
+        
+        if not semester_id or not course_id:
+            messages.error(request, "Please select a semester and course.")
+            return redirect('attendance-calendar')
+        
+        semester = Semester.objects.get(id=semester_id)
+        if teacher:
+            course = Course.objects.get(id=course_id, teacher=teacher)
+        else:
+            course = Course.objects.get(id=course_id)
+        
+        # Get all students and their attendance records with custom sorting
+        # Sort by first two digits (descending), then last three digits (ascending)
+        students = Student.objects.filter(semester=semester).extra(
+            select={
+                'first_two_digits': "CAST(SUBSTR(id, 1, 2) AS INTEGER)",
+                'last_three_digits': "CAST(SUBSTR(id, -3) AS INTEGER)"
+            }
+        ).order_by('-first_two_digits', 'last_three_digits')
+        
+        # Get all attendance dates for this course
+        attendance_dates = Attendance.objects.filter(
+            course=course,
+            semester=semester
+        ).values_list('attendance_date', flat=True).distinct().order_by('attendance_date')
+        
+        # Create attendance matrix
+        attendance_matrix = {}
+        for student in students:
+            attendance_matrix[student.id] = {
+                'student': student,
+                'attendance': {}
+            }
+            
+            # Get attendance records for this student
+            student_attendance = Attendance.objects.filter(
+                student=student,
+                course=course,
+                semester=semester
+            )
+            
+            for record in student_attendance:
+                attendance_matrix[student.id]['attendance'][record.attendance_date] = record.is_present
+        
+        # Calculate statistics
+        total_classes = len(attendance_dates)
+        for student_id in attendance_matrix:
+            present_count = sum(1 for is_present in attendance_matrix[student_id]['attendance'].values() if is_present)
+            attendance_matrix[student_id]['present_count'] = present_count
+            attendance_matrix[student_id]['absent_count'] = total_classes - present_count
+            attendance_matrix[student_id]['percentage'] = (present_count / total_classes * 100) if total_classes > 0 else 0
+        
+        context = {
+            'semester': semester,
+            'course': course,
+            'students': students,
+            'attendance_dates': attendance_dates,
+            'attendance_matrix': attendance_matrix,
+            'total_classes': total_classes,
+        }
+        
+        return render(request, 'bou_routines_app/attendance_report.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error generating attendance report: {str(e)}")
+        return redirect('attendance-calendar')
+
+# Teacher Registration Views
+
+def teacher_register(request):
+    """Teacher registration form"""
+    if request.method == 'POST':
+        form = TeacherRegistrationForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            username = form.cleaned_data.get('username')
+            messages.success(request, f'Account created for {username}. You can now login!')
+            return redirect('login')
+    else:
+        form = TeacherRegistrationForm()
+    
+    return render(request, 'registration/teacher_register.html', {'form': form})
+
+def teacher_dashboard(request):
+    """Teacher dashboard showing their profile and permissions"""
+    if not request.user.is_authenticated:
+        return redirect('login')
+    
+    teacher = get_teacher_from_user(request.user)
+    if not teacher:
+        messages.error(request, "You don't have a teacher profile.")
+        return redirect('generate-routine')
+    
+    # Get user permissions
+    user_permissions = request.user.get_all_permissions()
+    teacher_permissions = [perm for perm in user_permissions if perm.startswith('bou_routines_app.')]
+    
+    context = {
+        'teacher': teacher,
+        'permissions': teacher_permissions,
+        'can_mark_attendance': check_teacher_permission(request.user, 'can_mark_attendance'),
+        'can_manage_ca': check_teacher_permission(request.user, 'can_manage_ca'),
+        'can_manage_final_marks': check_teacher_permission(request.user, 'can_manage_final_marks'),
+    }
+    
+    return render(request, 'bou_routines_app/teacher_dashboard.html', context)

@@ -1,0 +1,445 @@
+{% extends 'bou_routines_app/base.html' %}
+{% load static %}
+
+{% block title %}Attendance Report{% endblock %}
+
+{% block extra_css %}
+<style>
+    .report-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    
+    .report-header {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .report-table-container {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        overflow-x: auto;
+    }
+    
+    .attendance-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+        font-size: 14px;
+    }
+    
+    .attendance-table th,
+    .attendance-table td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: center;
+        vertical-align: middle;
+    }
+    
+    .attendance-table th {
+        background: #007bff;
+        color: white;
+        font-weight: bold;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    
+    .attendance-table th.student-column {
+        background: #0056b3;
+        text-align: left;
+        min-width: 200px;
+    }
+    
+    .attendance-table th.date-column {
+        min-width: 80px;
+        max-width: 80px;
+        writing-mode: vertical-rl;
+        text-orientation: mixed;
+    }
+    
+    .attendance-table td.student-info {
+        text-align: left;
+        background: #f8f9fa;
+        font-weight: bold;
+        position: sticky;
+        left: 0;
+        z-index: 5;
+    }
+    
+    .attendance-table td.present {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .attendance-table td.absent {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .attendance-table td.no-class {
+        background: #e2e3e5;
+        color: #6c757d;
+    }
+    
+    .statistics-section {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-top: 20px;
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-top: 20px;
+    }
+    
+    .stat-card {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        text-align: center;
+        border-left: 4px solid #007bff;
+    }
+    
+    .stat-number {
+        font-size: 2em;
+        font-weight: bold;
+        color: #007bff;
+        margin-bottom: 5px;
+    }
+    
+    .stat-label {
+        color: #6c757d;
+        font-size: 0.9em;
+    }
+    
+    .btn-group {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+    
+    .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        text-align: center;
+        font-size: 14px;
+        transition: background-color 0.2s;
+    }
+    
+    .btn-primary {
+        background: #007bff;
+        color: white;
+    }
+    
+    .btn-primary:hover {
+        background: #0056b3;
+    }
+    
+    .btn-success {
+        background: #28a745;
+        color: white;
+    }
+    
+    .btn-success:hover {
+        background: #1e7e34;
+    }
+    
+    .btn-info {
+        background: #17a2b8;
+        color: white;
+    }
+    
+    .btn-info:hover {
+        background: #117a8b;
+    }
+    
+    .btn-secondary {
+        background: #6c757d;
+        color: white;
+    }
+    
+    .btn-secondary:hover {
+        background: #545b62;
+    }
+    
+    .alert {
+        padding: 15px;
+        margin-bottom: 20px;
+        border: 1px solid transparent;
+        border-radius: 4px;
+    }
+    
+    .alert-info {
+        color: #0c5460;
+        background-color: #d1ecf1;
+        border-color: #bee5eb;
+    }
+    
+    .percentage-good {
+        color: #28a745;
+        font-weight: bold;
+    }
+    
+    .percentage-warning {
+        color: #ffc107;
+        font-weight: bold;
+    }
+    
+    .percentage-danger {
+        color: #dc3545;
+        font-weight: bold;
+    }
+    
+    .no-data {
+        text-align: center;
+        padding: 40px;
+        color: #6c757d;
+        font-style: italic;
+    }
+    
+    td.student-id-cell, td.student-name-cell {
+        background: #fff;
+    }
+
+    @media print {
+        .btn-group {
+            display: none;
+        }
+        
+        .report-container {
+            max-width: none;
+            padding: 0;
+        }
+        
+        .attendance-table {
+            font-size: 12px;
+        }
+        
+        .attendance-table th,
+        .attendance-table td {
+            padding: 4px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container container-box-bou report-container">
+    <div class="btn-group">
+        <a href="{% url 'attendance-calendar' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Calendar
+        </a>
+        <a href="{% url 'attendance-calendar' %}?semester={{ semester.id }}&course={{ course.id }}" class="btn btn-primary">
+            <i class="fas fa-calendar-check"></i> Mark Attendance
+        </a>
+        <button onclick="window.print()" class="btn btn-info">
+            <i class="fas fa-print"></i> Print Report
+        </button>
+        <button onclick="exportToExcel()" class="btn btn-success">
+            <i class="fas fa-file-excel"></i> Export to Excel
+        </button>
+    </div>
+
+    <div class="report-header">
+        <h2><i class="fas fa-chart-bar"></i> Attendance Report</h2>
+        <div class="row">
+            <div class="col-md-6">
+                <p><strong>Course:</strong> {{ course.code }} - {{ course.name }}</p>
+                <p><strong>Teacher:</strong> {{ course.teacher.name }}</p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>Semester:</strong> {{ semester.name }}</p>
+                <p><strong>Total Classes:</strong> {{ total_classes }}</p>
+            </div>
+        </div>
+    </div>
+
+    {% if attendance_dates %}
+        <!-- Statistics Section -->
+        <div class="statistics-section">
+            <h4>Overall Statistics</h4>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number">{{ students.count }}</div>
+                    <div class="stat-label">Total Students</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">{{ total_classes }}</div>
+                    <div class="stat-label">Total Classes</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">{{ attendance_dates|length }}</div>
+                    <div class="stat-label">Classes with Attendance</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">
+                        {% if students.count > 0 %}
+                            {% widthratio students.count 1 100 %}%
+                        {% else %}
+                            0%
+                        {% endif %}
+                    </div>
+                    <div class="stat-label">Students with Records</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Attendance Table -->
+        <div class="report-table-container">
+            <h4>Detailed Attendance Records</h4>
+            <table class="attendance-table">
+                <thead>
+                    <tr>
+                        <th class="student-column">Student ID & Name</th>
+                        {% for date in attendance_dates %}
+                            <th class="date-column">{{ date|date:"M d" }}</th>
+                        {% endfor %}
+                        <th>Present</th>
+                        <th>Absent</th>
+                        <th>Percentage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for student in students %}
+                        <tr>
+                            <td class="student-info">
+                                <div><strong>{{ student.id }}</strong></div>
+                                <div style="font-size: 0.9em; color: #6c757d;">{{ student.name }}</div>
+                                <div style="font-size: 0.8em; color: #6c757d;">{{ student.session }}</div>
+                            </td>
+                            {% for date in attendance_dates %}
+                                <td class="{% if attendance_matrix.student.id.attendance.date %}present{% else %}absent{% endif %}">
+                                    {% if attendance_matrix.student.id.attendance.date %}
+                                        <i class="fas fa-check text-success"></i>
+                                    {% else %}
+                                        <i class="fas fa-times text-danger"></i>
+                                    {% endif %}
+                                </td>
+                            {% endfor %}
+                            <td class="present">
+                                <strong>{{ attendance_matrix.student.id.present_count }}</strong>
+                            </td>
+                            <td class="absent">
+                                <strong>{{ attendance_matrix.student.id.absent_count }}</strong>
+                            </td>
+                            <td class="{% if attendance_matrix.student.id.percentage >= 75 %}percentage-good{% elif attendance_matrix.student.id.percentage >= 60 %}percentage-warning{% else %}percentage-danger{% endif %}">
+                                <strong>{{ attendance_matrix.student.id.percentage|floatformat:1 }}%</strong>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Summary by Attendance Percentage -->
+        <div class="statistics-section">
+            <h4>Attendance Summary by Percentage</h4>
+            <div class="stats-grid">
+                <div class="stat-card" style="border-left-color: #28a745;">
+                    <div class="stat-number text-success">
+                        {% for student in students %}
+                            {% if attendance_matrix.student.id.percentage >= 75 %}
+                                {% if forloop.first %}1{% endif %}
+                                {% if not forloop.last %}{{ forloop.counter }}{% endif %}
+                            {% endif %}
+                        {% empty %}0{% endfor %}
+                    </div>
+                    <div class="stat-label">Students ≥75% (Good)</div>
+                </div>
+                <div class="stat-card" style="border-left-color: #ffc107;">
+                    <div class="stat-number text-warning">
+                        {% for student in students %}
+                            {% if attendance_matrix.student.id.percentage >= 60 and attendance_matrix.student.id.percentage < 75 %}
+                                {% if forloop.first %}1{% endif %}
+                                {% if not forloop.last %}{{ forloop.counter }}{% endif %}
+                            {% endif %}
+                        {% empty %}0{% endfor %}
+                    </div>
+                    <div class="stat-label">Students 60-74% (Warning)</div>
+                </div>
+                <div class="stat-card" style="border-left-color: #dc3545;">
+                    <div class="stat-number text-danger">
+                        {% for student in students %}
+                            {% if attendance_matrix.student.id.percentage < 60 %}
+                                {% if forloop.first %}1{% endif %}
+                                {% if not forloop.last %}{{ forloop.counter }}{% endif %}
+                            {% endif %}
+                        {% empty %}0{% endfor %}
+                    </div>
+                    <div class="stat-label">Students <60% (Danger)</div>
+                </div>
+            </div>
+        </div>
+
+    {% else %}
+        <div class="no-data">
+            <i class="fas fa-info-circle fa-3x mb-3"></i>
+            <p>No attendance records found for this course.</p>
+            <a href="{% url 'attendance-calendar' %}?semester={{ semester.id }}&course={{ course.id }}" class="btn btn-primary mt-3">
+                <i class="fas fa-calendar-check"></i> Start Marking Attendance
+            </a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function exportToExcel() {
+        // Create a simple Excel export
+        const table = document.querySelector('.attendance-table');
+        const rows = table.querySelectorAll('tr');
+        
+        let csvContent = '';
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('th, td');
+            const rowData = Array.from(cells).map(cell => {
+                return '"' + cell.textContent.trim().replace(/"/g, '""') + '"';
+            });
+            csvContent += rowData.join(',') + '\n';
+        });
+        
+        // Create and download file
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'attendance_report_{{ course.code }}_{{ semester.name }}.csv');
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // Print functionality
+    window.addEventListener('beforeprint', function() {
+        // Hide elements that shouldn't be printed
+        document.querySelectorAll('.btn-group').forEach(el => {
+            el.style.display = 'none';
+        });
+    });
+
+    window.addEventListener('afterprint', function() {
+        // Restore elements after printing
+        document.querySelectorAll('.btn-group').forEach(el => {
+            el.style.display = 'flex';
+        });
+    });
+</script>
+{% endblock %}

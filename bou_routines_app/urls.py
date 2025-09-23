@@ -15,4 +15,16 @@ urlpatterns = [
     path('export-to-excel/<int:semester_id>/', views.export_to_excel, name='export-to-excel'),
     path('export-to-pdf/<int:semester_id>/', views.export_to_pdf, name='export-to-pdf'),
     path('export-academic-calendar-pdf/<int:semester_id>/', views.export_academic_calendar_pdf, name='export-academic-calendar-pdf'),
+    
+    # Attendance Management URLs
+    path('attendance/', views.attendance_calendar, name='attendance-calendar'),
+    path('attendance/mark/', views.mark_attendance, name='mark-attendance'),
+    path('attendance/data/', views.get_attendance_data, name='get-attendance-data'),
+    path('attendance/report/', views.attendance_report, name='attendance-report'),
+    path('attendance/courses/', views.get_courses_for_semester, name='get-courses-for-semester'),
+    path('attendance/mark-individual/', views.mark_individual_attendance, name='mark-individual-attendance'),
+    
+    # Teacher Management URLs
+    path('teacher/register/', views.teacher_register, name='teacher-register'),
+    path('teacher/dashboard/', views.teacher_dashboard, name='teacher-dashboard'),
 ]

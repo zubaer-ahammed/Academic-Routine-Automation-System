@@ -1,5 +1,7 @@
 from django.contrib import admin
-from .models import Teacher, Semester, Course, CurrentRoutine, NewRoutine, SemesterCourse, LoginLog
+from django.contrib.auth.admin import UserAdmin
+from django.contrib.auth.models import User
+from .models import Teacher, Semester, Course, CurrentRoutine, NewRoutine, SemesterCourse, LoginLog, Student, Attendance
 
 @admin.register(CurrentRoutine)
 class CurrentRoutineAdmin(admin.ModelAdmin):
@@ -27,11 +29,50 @@ class SemesterCourseAdmin(admin.ModelAdmin):
     search_fields = ('semester__name', 'course__code')
     ordering = ('semester', 'course__code')
 
+class TeacherInline(admin.StackedInline):
+    model = Teacher
+    can_delete = False
+    verbose_name_plural = 'Teacher Profile'
+    fields = ('name', 'short_name', 'address', 'phone', 'designation', 'department', 'join_date')
+
+class TeacherUserAdmin(UserAdmin):
+    inlines = (TeacherInline,)
+    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'get_teacher_name')
+    list_filter = ('is_staff', 'is_superuser', 'is_active', 'date_joined')
+    
+    def get_teacher_name(self, obj):
+        try:
+            return obj.teacher.name
+        except Teacher.DoesNotExist:
+            return "No Teacher Profile"
+    get_teacher_name.short_description = 'Teacher Name'
+    
+    def get_inline_instances(self, request, obj=None):
+        if not obj:
+            return list()
+        return super(TeacherUserAdmin, self).get_inline_instances(request, obj)
+
+# Unregister the default User admin and register our custom one
+admin.site.unregister(User)
+admin.site.register(User, TeacherUserAdmin)
+
 @admin.register(Teacher)
 class TeacherAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'short_name')
-    search_fields = ('name', 'short_name')
+    list_display = ('name', 'username', 'email', 'short_name', 'designation', 'department', 'phone')
+    search_fields = ('name', 'short_name', 'user__username', 'user__email', 'designation')
+    list_filter = ('department', 'designation')
     ordering = ('name',)
+    
+    fields = ('user', 'name', 'short_name', 'address', 'phone', 'designation', 'department', 'join_date')
+    readonly_fields = ('user',)
+    
+    def username(self, obj):
+        return obj.user.username if obj.user else ""
+    username.short_description = 'Username'
+    
+    def email(self, obj):
+        return obj.user.email if obj.user else ""
+    email.short_description = 'Email'
 
 @admin.register(Semester)
 class SemesterAdmin(admin.ModelAdmin):
@@ -76,3 +117,31 @@ class LoginLogAdmin(admin.ModelAdmin):
     list_display = ('user', 'login_time', 'ip_address', 'user_agent')
     search_fields = ('user__username', 'ip_address', 'user_agent')
     list_filter = ('user',)
+
+@admin.register(Student)
+class StudentAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name', 'semester', 'session', 'roll_number', 'email')
+    list_filter = ('semester', 'session')
+    search_fields = ('id', 'name', 'roll_number', 'email')
+    ordering = ('semester', 'id')
+
+
+@admin.register(Attendance)
+class AttendanceAdmin(admin.ModelAdmin):
+    list_display = ('student', 'course', 'semester', 'attendance_date', 'is_present', 'marked_by', 'marked_at')
+    list_filter = ('semester', 'course', 'attendance_date', 'is_present', 'marked_by')
+    search_fields = ('student__id', 'student__name', 'course__code', 'course__name')
+    ordering = ('-attendance_date', 'student__id')
+    date_hierarchy = 'attendance_date'
+    
+    readonly_fields = ('marked_at',)
+    
+    fieldsets = (
+        ('Attendance Information', {
+            'fields': ('student', 'course', 'semester', 'attendance_date', 'is_present')
+        }),
+        ('Record Details', {
+            'fields': ('marked_by', 'marked_at', 'notes'),
+            'classes': ('collapse',)
+        }),
+    )

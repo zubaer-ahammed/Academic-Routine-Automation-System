@@ -3529,12 +3529,12 @@ def attendance_calendar(request):
                 }
             ).order_by('-first_two_digits', 'last_three_digits')
             
-            # Get actual course schedule dates from NewRoutine table for this specific course
+            # Get actual course schedule dates from CurrentRoutine table for this specific course
             from datetime import datetime, timedelta
-            from bou_routines_app.models import NewRoutine
+            from bou_routines_app.models import CurrentRoutine
             
-            # Get the course's scheduled days from NewRoutine table
-            course_routines = NewRoutine.objects.filter(
+            # Get the course's scheduled days from CurrentRoutine table
+            course_routines = CurrentRoutine.objects.filter(
                 course=course,
                 semester=semester
             ).values_list('day', flat=True).distinct()
@@ -3567,11 +3567,30 @@ def attendance_calendar(request):
                         except ValueError:
                             pass  # Skip invalid date formats
             
-            # Generate dates based on the course's actual scheduled days
+            # Determine which days to show based on course schedule
+            days_to_show = []
+            if 'Friday' in course_routines and 'Saturday' in course_routines:
+                # Course has both Friday and Saturday classes - show all dates
+                days_to_show = ['Friday', 'Saturday']
+                print(f"DEBUG: Course has both Friday and Saturday classes - showing all dates")
+            elif 'Friday' in course_routines:
+                # Course has only Friday classes - show all Friday dates
+                days_to_show = ['Friday']
+                print(f"DEBUG: Course has only Friday classes - showing Friday dates only")
+            elif 'Saturday' in course_routines:
+                # Course has only Saturday classes - show all Saturday dates
+                days_to_show = ['Saturday']
+                print(f"DEBUG: Course has only Saturday classes - showing Saturday dates only")
+            else:
+                # Fallback: show Friday and Saturday if no specific schedule found
+                days_to_show = ['Friday', 'Saturday']
+                print(f"DEBUG: No specific schedule found - showing both Friday and Saturday dates")
+            
+            # Generate dates based on the determined days to show
             while current_date <= end_date:
-                # Check if it's one of the course's scheduled days
+                # Check if it's one of the days to show
                 day_name = current_date.strftime('%A')  # Get day name (Monday, Tuesday, etc.)
-                if day_name in course_routines:
+                if day_name in days_to_show:
                     # Only add if not a holiday
                     if current_date not in holiday_dates:
                         semester_dates.append(current_date)
@@ -3587,6 +3606,7 @@ def attendance_calendar(request):
             semester_dates.sort()
             
             print(f"DEBUG: Generated {len(semester_dates)} dates for course {course.name}")
+            print(f"DEBUG: Days to show: {days_to_show}")
             print(f"DEBUG: First 5 dates: {semester_dates[:5]}")
             print(f"DEBUG: Last 5 dates: {semester_dates[-5:]}")
             

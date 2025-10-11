@@ -4420,7 +4420,9 @@ def save_ca_marks(request):
                     # Update marks based on course type
                     if course.is_lab:
                         # Lab course marks
-                        ca_mark.lab_assignment_mark = float(marks_data.get('lab_assignment_mark', 0))
+                        ca_mark.first_lab_assignment_mark = float(marks_data.get('first_lab_assignment_mark', 0))
+                        ca_mark.second_lab_assignment_mark = float(marks_data.get('second_lab_assignment_mark', 0))
+                        ca_mark.third_lab_assignment_mark = float(marks_data.get('third_lab_assignment_mark', 0))
                         ca_mark.lab_practical_mark = float(marks_data.get('lab_practical_mark', 0))
                     else:
                         # Theory course marks

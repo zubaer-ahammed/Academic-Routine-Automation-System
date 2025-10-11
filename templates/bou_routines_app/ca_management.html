@@ -440,27 +440,36 @@
                                     <table class="ca-table">
                                         <thead>
                                             <tr>
-                                                <th rowspan="{% if selected_course.is_lab %}2{% else %}3{% endif %}" class="student-info">Student ID</th>
-                                                <th rowspan="{% if selected_course.is_lab %}2{% else %}3{% endif %}" class="student-info">Name</th>
+                                                <th rowspan="3" class="student-info">Student ID</th>
+                                                <th rowspan="3" class="student-info">Name</th>
                                                 {% if selected_course.is_lab %}
-                                                    <th colspan="3">Lab Course CA (Total: {{ selected_course.lab_ca_attendance_weight|add:selected_course.lab_ca_assignment_weight|add:selected_course.lab_ca_practical_weight }}%)</th>
+                                                    <th colspan="6">Lab Course CA (Total: {{ selected_course.lab_ca_attendance_weight|add:selected_course.lab_ca_assignment_weight|add:selected_course.lab_ca_practical_weight }}%)</th>
                                                 {% else %}
                                                     <th colspan="6">Theory Course CA (Total: {{ selected_course.ca_attendance_weight|add:selected_course.ca_assignment_weight|add:selected_course.ca_midterm_weight }}%)</th>
                                                 {% endif %}
-                                                <th rowspan="{% if selected_course.is_lab %}2{% else %}3{% endif %}">Total CA Mark</th>
-                                                <th rowspan="{% if selected_course.is_lab %}2{% else %}3{% endif %}">Notes</th>
+                                                <th rowspan="3">Total CA Mark</th>
+                                                <th rowspan="3">Notes</th>
                                             </tr>
                                             <tr>
                                                 <th>Attendance<br><small>({% if selected_course.is_lab %}{{ selected_course.lab_ca_attendance_weight }}{% else %}{{ selected_course.ca_attendance_weight }}{% endif %}%)</small></th>
                                                 {% if selected_course.is_lab %}
-                                                    <th>Assignment/Lab Report<br><small>({{ selected_course.lab_ca_assignment_weight }}%)</small></th>
+                                                    <th colspan="4">Assignment/Lab Report<br><small>({{ selected_course.lab_ca_assignment_weight }}%)</small></th>
                                                     <th>Experiment/Lab Project<br><small>({{ selected_course.lab_ca_practical_weight }}%)</small></th>
                                                 {% else %}
                                                     <th colspan="4">Assignment/Presentation<br><small>({{ selected_course.ca_assignment_weight }}%)</small></th>
                                                     <th>Mid-Term Exam<br><small>({{ selected_course.ca_midterm_weight }}%)</small></th>
                                                 {% endif %}
                                             </tr>
-                                            {% if not selected_course.is_lab %}
+                                            {% if selected_course.is_lab %}
+                                            <tr class="sub-header">
+                                                <th></th>
+                                                <th>First</th>
+                                                <th>Second</th>
+                                                <th>Third</th>
+                                                <th>Average</th>
+                                                <th></th>
+                                            </tr>
+                                            {% else %}
                                             <tr class="sub-header">
                                                 <th></th>
                                                 <th>First</th>
@@ -494,13 +503,36 @@
                                                         <!-- Lab Course Marks -->
                                                         <td>
                                                             <input type="number" 
-                                                                   name="students_data[{{ student.id }}][lab_assignment_mark]"
-                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.lab_assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                   name="students_data[{{ student.id }}][first_lab_assignment_mark]"
+                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.first_lab_assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
                                                                    min="0" 
                                                                    max="{{ selected_course.lab_ca_assignment_weight }}"
                                                                    step="0.01"
                                                                    class="mark-input"
                                                                    oninput="calculateStudentTotal(this)">
+                                                        </td>
+                                                        <td>
+                                                            <input type="number" 
+                                                                   name="students_data[{{ student.id }}][second_lab_assignment_mark]"
+                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.second_lab_assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                   min="0" 
+                                                                   max="{{ selected_course.lab_ca_assignment_weight }}"
+                                                                   step="0.01"
+                                                                   class="mark-input"
+                                                                   oninput="calculateStudentTotal(this)">
+                                                        </td>
+                                                        <td>
+                                                            <input type="number" 
+                                                                   name="students_data[{{ student.id }}][third_lab_assignment_mark]"
+                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.third_lab_assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                   min="0" 
+                                                                   max="{{ selected_course.lab_ca_assignment_weight }}"
+                                                                   step="0.01"
+                                                                   class="mark-input"
+                                                                   oninput="calculateStudentTotal(this)">
+                                                        </td>
+                                                        <td class="total-mark assignment-average">
+                                                            <span class="assignment-average-value">{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.lab_assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}</span>
                                                         </td>
                                                         <td>
                                                             <input type="number" 
@@ -728,9 +760,20 @@ function calculateStudentTotal(inputElement) {
     let total = attendanceMark; // Attendance is auto-calculated, so we include it in total
 
     if (isLabCourse) {
-        const labAssignmentMark = parseFloat(row.querySelector('input[name$="[lab_assignment_mark]"]').value) || 0;
+        const firstLabAssignmentMark = parseFloat(row.querySelector('input[name$="[first_lab_assignment_mark]"]').value) || 0;
+        const secondLabAssignmentMark = parseFloat(row.querySelector('input[name$="[second_lab_assignment_mark]"]').value) || 0;
+        const thirdLabAssignmentMark = parseFloat(row.querySelector('input[name$="[third_lab_assignment_mark]"]').value) || 0;
+        
+        // Calculate average of ONLY the three lab assignment marks (NOT including attendance)
+        const labAssignmentMark = (firstLabAssignmentMark + secondLabAssignmentMark + thirdLabAssignmentMark) / 3;
         const labPracticalMark = parseFloat(row.querySelector('input[name$="[lab_practical_mark]"]').value) || 0;
         total += labAssignmentMark + labPracticalMark;
+        
+        // Update the average lab assignment mark display
+        const averageLabAssignmentCell = row.querySelector('.assignment-average-value');
+        if (averageLabAssignmentCell) {
+            averageLabAssignmentCell.textContent = labAssignmentMark.toFixed(2);
+        }
     } else {
         const firstAssignmentMark = parseFloat(row.querySelector('input[name$="[first_assignment_mark]"]').value) || 0;
         const secondAssignmentMark = parseFloat(row.querySelector('input[name$="[second_assignment_mark]"]').value) || 0;
@@ -802,7 +845,9 @@ function saveCAMarks() {
         const isLabCourse = {% if selected_course.is_lab %}true{% else %}false{% endif %};
 
         if (isLabCourse) {
-            marks['lab_assignment_mark'] = parseFloat(row.querySelector('input[name$="[lab_assignment_mark]"]').value);
+            marks['first_lab_assignment_mark'] = parseFloat(row.querySelector('input[name$="[first_lab_assignment_mark]"]').value);
+            marks['second_lab_assignment_mark'] = parseFloat(row.querySelector('input[name$="[second_lab_assignment_mark]"]').value);
+            marks['third_lab_assignment_mark'] = parseFloat(row.querySelector('input[name$="[third_lab_assignment_mark]"]').value);
             marks['lab_practical_mark'] = parseFloat(row.querySelector('input[name$="[lab_practical_mark]"]').value);
         } else {
             marks['first_assignment_mark'] = parseFloat(row.querySelector('input[name$="[first_assignment_mark]"]').value);

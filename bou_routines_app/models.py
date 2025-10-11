@@ -430,14 +430,19 @@ class CAMark(models.Model):
             )
     
     def save(self, *args, **kwargs):
+        from decimal import Decimal
+        
         # Auto-calculate attendance mark
-        self.attendance_mark = self.calculate_attendance_mark()
+        attendance_mark_float = self.calculate_attendance_mark()
+        self.attendance_mark = Decimal(str(attendance_mark_float))
         
         # Auto-calculate assignment mark (average of three assignments)
-        self.assignment_mark = self.calculate_assignment_mark()
+        assignment_mark_float = self.calculate_assignment_mark()
+        self.assignment_mark = Decimal(str(assignment_mark_float))
         
         # Auto-calculate lab assignment mark (average of three lab assignments)
-        self.lab_assignment_mark = self.calculate_lab_assignment_mark()
+        lab_assignment_mark_float = self.calculate_lab_assignment_mark()
+        self.lab_assignment_mark = Decimal(str(lab_assignment_mark_float))
         
         # Calculate total CA mark
         self.total_ca_mark = self.calculate_total_ca_mark()

@@ -3665,12 +3665,12 @@ def attendance_calendar(request):
                 }
             ).order_by('-first_two_digits', 'last_three_digits')
             
-            # Get actual course schedule dates from CurrentRoutine table for this specific course
+            # Get actual course schedule dates from NewRoutine table for this specific course
             from datetime import datetime, timedelta
-            from bou_routines_app.models import CurrentRoutine
+            from bou_routines_app.models import NewRoutine
             
-            # Get the course's scheduled days from CurrentRoutine table
-            course_routines = CurrentRoutine.objects.filter(
+            # Get the course's scheduled days from NewRoutine table
+            course_routines = NewRoutine.objects.filter(
                 course=course,
                 semester=semester
             ).values_list('day', flat=True).distinct()

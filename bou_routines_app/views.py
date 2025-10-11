@@ -4424,7 +4424,9 @@ def save_ca_marks(request):
                         ca_mark.lab_practical_mark = float(marks_data.get('lab_practical_mark', 0))
                     else:
                         # Theory course marks
-                        ca_mark.assignment_mark = float(marks_data.get('assignment_mark', 0))
+                        ca_mark.first_assignment_mark = float(marks_data.get('first_assignment_mark', 0))
+                        ca_mark.second_assignment_mark = float(marks_data.get('second_assignment_mark', 0))
+                        ca_mark.third_assignment_mark = float(marks_data.get('third_assignment_mark', 0))
                         ca_mark.quiz_mark = float(marks_data.get('quiz_mark', 0))
                         ca_mark.midterm_mark = float(marks_data.get('midterm_mark', 0))
                     

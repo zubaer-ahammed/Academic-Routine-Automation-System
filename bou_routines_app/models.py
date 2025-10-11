@@ -259,7 +259,13 @@ class CAMark(models.Model):
     
     # Theory course CA components
     attendance_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Attendance mark (auto-calculated)")
-    assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Assignment mark")
+    
+    # Assignment/Presentation fields (3 assignments + average)
+    first_assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="First Assignment/Presentation mark")
+    second_assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Second Assignment/Presentation mark")
+    third_assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Third Assignment/Presentation mark")
+    assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Average Assignment mark (auto-calculated)")
+    
     quiz_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Quiz mark")
     midterm_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Midterm mark")
     
@@ -387,6 +393,13 @@ class CAMark(models.Model):
             return (mark_percentage / 100) * attendance_weight
         return 0
     
+    def calculate_assignment_mark(self):
+        """Calculate average assignment mark from the three assignments"""
+        total = self.first_assignment_mark + self.second_assignment_mark + self.third_assignment_mark
+        if total > 0:
+            return round(total / 3, 2)
+        return 0
+    
     def calculate_total_ca_mark(self):
         """Calculate total CA mark based on course type"""
         if self.course.is_lab:
@@ -408,6 +421,9 @@ class CAMark(models.Model):
     def save(self, *args, **kwargs):
         # Auto-calculate attendance mark
         self.attendance_mark = self.calculate_attendance_mark()
+        
+        # Auto-calculate assignment mark (average of three assignments)
+        self.assignment_mark = self.calculate_assignment_mark()
         
         # Calculate total CA mark
         self.total_ca_mark = self.calculate_total_ca_mark()

@@ -247,3 +247,154 @@ class Attendance(models.Model):
     def __str__(self):
         status = "Present" if self.is_present else "Absent"
         return f"{self.student.id} - {self.course.code} - {self.attendance_date} - {status}"
+
+
+class CAMark(models.Model):
+    """
+    Continuous Assessment marks for students
+    """
+    student = models.ForeignKey(Student, on_delete=models.CASCADE)
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    semester = models.ForeignKey(Semester, on_delete=models.CASCADE)
+    
+    # Theory course CA components
+    attendance_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Attendance mark (auto-calculated)")
+    assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Assignment mark")
+    quiz_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Quiz mark")
+    midterm_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Midterm mark")
+    
+    # Lab course CA components
+    lab_assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Lab assignment mark")
+    lab_practical_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Lab practical mark")
+    
+    # Total CA mark (calculated)
+    total_ca_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Total CA mark")
+    
+    # Metadata
+    marked_by = models.ForeignKey(Teacher, on_delete=models.CASCADE)
+    marked_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    notes = models.TextField(blank=True, null=True)
+    
+    class Meta:
+        unique_together = ('student', 'course', 'semester')
+        ordering = ['student__id']
+    
+    def __str__(self):
+        return f"{self.student.id} - {self.course.code} - CA: {self.total_ca_mark}"
+    
+    def calculate_attendance_mark(self):
+        """Calculate attendance mark based on BOU official attendance rules with duration-based class counting"""
+        # Get total classes from SemesterCourse relationship
+        try:
+            semester_course = SemesterCourse.objects.get(
+                semester=self.semester,
+                course=self.course
+            )
+            total_classes = semester_course.number_of_classes
+        except SemesterCourse.DoesNotExist:
+            total_classes = 1  # Default to 1 if no SemesterCourse found
+        
+        # Get standard class duration from semester settings
+        if self.course.is_lab:
+            standard_duration_minutes = self.semester.lab_class_duration_minutes
+        else:
+            standard_duration_minutes = self.semester.theory_class_duration_minutes
+        
+        # Calculate attended classes with duration consideration
+        attended_classes_fractional = 0.0
+        
+        # Get all attendance records for this student, course, and semester
+        attendance_records = Attendance.objects.filter(
+            student=self.student,
+            course=self.course,
+            semester=self.semester,
+            is_present=True
+        )
+        
+        for attendance_record in attendance_records:
+            # Find the routine for this specific date and course
+            try:
+                routine = NewRoutine.objects.get(
+                    semester=self.semester,
+                    course=self.course,
+                    class_date=attendance_record.attendance_date
+                )
+                
+                # Calculate actual class duration in minutes
+                if routine.start_time and routine.end_time:
+                    start_time = routine.start_time
+                    end_time = routine.end_time
+                    
+                    # Convert time to minutes for calculation
+                    start_minutes = start_time.hour * 60 + start_time.minute
+                    end_minutes = end_time.hour * 60 + end_time.minute
+                    actual_duration_minutes = end_minutes - start_minutes
+                    
+                    # Calculate fractional class count
+                    if standard_duration_minutes > 0:
+                        fractional_classes = actual_duration_minutes / standard_duration_minutes
+                        attended_classes_fractional += fractional_classes
+                    else:
+                        # Fallback to 1 class if standard duration is 0
+                        attended_classes_fractional += 1.0
+                else:
+                    # Fallback to 1 class if no time information
+                    attended_classes_fractional += 1.0
+                    
+            except NewRoutine.DoesNotExist:
+                # If no routine found for this date, count as 1 class (fallback)
+                attended_classes_fractional += 1.0
+        
+        if total_classes > 0:
+            attendance_percentage = (attended_classes_fractional / total_classes) * 100
+            
+            # Apply BOU official attendance mark distribution
+            if attendance_percentage >= 90:
+                mark_percentage = 100
+            elif attendance_percentage >= 85:
+                mark_percentage = 90
+            elif attendance_percentage >= 80:
+                mark_percentage = 80
+            elif attendance_percentage >= 75:
+                mark_percentage = 70
+            elif attendance_percentage >= 70:
+                mark_percentage = 60
+            elif attendance_percentage >= 65:
+                mark_percentage = 50
+            elif attendance_percentage >= 60:
+                mark_percentage = 40
+            else:
+                mark_percentage = 0
+            
+            # Convert to actual mark out of the attendance weight
+            attendance_weight = self.course.ca_attendance_weight if not self.course.is_lab else self.course.lab_ca_attendance_weight
+            return (mark_percentage / 100) * attendance_weight
+        return 0
+    
+    def calculate_total_ca_mark(self):
+        """Calculate total CA mark based on course type"""
+        if self.course.is_lab:
+            # Lab course: attendance + lab assignment + lab practical
+            return (
+                self.attendance_mark +
+                self.lab_assignment_mark +
+                self.lab_practical_mark
+            )
+        else:
+            # Theory course: attendance + assignment + quiz + midterm
+            return (
+                self.attendance_mark +
+                self.assignment_mark +
+                self.quiz_mark +
+                self.midterm_mark
+            )
+    
+    def save(self, *args, **kwargs):
+        # Auto-calculate attendance mark
+        self.attendance_mark = self.calculate_attendance_mark()
+        
+        # Calculate total CA mark
+        self.total_ca_mark = self.calculate_total_ca_mark()
+        
+        super().save(*args, **kwargs)

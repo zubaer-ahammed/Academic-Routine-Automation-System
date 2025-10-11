@@ -22,9 +22,14 @@ urlpatterns = [
     path('attendance/data/', views.get_attendance_data, name='get-attendance-data'),
     path('attendance/report/', views.attendance_report, name='attendance-report'),
     path('attendance/courses/', views.get_courses_for_semester, name='get-courses-for-semester'),
+    path('attendance/semesters/', views.get_semesters_for_curriculum, name='get-semesters-for-curriculum'),
     path('attendance/mark-individual/', views.mark_individual_attendance, name='mark-individual-attendance'),
     
     # Teacher Management URLs
     path('teacher/register/', views.teacher_register, name='teacher-register'),
     path('teacher/dashboard/', views.teacher_dashboard, name='teacher-dashboard'),
+    
+    # CA Management URLs
+    path('ca/', views.ca_management, name='ca-management'),
+    path('ca/save/', views.save_ca_marks, name='save-ca-marks'),
 ]

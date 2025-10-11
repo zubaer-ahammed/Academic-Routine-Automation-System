@@ -17,7 +17,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(primary_key=True, serialize=False)),
                 ('name', models.CharField(help_text="Curriculum name (e.g., 'Current Curriculum', 'New Curriculum 2024')", max_length=100, unique=True)),
-                ('code', models.CharField(help_text="Short code for curriculum (e.g., 'OLD', 'NEW2024')", max_length=20, unique=True)),
+                ('code', models.CharField(help_text="Short code for curriculum (e.g., 'OLD', 'NEW')", max_length=20, unique=True)),
                 ('description', models.TextField(blank=True, help_text='Description of the curriculum', null=True)),
                 ('is_active', models.BooleanField(default=True, help_text='Whether this curriculum is currently active')),
                 ('effective_from', models.DateField(blank=True, help_text='Date from which this curriculum is effective', null=True)),

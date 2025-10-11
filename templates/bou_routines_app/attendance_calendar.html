@@ -1,5 +1,6 @@
 {% extends 'bou_routines_app/base.html' %}
 {% load static %}
+{% load attendance_extras %}
 {% load attendance_tags %}
 
 {% block title %}Attendance Management - BOUSST CSE Routine Generator{% endblock %}
@@ -866,11 +867,24 @@
         <h2><i class="fas fa-calendar-check"></i> Attendance Management</h2>
     </div>
 
-    <!-- Semester and Course Selection -->
+    <!-- Curriculum, Semester and Course Selection -->
     <div class="selection-form">
         <form method="get" action="{% url 'attendance-calendar' %}">
             <div class="row">
-                <div class="col-md-4">
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label for="curriculum">Select Curriculum:</label>
+                        <select name="curriculum" id="curriculum" onchange="loadSemestersForCurriculum(this.value)">
+                            <option value="">-- Select Curriculum --</option>
+                            {% for curriculum in curricula %}
+                                <option value="{{ curriculum.id }}" {% if selected_curriculum_id == curriculum.id %}selected{% endif %}>
+                                    {{ curriculum.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-3">
                     <div class="form-group">
                         <label for="semester">Select Semester:</label>
                         <select name="semester" id="semester" onchange="loadCoursesForSemester(this.value)">
@@ -883,7 +897,7 @@
                         </select>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="form-group">
                         <label for="course">Select Course:</label>
                         <select name="course" id="course" onchange="loadStudentsForCourse()">
@@ -896,7 +910,7 @@
                         </select>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="form-group">
                         <label>&nbsp;</label>
                         <div>
@@ -933,6 +947,41 @@
                         <i class="fas fa-info-circle"></i> 
                         <strong>Admin Access:</strong> You are viewing all courses as an administrator.
                     </div>
+                {% endif %}
+            </div>
+            
+            <!-- Duration-based Attendance Information -->
+            <div class="alert alert-info" style="margin-bottom: 20px;">
+                <i class="fas fa-info-circle"></i> 
+                <strong>Attendance Calculation:</strong>
+                {% if actual_class_duration %}
+                    {% if class_ratio != 1.0 %}
+                        <strong>1 Attendance for this course = {{ class_ratio|floatformat:1 }} classes</strong>
+                        <br><small>This course runs for {{ actual_class_duration }} minutes 
+                        {% if course.is_lab %}
+                            (standard lab: {{ semester.lab_class_duration_minutes }} minutes)
+                        {% else %}
+                            (standard theory: {{ semester.theory_class_duration_minutes }} minutes)
+                        {% endif %}
+                        </small>
+                    {% else %}
+                        <strong>1 Attendance for this course = 1 class</strong>
+                        <br><small>This course runs for {{ actual_class_duration }} minutes 
+                        {% if course.is_lab %}
+                            (standard lab duration)
+                        {% else %}
+                            (standard theory duration)
+                        {% endif %}
+                        </small>
+                    {% endif %}
+                {% else %}
+                    {% if course.is_lab %}
+                        <strong>1 Attendance for this course = 1 class</strong>
+                        <br><small>Standard lab duration: {{ semester.lab_class_duration_minutes }} minutes</small>
+                    {% else %}
+                        <strong>1 Attendance for this course = 1 class</strong>
+                        <br><small>Standard theory duration: {{ semester.theory_class_duration_minutes }} minutes</small>
+                    {% endif %}
                 {% endif %}
             </div>
             
@@ -990,7 +1039,9 @@
                             {% endfor %}
                             <td class="summary-cell">
                                 <div class="attendance-summary">
-                                    <span class="present-count">0</span>/<span class="total-count">{{ semester_dates|length }}</span>
+                                    {% with attendance_totals|default_if_none:""|dict_key:student.id as student_total %}
+                                        <span class="present-count">{{ student_total.classes_attended|default:0 }}</span>/<span class="total-count">{{ student_total.number_of_classes|default:semester_dates|length }}</span>
+                                    {% endwith %}
                                 </div>
                             </td>
                         </tr>
@@ -1025,6 +1076,51 @@
 </div>
 
 <script>
+// Function to load semesters for a selected curriculum
+    function loadSemestersForCurriculum(curriculumId) {
+        console.log('loadSemestersForCurriculum called with curriculumId:', curriculumId);
+        const semesterSelect = document.getElementById('semester');
+        const courseSelect = document.getElementById('course');
+        
+        // Clear existing options
+        semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
+        courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
+        
+        if (!curriculumId) {
+            return;
+        }
+        
+        // Show loading state
+        semesterSelect.innerHTML = '<option value="">Loading semesters...</option>';
+    
+           // Make AJAX request to get semesters for the curriculum
+           fetch(`{% url 'get-semesters-for-curriculum' %}?curriculum_id=${curriculumId}&t=${Date.now()}`)
+               .then(response => response.json())
+               .then(data => {
+                   if (data.error) {
+                       semesterSelect.innerHTML = '<option value="">Error loading semesters</option>';
+                       return;
+                   }
+                   
+                   // Debug: Log the response data
+                   console.log('Semesters data:', data.semesters);
+                   
+                   // Clear and populate semester options
+                   semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
+                   data.semesters.forEach(semester => {
+                       const option = document.createElement('option');
+                       option.value = semester.id;
+                       console.log(`Semester: id=${semester.id}, name=${semester.name}, full_name=${semester.semester_full_name}`);
+                       option.textContent = semester.name; // Use semester name (e.g., Y1S1) instead of full name
+                       semesterSelect.appendChild(option);
+                   });
+        })
+        .catch(error => {
+            console.error('Error loading semesters:', error);
+            semesterSelect.innerHTML = '<option value="">Error loading semesters</option>';
+        });
+}
+
 // Function to load courses for a selected semester
 function loadCoursesForSemester(semesterId) {
     const courseSelect = document.getElementById('course');
@@ -1065,15 +1161,22 @@ function loadCoursesForSemester(semesterId) {
 
 // Function to load students when course is selected
 function loadStudentsForCourse() {
+    const curriculumSelect = document.getElementById('curriculum');
     const semesterSelect = document.getElementById('semester');
     const courseSelect = document.getElementById('course');
     
+    const curriculumId = curriculumSelect.value;
     const semesterId = semesterSelect.value;
     const courseId = courseSelect.value;
     
     if (semesterId && courseId) {
+        // Build URL with curriculum parameter if available
+        let url = `{% url 'attendance-calendar' %}?semester=${semesterId}&course=${courseId}`;
+        if (curriculumId) {
+            url += `&curriculum=${curriculumId}`;
+        }
         // Redirect to attendance calendar with selected semester and course
-        window.location.href = `{% url 'attendance-calendar' %}?semester=${semesterId}&course=${courseId}`;
+        window.location.href = url;
     }
 }
 

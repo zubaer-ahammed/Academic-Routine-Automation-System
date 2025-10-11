@@ -195,6 +195,16 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'download-routines' %}">Download Routines</a>
                     </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'attendance-calendar' %}">
+                                <i class="fas fa-calendar-check"></i> Attendance
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'ca-management' %}">
+                                <i class="fas fa-chart-line"></i> CA Management
+                            </a>
+                        </li>
                     {% if user.is_authenticated %}
                         <li class="nav-item">
                             <a class="nav-link" href="/admin/">Admin</a>
@@ -247,6 +257,7 @@
                     {% for curriculum in curricula %}
                     <option value="{{ curriculum.id }}" {% if selected_curriculum_id == curriculum.id %}selected{% endif %}>
                         {{ curriculum.name }}
+                        
                     </option>
                     {% endfor %}
                 </select>
@@ -327,7 +338,7 @@
                         </select>
                     </div>
                     <div class="col">
-                        <select name="day[]" class="form-control" required>
+                        <select name="day[]" class="form-control day-select" required>
                             <option value="">Select Day</option>
                             <option value="Friday">Friday</option>
                             <option value="Saturday">Saturday</option>
@@ -1284,6 +1295,46 @@
                     });
                 }
             }
+
+            // Handle course selection change to filter day options
+            $(document).on('change', '.course-select', function() {
+                const courseId = $(this).val();
+                const row = $(this).closest('.course-row');
+                const daySelect = row.find('.day-select');
+                
+                // Clear previous selection
+                daySelect.val('');
+                
+                if (courseId) {
+                    // Check if this course already has routines for specific days
+                    const existingRoutines = {{ generated_routines|safe }};
+                    const courseRoutines = existingRoutines.filter(r => r.course_id == courseId);
+                    
+                    // Get unique days for this course
+                    const courseDays = [...new Set(courseRoutines.map(r => r.day))];
+                    
+                    // Clear and repopulate day options
+                    daySelect.empty();
+                    daySelect.append('<option value="">Select Day</option>');
+                    
+                    if (courseDays.length > 0) {
+                        // Show only days when this course has classes
+                        courseDays.forEach(day => {
+                            daySelect.append(`<option value="${day}">${day}</option>`);
+                        });
+                    } else {
+                        // Show both Friday and Saturday if no existing routines
+                        daySelect.append('<option value="Friday">Friday</option>');
+                        daySelect.append('<option value="Saturday">Saturday</option>');
+                    }
+                } else {
+                    // Reset to default options
+                    daySelect.empty();
+                    daySelect.append('<option value="">Select Day</option>');
+                    daySelect.append('<option value="Friday">Friday</option>');
+                    daySelect.append('<option value="Saturday">Saturday</option>');
+                }
+            });
 
             // Handle semester change
             $('#semester').change(function() {

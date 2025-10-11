@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect
-from .models import CurrentRoutine, Teacher, Semester, Course, NewRoutine, SemesterCourse, Student, Attendance, Curriculum
+from .models import CurrentRoutine, Teacher, Semester, Course, NewRoutine, SemesterCourse, Student, Attendance, Curriculum, CAMark
 from .forms import RoutineForm, TeacherRegistrationForm
 from datetime import datetime, timedelta, date
 from collections import defaultdict
@@ -3581,6 +3581,37 @@ def attendance_calendar(request):
         messages.error(request, "You don't have a teacher profile. Please contact administrator.")
         return redirect('generate-routine')
     
+    # Get all curricula
+    curricula = Curriculum.objects.filter(is_active=True).order_by('name')
+    
+    # Get selected curriculum from request
+    selected_curriculum_id = request.GET.get('curriculum') or request.POST.get('curriculum')
+    selected_curriculum = None
+    
+    if selected_curriculum_id:
+        try:
+            # Convert to integer to ensure type consistency
+            selected_curriculum_id = int(selected_curriculum_id)
+            selected_curriculum = Curriculum.objects.get(id=selected_curriculum_id)
+        except (Curriculum.DoesNotExist, ValueError):
+            selected_curriculum = None
+            selected_curriculum_id = None
+    
+    # If no curriculum selected, use the Old Curriculum by default
+    if not selected_curriculum and curricula.exists():
+        try:
+            selected_curriculum = Curriculum.objects.get(code='OLD')
+            selected_curriculum_id = selected_curriculum.id
+        except Curriculum.DoesNotExist:
+            selected_curriculum = curricula.first()
+            selected_curriculum_id = selected_curriculum.id if selected_curriculum else None
+    
+    # Filter semesters by selected curriculum
+    if selected_curriculum:
+        semesters = Semester.objects.filter(curriculum=selected_curriculum).order_by('order', 'name')
+    else:
+        semesters = Semester.objects.all().order_by('order', 'name')
+    
     # Get semester and course from request
     semester_id = request.GET.get('semester')
     course_id = request.GET.get('course')
@@ -3604,7 +3635,10 @@ def attendance_calendar(request):
     context = {
         'teacher': teacher,
         'is_admin': request.user.is_superuser or request.user.is_staff,
-        'semesters': Semester.objects.all().order_by('order', 'name'),
+        'curricula': curricula,
+        'selected_curriculum_id': selected_curriculum_id,
+        'selected_curriculum': selected_curriculum,
+        'semesters': semesters,
         'courses': courses_queryset.order_by('code'),
         'selected_semester_id': semester_id,
         'selected_course_id': course_id,
@@ -3640,6 +3674,53 @@ def attendance_calendar(request):
                 course=course,
                 semester=semester
             ).values_list('day', flat=True).distinct()
+            
+            # Get actual class duration from routine data
+            actual_class_duration = None
+            class_ratio = 1.0
+            try:
+                # Get a sample routine entry to determine actual class duration
+                sample_routine = NewRoutine.objects.filter(
+                    course=course,
+                    semester=semester
+                ).first()
+                
+                if sample_routine and sample_routine.start_time and sample_routine.end_time:
+                    # Calculate actual duration in minutes
+                    start_time = sample_routine.start_time
+                    end_time = sample_routine.end_time
+                    start_minutes = start_time.hour * 60 + start_time.minute
+                    end_minutes = end_time.hour * 60 + end_time.minute
+                    actual_class_duration = end_minutes - start_minutes
+                    
+                    # Calculate class ratio
+                    if course.is_lab:
+                        standard_duration = semester.lab_class_duration_minutes
+                    else:
+                        standard_duration = semester.theory_class_duration_minutes
+                    
+                    if standard_duration > 0:
+                        class_ratio = actual_class_duration / standard_duration
+                    
+                    print(f"DEBUG: Actual class duration for {course.name}: {actual_class_duration} minutes")
+                    print(f"DEBUG: Standard duration: {standard_duration} minutes")
+                    print(f"DEBUG: Class ratio: {class_ratio}")
+                else:
+                    # Fallback to semester default duration
+                    if course.is_lab:
+                        actual_class_duration = semester.lab_class_duration_minutes
+                    else:
+                        actual_class_duration = semester.theory_class_duration_minutes
+                    class_ratio = 1.0
+                    print(f"DEBUG: Using semester default duration for {course.name}: {actual_class_duration} minutes")
+            except Exception as e:
+                print(f"DEBUG: Error getting actual class duration: {e}")
+                # Fallback to semester default duration
+                if course.is_lab:
+                    actual_class_duration = semester.lab_class_duration_minutes
+                else:
+                    actual_class_duration = semester.theory_class_duration_minutes
+                class_ratio = 1.0
             
             print(f"DEBUG: Course {course.name} is scheduled on days: {list(course_routines)}")
             
@@ -3736,6 +3817,34 @@ def attendance_calendar(request):
                     else:
                         attendance_status[student.id][date] = None
             
+            # Calculate attendance totals for each student
+            attendance_totals = {}
+            try:
+                # Get number_of_classes from SemesterCourse
+                semester_course = SemesterCourse.objects.get(
+                    semester=semester,
+                    course=course
+                )
+                number_of_classes = semester_course.number_of_classes
+                print(f"DEBUG: Found SemesterCourse with number_of_classes: {number_of_classes}")
+            except SemesterCourse.DoesNotExist:
+                number_of_classes = len(semester_dates)  # Fallback to number of dates
+                print(f"DEBUG: No SemesterCourse found, using fallback: {number_of_classes}")
+            
+            for student in students:
+                # Simple count of present days (for now)
+                present_count = sum(1 for date in semester_dates 
+                                  if student.id in attendance_matrix and 
+                                  date in attendance_matrix[student.id] and 
+                                  attendance_matrix[student.id][date])
+                
+                attendance_totals[student.id] = {
+                    'classes_attended': present_count,
+                    'number_of_classes': number_of_classes
+                }
+                
+                print(f"DEBUG: Student {student.id} - Classes attended: {present_count}, Total classes: {number_of_classes}")
+            
             # Get attendance data for the selected date if provided (for backward compatibility)
             attendance_data = {}
             if selected_date:
@@ -3767,16 +3876,52 @@ def attendance_calendar(request):
                 'attendance_matrix': attendance_matrix,
                 'attendance_status': attendance_status,
                 'attendance_data': attendance_data,
+                'attendance_totals': attendance_totals,
                 'today': today,
                 'current_week_date': current_week_date,
                 'holiday_dates': holiday_dates,
                 'makeup_dates': makeup_dates,
+                'actual_class_duration': actual_class_duration,
+                'class_ratio': class_ratio,
             })
+            
+            print("=" * 80)
+            print("FINAL CONTEXT CHECK:")
+            print(f"attendance_totals: {attendance_totals}")
+            print(f"len(semester_dates): {len(semester_dates)}")
+            print("=" * 80)
             
         except (Semester.DoesNotExist, Course.DoesNotExist):
             messages.error(request, "Invalid semester or course selected.")
     
     return render(request, 'bou_routines_app/attendance_calendar.html', context)
+
+@login_required
+def get_semesters_for_curriculum(request):
+    """AJAX endpoint to get semesters for a specific curriculum"""
+    # Check if user is admin/superuser or has attendance permission
+    if not (request.user.is_superuser or request.user.is_staff or check_teacher_permission(request.user, 'can_mark_attendance')):
+        return JsonResponse({'error': 'Permission denied'}, status=403)
+    
+    curriculum_id = request.GET.get('curriculum_id')
+    if not curriculum_id:
+        return JsonResponse({'error': 'Curriculum ID required'}, status=400)
+    
+    try:
+        curriculum = Curriculum.objects.get(id=curriculum_id)
+        semesters = Semester.objects.filter(curriculum=curriculum).order_by('order', 'name')
+        
+        semesters_data = []
+        for semester in semesters:
+            semesters_data.append({
+                'id': semester.id,
+                'name': semester.name,
+                'semester_full_name': semester.semester_full_name
+            })
+        
+        return JsonResponse({'semesters': semesters_data})
+    except Curriculum.DoesNotExist:
+        return JsonResponse({'error': 'Curriculum not found'}, status=404)
 
 @login_required
 def get_courses_for_semester(request):
@@ -4081,3 +4226,216 @@ def teacher_dashboard(request):
     }
     
     return render(request, 'bou_routines_app/teacher_dashboard.html', context)
+
+
+@login_required
+def ca_management(request):
+    """
+    CA (Continuous Assessment) management page
+    Similar to attendance calendar but for CA marks
+    """
+    # Check permissions
+    if not (request.user.is_superuser or request.user.is_staff or check_teacher_permission(request.user, 'can_manage_ca')):
+        messages.error(request, "You don't have permission to manage CA marks.")
+        return redirect('teacher-dashboard')
+    
+    # Get teacher profile
+    teacher = None
+    if hasattr(request.user, 'teacher'):
+        teacher = request.user.teacher
+    elif request.user.is_superuser or request.user.is_staff:
+        teacher = None  # Admin can manage all courses
+    
+    # Get all curricula
+    curricula = Curriculum.objects.filter(is_active=True).order_by('name')
+    
+    # Get selected curriculum from request
+    selected_curriculum_id = request.GET.get('curriculum') or request.POST.get('curriculum')
+    selected_curriculum = None
+    
+    if selected_curriculum_id:
+        try:
+            selected_curriculum_id = int(selected_curriculum_id)
+            selected_curriculum = Curriculum.objects.get(id=selected_curriculum_id)
+        except (Curriculum.DoesNotExist, ValueError):
+            selected_curriculum = None
+            selected_curriculum_id = None
+    
+    # If no curriculum selected, use the Old Curriculum by default
+    if not selected_curriculum and curricula.exists():
+        try:
+            selected_curriculum = Curriculum.objects.get(code='OLD')
+            selected_curriculum_id = selected_curriculum.id
+        except Curriculum.DoesNotExist:
+            selected_curriculum = curricula.first()
+            selected_curriculum_id = selected_curriculum.id if selected_curriculum else None
+    
+    # Filter semesters by selected curriculum
+    if selected_curriculum:
+        semesters = Semester.objects.filter(curriculum=selected_curriculum).order_by('order', 'name')
+    else:
+        semesters = Semester.objects.all().order_by('order', 'name')
+    
+    # Get semester and course from request
+    semester_id = request.GET.get('semester') or request.POST.get('semester')
+    course_id = request.GET.get('course') or request.POST.get('course')
+    
+    # Get courses for the selected semester
+    courses_queryset = Course.objects.none()
+    if semester_id:
+        if teacher:
+            # Teacher can only see their own courses
+            courses_queryset = Course.objects.filter(
+                semestercourse__semester_id=semester_id,
+                teacher=teacher
+            ).distinct()
+        else:
+            # Admin users can see all courses in the selected semester
+            courses_queryset = Course.objects.filter(
+                semestercourse__semester_id=semester_id
+            ).distinct()
+    
+    # Get students for the selected course and semester
+    students = Student.objects.none()
+    ca_marks = {}
+    if semester_id and course_id:
+        try:
+            semester = Semester.objects.get(id=semester_id)
+            course = Course.objects.get(id=course_id)
+            
+            # Get students enrolled in this semester
+            students = Student.objects.filter(semesters=semester).order_by('id')
+            
+            # Get existing CA marks for these students
+            existing_marks = CAMark.objects.filter(
+                student__in=students,
+                course=course,
+                semester=semester
+            )
+            
+            # Create a dictionary for easy lookup
+            for mark in existing_marks:
+                ca_marks[mark.student.id] = mark
+            
+            # For students without existing CA marks, create temporary objects with calculated attendance
+            for student in students:
+                if student.id not in ca_marks:
+                    # Create a temporary CA mark object with calculated attendance
+                    temp_mark = CAMark(
+                        student=student,
+                        course=course,
+                        semester=semester
+                    )
+                    # Calculate attendance mark
+                    temp_mark.attendance_mark = temp_mark.calculate_attendance_mark()
+                    ca_marks[student.id] = temp_mark
+                
+        except (Semester.DoesNotExist, Course.DoesNotExist):
+            messages.error(request, "Invalid semester or course selected.")
+    
+    context = {
+        'teacher': teacher,
+        'is_admin': request.user.is_superuser or request.user.is_staff,
+        'curricula': curricula,
+        'selected_curriculum_id': selected_curriculum_id,
+        'selected_curriculum': selected_curriculum,
+        'semesters': semesters,
+        'courses': courses_queryset.order_by('code'),
+        'selected_semester_id': semester_id,
+        'selected_course_id': course_id,
+        'students': students,
+        'ca_marks': ca_marks,
+    }
+    
+    if semester_id and course_id:
+        try:
+            semester = Semester.objects.get(id=semester_id)
+            course = Course.objects.get(id=course_id)
+            context['selected_semester'] = semester
+            context['selected_course'] = course
+        except (Semester.DoesNotExist, Course.DoesNotExist):
+            pass
+    
+    return render(request, 'bou_routines_app/ca_management.html', context)
+
+
+@login_required
+def save_ca_marks(request):
+    """
+    Save CA marks for students
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Invalid request method'}, status=405)
+    
+    # Check permissions
+    if not (request.user.is_superuser or request.user.is_staff or check_teacher_permission(request.user, 'can_manage_ca')):
+        return JsonResponse({'error': 'Permission denied'}, status=403)
+    
+    try:
+        semester_id = request.POST.get('semester_id')
+        course_id = request.POST.get('course_id')
+        
+        if not semester_id or not course_id:
+            return JsonResponse({'error': 'Semester and course are required'}, status=400)
+        
+        semester = Semester.objects.get(id=semester_id)
+        course = Course.objects.get(id=course_id)
+        
+        # Get teacher
+        teacher = None
+        if hasattr(request.user, 'teacher'):
+            teacher = request.user.teacher
+        elif request.user.is_superuser or request.user.is_staff:
+            # For admin users, we need to get the course teacher
+            teacher = course.teacher
+        
+        if not teacher:
+            return JsonResponse({'error': 'Teacher not found'}, status=400)
+        
+        # Process each student's marks
+        students_data = request.POST.get('students_data')
+        if students_data:
+            import json
+            students_marks = json.loads(students_data)
+            
+            for student_id, marks_data in students_marks.items():
+                try:
+                    student = Student.objects.get(id=student_id)
+                    
+                    # Get or create CA mark record
+                    ca_mark, created = CAMark.objects.get_or_create(
+                        student=student,
+                        course=course,
+                        semester=semester,
+                        defaults={'marked_by': teacher}
+                    )
+                    
+                    # Update marks based on course type
+                    if course.is_lab:
+                        # Lab course marks
+                        ca_mark.lab_assignment_mark = float(marks_data.get('lab_assignment_mark', 0))
+                        ca_mark.lab_practical_mark = float(marks_data.get('lab_practical_mark', 0))
+                    else:
+                        # Theory course marks
+                        ca_mark.assignment_mark = float(marks_data.get('assignment_mark', 0))
+                        ca_mark.quiz_mark = float(marks_data.get('quiz_mark', 0))
+                        ca_mark.midterm_mark = float(marks_data.get('midterm_mark', 0))
+                    
+                    # Update metadata
+                    ca_mark.marked_by = teacher
+                    ca_mark.notes = marks_data.get('notes', '')
+                    
+                    # Save (this will trigger auto-calculation of attendance and total marks)
+                    ca_mark.save()
+                    
+                except Student.DoesNotExist:
+                    continue
+                except (ValueError, TypeError) as e:
+                    continue
+        
+        return JsonResponse({'success': True, 'message': 'CA marks saved successfully'})
+        
+    except (Semester.DoesNotExist, Course.DoesNotExist):
+        return JsonResponse({'error': 'Invalid semester or course'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)

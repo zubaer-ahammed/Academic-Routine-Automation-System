@@ -1,0 +1,813 @@
+{% extends 'bou_routines_app/base.html' %}
+{% load static %}
+
+{% block title %}CA Management - BOUSST CSE Routine Generator{% endblock %}
+
+{% block extra_head %}
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .container-box-bou {
+        background: white;
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-top: 20px;
+        margin-bottom: 20px;
+    }
+
+    .ca-table-section {
+        margin-top: 20px;
+    }
+
+    .table-header {
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #e9ecef;
+    }
+
+    .table-header h4 {
+        color: #dc3545;
+        margin-bottom: 10px;
+    }
+
+    .table-responsive {
+        overflow-x: auto;
+        overflow-y: visible;
+        margin-bottom: 20px;
+        position: relative;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        -webkit-overflow-scrolling: touch;
+        contain: layout style paint;
+        transform: translateZ(0);
+        will-change: scroll-position;
+    }
+    
+    .table-responsive::-webkit-scrollbar {
+        height: 8px;
+    }
+    
+    .table-responsive::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+    
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 4px;
+    }
+    
+    .table-responsive::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+    }
+
+    .ca-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0;
+        font-size: 0.9rem;
+        background-color: white;
+    }
+
+    .ca-table th {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-weight: 600;
+        padding: 12px 8px;
+        text-align: center;
+        border: 1px solid #dee2e6;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        white-space: nowrap;
+    }
+
+    .ca-table td {
+        padding: 10px 8px;
+        text-align: center;
+        vertical-align: middle;
+        border: 1px solid #dee2e6;
+        background-color: white;
+    }
+
+    .ca-table tbody tr:nth-child(even) {
+        background-color: #f8f9fa;
+    }
+
+    .ca-table tbody tr:hover {
+        background-color: #e3f2fd;
+        transition: background-color 0.2s ease;
+    }
+
+    .student-info {
+        text-align: left;
+        min-width: 120px;
+        font-weight: 500;
+        color: #495057;
+    }
+
+    .mark-input {
+        width: 70px;
+        padding: 6px 8px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        text-align: center;
+        font-size: 0.9rem;
+        transition: all 0.2s ease;
+    }
+
+    .mark-input:focus {
+        border-color: #80bdff;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        outline: none;
+    }
+
+    .total-mark {
+        font-weight: bold;
+        background-color: #e9ecef;
+        color: #495057;
+    }
+
+    .course-info {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border-left: 4px solid #007bff;
+    }
+
+    .ca-distribution {
+        background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border-left: 4px solid #2196f3;
+    }
+
+    .btn-save-ca {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        border: none;
+        color: white;
+        padding: 12px 24px;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+    }
+
+    .btn-save-ca:hover {
+        background: linear-gradient(135deg, #218838 0%, #1ea085 100%);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(40, 167, 69, 0.4);
+    }
+
+    .btn-save-ca:active {
+        transform: translateY(0);
+    }
+
+    .info-message {
+        background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+        border: 1px solid #bee5eb;
+        border-radius: 8px;
+        padding: 15px;
+        margin: 20px 0;
+        color: #0c5460;
+        border-left: 4px solid #17a2b8;
+    }
+
+    .info-message i {
+        margin-right: 8px;
+        color: #17a2b8;
+    }
+
+    .form-group label {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 5px;
+    }
+
+    .form-group select {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        background-color: white;
+        transition: border-color 0.2s ease;
+    }
+
+    .form-group select:focus {
+        border-color: #80bdff;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        outline: none;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+        border: none;
+        padding: 10px 20px;
+        border-radius: 6px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+    }
+
+    .btn-outline-primary {
+        border: 2px solid #007bff;
+        color: #007bff;
+        background: transparent;
+        padding: 8px 18px;
+        border-radius: 6px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    .btn-outline-primary:hover {
+        background: #007bff;
+        color: white;
+        transform: translateY(-1px);
+    }
+
+    .badge {
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .badge-info {
+        background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+        color: white;
+    }
+
+    .badge-primary {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+        color: white;
+    }
+
+    .header-buttons {
+        display: flex;
+        gap: 10px;
+    }
+
+    .header-buttons .btn {
+        min-width: 140px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="container-box-bou">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2><i class="fas fa-chart-line"></i> CA Management</h2>
+                    <div class="header-buttons">
+                        <a href="{% url 'attendance-calendar' %}" class="btn btn-outline-primary">
+                            <i class="fas fa-calendar-check"></i> Attendance
+                        </a>
+                        <a href="{% url 'ca-management' %}" class="btn btn-primary">
+                            <i class="fas fa-chart-line"></i> CA Management
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Selection Form -->
+                <form method="get" action="{% url 'ca-management' %}">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="curriculum">Select Curriculum:</label>
+                                <select name="curriculum" id="curriculum" onchange="loadSemestersForCurriculum(this.value)">
+                                    <option value="">-- Select Curriculum --</option>
+                                    {% for curriculum in curricula %}
+                                        <option value="{{ curriculum.id }}" {% if selected_curriculum_id == curriculum.id %}selected{% endif %}>
+                                            {{ curriculum.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="semester">Select Semester:</label>
+                                <select name="semester" id="semester" onchange="loadCoursesForSemester(this.value)">
+                                    <option value="">-- Select Semester --</option>
+                                    {% for semester in semesters %}
+                                        <option value="{{ semester.id }}" {% if selected_semester_id == semester.id %}selected{% endif %}>
+                                            {{ semester.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="course">Select Course:</label>
+                                <select name="course" id="course" onchange="loadStudentsForCourse()">
+                                    <option value="">-- Select Course --</option>
+                                    {% for course in courses %}
+                                        <option value="{{ course.id }}" {% if selected_course_id == course.id %}selected{% endif %}>
+                                            {{ course.code }} - {{ course.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label>&nbsp;</label>
+                                <div>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-search"></i> Load Students
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                {% if selected_semester and selected_course %}
+                    <!-- Course Information -->
+                    <div class="course-info">
+                        <h4><i class="fas fa-graduation-cap"></i> CA Management - {{ selected_semester.name }}</h4>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong><i class="fas fa-book"></i> Course:</strong> {{ selected_course.code }} - {{ selected_course.name }}</p>
+                                <p><strong><i class="fas fa-chalkboard-teacher"></i> Teacher:</strong> {{ selected_course.teacher.name }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong><i class="fas fa-tag"></i> Course Type:</strong> 
+                                    {% if selected_course.is_lab %}
+                                        <span class="badge badge-info">Lab Course</span>
+                                    {% else %}
+                                        <span class="badge badge-primary">Theory Course</span>
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CA Distribution Information -->
+                    <div class="ca-distribution">
+                        <h5><i class="fas fa-chart-pie"></i> CA Mark Distribution:</h5>
+                        {% if selected_course.is_lab %}
+                            <p><strong>Lab Course CA Distribution:</strong></p>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="d-flex justify-content-between">
+                                        <span><i class="fas fa-calendar-check"></i> Attendance:</span>
+                                        <strong>{{ selected_course.lab_ca_attendance_weight }}%</strong>
+                                    </div>
+                                    <small class="text-muted">(Auto-calculated)</small>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="d-flex justify-content-between">
+                                        <span><i class="fas fa-tasks"></i> Lab Assignment:</span>
+                                        <strong>{{ selected_course.lab_ca_assignment_weight }}%</strong>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="d-flex justify-content-between">
+                                        <span><i class="fas fa-flask"></i> Lab Practical:</span>
+                                        <strong>{{ selected_course.lab_ca_practical_weight }}%</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        {% else %}
+                            <p><strong>Theory Course CA Distribution:</strong></p>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="d-flex justify-content-between">
+                                        <span><i class="fas fa-calendar-check"></i> Attendance:</span>
+                                        <strong>{{ selected_course.ca_attendance_weight }}%</strong>
+                                    </div>
+                                    <small class="text-muted">(Auto-calculated)</small>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="d-flex justify-content-between">
+                                        <span><i class="fas fa-tasks"></i> Assignment/Presentation:</span>
+                                        <strong>{{ selected_course.ca_assignment_weight }}%</strong>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="d-flex justify-content-between">
+                                        <span><i class="fas fa-file-alt"></i> Mid-Term Exam:</span>
+                                        <strong>{{ selected_course.ca_midterm_weight }}%</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    {% if students %}
+                        <!-- CA Marks Table -->
+                        <div class="ca-table-section">
+                            <div class="table-header">
+                                <h4><i class="fas fa-table"></i> CA Marks for Students</h4>
+                            </div>
+                            
+                            <div class="table-responsive">
+                                <form id="ca-marks-form">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="semester_id" value="{{ selected_semester.id }}">
+                                    <input type="hidden" name="course_id" value="{{ selected_course.id }}">
+                                    
+                                    <table class="ca-table">
+                                        <thead>
+                                            <tr>
+                                                <th rowspan="2" class="student-info">Student ID</th>
+                                                <th rowspan="2" class="student-info">Name</th>
+                                                {% if selected_course.is_lab %}
+                                                    <th colspan="3">Lab Course CA (Total: {{ selected_course.lab_ca_attendance_weight|add:selected_course.lab_ca_assignment_weight|add:selected_course.lab_ca_practical_weight }}%)</th>
+                                                {% else %}
+                                                    <th colspan="3">Theory Course CA (Total: {{ selected_course.ca_attendance_weight|add:selected_course.ca_assignment_weight|add:selected_course.ca_midterm_weight }}%)</th>
+                                                {% endif %}
+                                                <th rowspan="2">Total CA Mark</th>
+                                                <th rowspan="2">Notes</th>
+                                            </tr>
+                                            <tr>
+                                                <th>Attendance<br><small>({% if selected_course.is_lab %}{{ selected_course.lab_ca_attendance_weight }}{% else %}{{ selected_course.ca_attendance_weight }}{% endif %}%)</small></th>
+                                                {% if selected_course.is_lab %}
+                                                    <th>Assignment/Lab Report<br><small>({{ selected_course.lab_ca_assignment_weight }}%)</small></th>
+                                                    <th>Experiment/Lab Project<br><small>({{ selected_course.lab_ca_practical_weight }}%)</small></th>
+                                                {% else %}
+                                                    <th>Assignment/Presentation<br><small>({{ selected_course.ca_assignment_weight }}%)</small></th>
+                                                    <th>Mid-Term Exam<br><small>({{ selected_course.ca_midterm_weight }}%)</small></th>
+                                                {% endif %}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for student in students %}
+                                                <tr>
+                                                    <td class="student-info">{{ student.id }}</td>
+                                                    <td class="student-info">{{ student.name }}</td>
+                                                    
+                                                    <td>
+                                                        <input type="number" 
+                                                               name="students_data[{{ student.id }}][attendance_mark]"
+                                                               value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.attendance_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                               min="0" 
+                                                               max="{% if selected_course.is_lab %}{{ selected_course.lab_ca_attendance_weight }}{% else %}{{ selected_course.ca_attendance_weight }}{% endif %}"
+                                                               step="0.01"
+                                                               class="mark-input"
+                                                               readonly
+                                                               style="background-color: #f8f9fa; color: #6c757d;"
+                                                               title="Auto-calculated based on attendance records">
+                                                    </td>
+                                                    
+                                                    {% if selected_course.is_lab %}
+                                                        <!-- Lab Course Marks -->
+                                                        <td>
+                                                            <input type="number" 
+                                                                   name="students_data[{{ student.id }}][lab_assignment_mark]"
+                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.lab_assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                   min="0" 
+                                                                   max="{{ selected_course.lab_ca_assignment_weight }}"
+                                                                   step="0.01"
+                                                                   class="mark-input"
+                                                                   oninput="calculateStudentTotal(this)">
+                                                        </td>
+                                                        <td>
+                                                            <input type="number" 
+                                                                   name="students_data[{{ student.id }}][lab_practical_mark]"
+                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.lab_practical_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                   min="0" 
+                                                                   max="{{ selected_course.lab_ca_practical_weight }}"
+                                                                   step="0.01"
+                                                                   class="mark-input"
+                                                                   oninput="calculateStudentTotal(this)">
+                                                        </td>
+                                                    {% else %}
+                                                        <!-- Theory Course Marks -->
+                                                        <td>
+                                                            <input type="number" 
+                                                                   name="students_data[{{ student.id }}][assignment_mark]"
+                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                   min="0" 
+                                                                   max="{{ selected_course.ca_assignment_weight }}"
+                                                                   step="0.01"
+                                                                   class="mark-input"
+                                                                   oninput="calculateStudentTotal(this)">
+                                                        </td>
+                                                        <td>
+                                                            <input type="number" 
+                                                                   name="students_data[{{ student.id }}][midterm_mark]"
+                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.midterm_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                   min="0" 
+                                                                   max="{{ selected_course.ca_midterm_weight }}"
+                                                                   step="0.01"
+                                                                   class="mark-input"
+                                                                   oninput="calculateStudentTotal(this)">
+                                                        </td>
+                                                    {% endif %}
+                                                    
+                                                    <td class="total-mark">
+                                                        <span id="total-ca-{{ student.id }}">
+                                                            {% for mark_id, ca_mark in ca_marks.items %}
+                                                                {% if mark_id == student.id %}
+                                                                    {{ ca_mark.total_ca_mark|floatformat:2 }}
+                                                                {% endif %}
+                                                            {% empty %}
+                                                                0.00
+                                                            {% endfor %}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <input type="text" 
+                                                               name="students_data[{{ student.id }}][notes]"
+                                                               value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.notes }}{% endif %}{% endfor %}"
+                                                               placeholder="Notes..."
+                                                               style="width: 100px; padding: 4px; border: 1px solid #ced4da; border-radius: 4px;">
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </form>
+                            </div>
+                            
+                            <div class="text-right mt-3">
+                                <button type="button" class="btn-save-ca" onclick="saveCAMarks()">
+                                    <i class="fas fa-save"></i> Save CA Marks
+                                </button>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="info-message">
+                            <i class="fas fa-info-circle"></i> No students found for the selected semester and course.
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <div class="info-message">
+                        <i class="fas fa-info-circle"></i> Please select a curriculum, semester, and course to manage CA marks.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Function to load semesters for a selected curriculum
+function loadSemestersForCurriculum(curriculumId) {
+    const semesterSelect = document.getElementById('semester');
+    const courseSelect = document.getElementById('course');
+    
+    semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
+    courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
+    
+    if (!curriculumId) {
+        return;
+    }
+    
+    semesterSelect.innerHTML = '<option value="">Loading semesters...</option>';
+    
+    fetch(`{% url 'get-semesters-for-curriculum' %}?curriculum_id=${curriculumId}&t=${Date.now()}`)
+        .then(response => response.json())
+        .then(data => {
+            semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
+            data.semesters.forEach(semester => {
+                const option = document.createElement('option');
+                option.value = semester.id;
+                option.textContent = semester.name;
+                semesterSelect.appendChild(option);
+            });
+            
+            // Try to re-select semester if it was in the URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const prevSemesterId = urlParams.get('semester');
+            if (prevSemesterId && data.semesters.some(s => s.id == prevSemesterId)) {
+                semesterSelect.value = prevSemesterId;
+                loadCoursesForSemester(prevSemesterId);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading semesters:', error);
+            semesterSelect.innerHTML = '<option value="">Error loading semesters</option>';
+        });
+}
+
+// Function to load courses for a selected semester
+function loadCoursesForSemester(semesterId) {
+    const curriculumSelect = document.getElementById('curriculum');
+    const courseSelect = document.getElementById('course');
+    const curriculumId = curriculumSelect.value;
+    
+    courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
+    
+    if (!semesterId) {
+        return;
+    }
+    
+    courseSelect.innerHTML = '<option value="">Loading courses...</option>';
+    
+    fetch(`{% url 'get-courses-for-semester' %}?semester_id=${semesterId}&t=${Date.now()}`)
+        .then(response => response.json())
+        .then(data => {
+            courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
+            data.courses.forEach(course => {
+                const option = document.createElement('option');
+                option.value = course.id;
+                option.textContent = `${course.code} - ${course.name}`;
+                courseSelect.appendChild(option);
+            });
+
+            // Try to re-select course if it was in the URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const prevCourseId = urlParams.get('course');
+            if (prevCourseId && data.courses.some(c => c.id == prevCourseId)) {
+                courseSelect.value = prevCourseId;
+            }
+        })
+        .catch(error => {
+            console.error('Error loading courses:', error);
+            courseSelect.innerHTML = '<option value="">Error loading courses</option>';
+        });
+}
+
+// Function to update URL parameters and reload page
+function loadStudentsForCourse() {
+    const curriculumSelect = document.getElementById('curriculum');
+    const semesterSelect = document.getElementById('semester');
+    const courseSelect = document.getElementById('course');
+    
+    const curriculumId = curriculumSelect.value;
+    const semesterId = semesterSelect.value;
+    const courseId = courseSelect.value;
+    
+    // Only reload if we have all three selections
+    if (curriculumId && semesterId && courseId) {
+        updateUrlParams(curriculumId, semesterId, courseId);
+    }
+}
+
+function updateUrlParams(curriculumId, semesterId, courseId) {
+    const url = new URL(window.location.href);
+    if (curriculumId) {
+        url.searchParams.set('curriculum', curriculumId);
+    } else {
+        url.searchParams.delete('curriculum');
+    }
+    if (semesterId) {
+        url.searchParams.set('semester', semesterId);
+    } else {
+        url.searchParams.delete('semester');
+    }
+    if (courseId) {
+        url.searchParams.set('course', courseId);
+    } else {
+        url.searchParams.delete('course');
+    }
+    window.location.href = url.toString();
+}
+
+// Function to calculate total CA mark for a single student row
+function calculateStudentTotal(inputElement) {
+    const row = inputElement.closest('tr');
+    const isLabCourse = {% if selected_course.is_lab %}true{% else %}false{% endif %};
+    
+    const attendanceMark = parseFloat(row.querySelector('input[name$="[attendance_mark]"]').value) || 0;
+    let total = attendanceMark; // Attendance is auto-calculated, so we include it in total
+
+    if (isLabCourse) {
+        const labAssignmentMark = parseFloat(row.querySelector('input[name$="[lab_assignment_mark]"]').value) || 0;
+        const labPracticalMark = parseFloat(row.querySelector('input[name$="[lab_practical_mark]"]').value) || 0;
+        total += labAssignmentMark + labPracticalMark;
+    } else {
+        const assignmentMark = parseFloat(row.querySelector('input[name$="[assignment_mark]"]').value) || 0;
+        const midtermMark = parseFloat(row.querySelector('input[name$="[midterm_mark]"]').value) || 0;
+        total += assignmentMark + midtermMark;
+    }
+    
+    row.querySelector('.total-mark span').textContent = total.toFixed(2);
+}
+
+// Function to save CA marks
+function saveCAMarks() {
+    const form = document.getElementById('ca-marks-form');
+    const formData = new FormData(form);
+    const studentsData = {};
+    
+    // Collect all student marks and notes
+    form.querySelectorAll('tbody tr').forEach(row => {
+        const studentId = row.querySelector('.student-info').textContent;
+        const attendanceMark = parseFloat(row.querySelector('input[name$="[attendance_mark]"]').value);
+        const notes = row.querySelector('input[name$="[notes]"]').value;
+        
+        const marks = {
+            'attendance_mark': attendanceMark, // This will be auto-calculated on the server
+            'notes': notes
+        };
+
+        // Check if it's a lab course or theory course to get relevant marks
+        const isLabCourse = {% if selected_course.is_lab %}true{% else %}false{% endif %};
+
+        if (isLabCourse) {
+            marks['lab_assignment_mark'] = parseFloat(row.querySelector('input[name$="[lab_assignment_mark]"]').value);
+            marks['lab_practical_mark'] = parseFloat(row.querySelector('input[name$="[lab_practical_mark]"]').value);
+        } else {
+            marks['assignment_mark'] = parseFloat(row.querySelector('input[name$="[assignment_mark]"]').value);
+            marks['midterm_mark'] = parseFloat(row.querySelector('input[name$="[midterm_mark]"]').value);
+        }
+        studentsData[studentId] = marks;
+    });
+
+    const postData = {
+        'csrfmiddlewaretoken': formData.get('csrfmiddlewaretoken'),
+        'semester_id': formData.get('semester_id'),
+        'course_id': formData.get('course_id'),
+        'students_data': JSON.stringify(studentsData)
+    };
+
+    fetch('{% url "save-ca-marks" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': postData['csrfmiddlewaretoken']
+        },
+        body: new URLSearchParams(postData).toString()
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            // Reload the page to show updated marks
+            window.location.reload(); 
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error saving CA marks:', error);
+        alert('An error occurred while saving CA marks.');
+    });
+}
+
+// Initial load based on URL parameters
+document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const curriculumId = urlParams.get('curriculum');
+    const semesterId = urlParams.get('semester');
+    const courseId = urlParams.get('course');
+    
+    const curriculumSelect = document.getElementById('curriculum');
+    const semesterSelect = document.getElementById('semester');
+    const courseSelect = document.getElementById('course');
+    const loadStudentsBtn = document.getElementById('loadStudentsBtn');
+
+    // Set up event listeners
+    curriculumSelect.addEventListener('change', function() {
+        const curriculumId = this.value;
+        if (curriculumId) {
+            loadSemestersForCurriculum(curriculumId);
+        }
+    });
+    
+    semesterSelect.addEventListener('change', function() {
+        const semesterId = this.value;
+        if (semesterId) {
+            loadCoursesForSemester(semesterId);
+        }
+    });
+    
+    courseSelect.addEventListener('change', function() {
+        loadStudentsForCourse();
+    });
+    
+    loadStudentsBtn.addEventListener('click', function() {
+        loadStudentsForCourse();
+    });
+
+    // Initialize page state from URL parameters (without triggering events)
+    if (curriculumId) {
+        curriculumSelect.value = curriculumId;
+        // Load semesters without triggering change event
+        loadSemestersForCurriculum(curriculumId);
+    }
+    
+    if (semesterId) {
+        semesterSelect.value = semesterId;
+        if (curriculumId) {
+            // Load courses if curriculum is already set
+            loadCoursesForSemester(semesterId);
+        }
+    }
+    
+    if (courseId) {
+        courseSelect.value = courseId;
+    }
+});
+</script>
+{% endblock %}

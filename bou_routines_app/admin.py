@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import User
-from .models import Teacher, Semester, Course, CurrentRoutine, NewRoutine, SemesterCourse, LoginLog, Student, Attendance, Curriculum
+from .models import Teacher, Semester, Course, CurrentRoutine, NewRoutine, SemesterCourse, LoginLog, Student, Attendance, Curriculum, CAMark
 
 @admin.register(CurrentRoutine)
 class CurrentRoutineAdmin(admin.ModelAdmin):
@@ -179,6 +179,35 @@ class AttendanceAdmin(admin.ModelAdmin):
         }),
         ('Record Details', {
             'fields': ('marked_by', 'marked_at', 'notes'),
+            'classes': ('collapse',)
+        }),
+    )
+
+@admin.register(CAMark)
+class CAMarkAdmin(admin.ModelAdmin):
+    list_display = ('student', 'course', 'semester', 'total_ca_mark', 'marked_by', 'updated_at')
+    list_filter = ('semester', 'course', 'marked_by', 'updated_at')
+    search_fields = ('student__id', 'student__name', 'course__code', 'course__name')
+    ordering = ('semester', 'course', 'student__id')
+    readonly_fields = ('attendance_mark', 'total_ca_mark', 'marked_at', 'updated_at')
+    
+    fieldsets = (
+        ('Student & Course', {
+            'fields': ('student', 'course', 'semester')
+        }),
+        ('Theory Course Marks', {
+            'fields': ('attendance_mark', 'assignment_mark', 'quiz_mark', 'midterm_mark'),
+            'description': 'Marks for theory courses'
+        }),
+        ('Lab Course Marks', {
+            'fields': ('lab_assignment_mark', 'lab_practical_mark'),
+            'description': 'Marks for lab courses'
+        }),
+        ('Total', {
+            'fields': ('total_ca_mark',)
+        }),
+        ('Record Details', {
+            'fields': ('marked_by', 'marked_at', 'updated_at', 'notes'),
             'classes': ('collapse',)
         }),
     )

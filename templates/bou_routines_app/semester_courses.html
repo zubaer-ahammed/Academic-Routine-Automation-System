@@ -80,6 +80,16 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'download-routines' %}">Download Routines</a>
                     </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'attendance-calendar' %}">
+                                <i class="fas fa-calendar-check"></i> Attendance
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'ca-management' %}">
+                                <i class="fas fa-chart-line"></i> CA Management
+                            </a>
+                        </li>
                     {% if user.is_authenticated %}
                         <li class="nav-item">
                             <a class="nav-link" href="/admin/">Admin</a>

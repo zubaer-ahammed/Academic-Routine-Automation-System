@@ -571,12 +571,49 @@
         font-size: 15px;
         font-weight: bold;
     }
+    
+    /* Make Total column wider */
+    .summary-cell {
+        min-width: 250px;
+        width: 250px;
+    }
+    
+    .duration-based {
+        margin-bottom: 4px;
+        padding: 2px 4px;
+        background-color: #e8f5e8;
+        border-radius: 3px;
+        display: block;
+    }
+    
+    .simple-attendance {
+        padding: 2px 4px;
+        background-color: #f0f8ff;
+        border-radius: 3px;
+        font-size: 0.9em;
+        display: block;
+    }
+    
+    .metric-label {
+        display: block;
+        font-size: 0.75em;
+        color: #666;
+        margin-top: 1px;
+    }
 
     .present-count {
         color: #28a745;
     }
-
+    
     .total-count {
+        color: #6c757d;
+    }
+    
+    .attendance-count {
+        color: #007bff;
+    }
+    
+    .date-count {
         color: #6c757d;
     }
 
@@ -1037,13 +1074,24 @@
                                 {% endwith %}
                             </td>
                             {% endfor %}
-                            <td class="summary-cell">
-                                <div class="attendance-summary">
-                                    {% with attendance_totals|default_if_none:""|dict_key:student.id as student_total %}
-                                        <span class="present-count">{{ student_total.classes_attended|default:0 }}</span>/<span class="total-count">{{ student_total.number_of_classes|default:semester_dates|length }}</span>
-                                    {% endwith %}
-                                </div>
-                            </td>
+                <td class="summary-cell">
+                    <div class="attendance-summary">
+                        {% with attendance_totals|default_if_none:""|dict_key:student.id as student_total %}
+                            <!-- Duration-based classes (main metric) -->
+                            <div class="duration-based">
+                                <span class="present-count">{{ student_total.classes_attended|default:0 }}</span>/<span class="total-count">{{ student_total.number_of_classes }}</span>
+                                <small class="metric-label">classes</small>
+                            </div>
+                            <!-- Simple attendance count (reference metric) -->
+                            <div class="simple-attendance">
+                                <span class="attendance-count">{{ student_total.attendance_days|default:0 }}</span>/<span class="date-count">{{ semester_dates|length }}</span>
+                                <small class="metric-label">days</small>
+                            </div>
+                            <!-- Debug info -->
+                            <!-- DEBUG: attendance_days={{ student_total.attendance_days|default:"None" }}, classes_attended={{ student_total.classes_attended|default:"None" }} -->
+                        {% endwith %}
+                    </div>
+                </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -1633,8 +1681,25 @@ document.addEventListener('DOMContentLoaded', function() {
             const presentSpan = row.querySelector('.present-count');
             const totalSpan = row.querySelector('.total-count');
             
-            if (presentSpan) presentSpan.textContent = checkedBoxes;
-            if (totalSpan) totalSpan.textContent = totalBoxes;
+            if (presentSpan) {
+                // Calculate classes attended based on class ratio (1 attendance = 1.5 classes)
+                const classRatio = {{ class_ratio|default:1.0 }};
+                const classesAttended = Math.round(checkedBoxes * classRatio * 10) / 10; // Round to 1 decimal
+                presentSpan.textContent = classesAttended;
+            }
+            
+            // Update attendance days count (reference metric)
+            const attendanceCountSpan = row.querySelector('.attendance-count');
+            if (attendanceCountSpan) {
+                attendanceCountSpan.textContent = checkedBoxes;
+            }
+            
+            // Update date count (reference metric)
+            const dateCountSpan = row.querySelector('.date-count');
+            if (dateCountSpan) {
+                dateCountSpan.textContent = totalBoxes;
+            }
+            // Don't override totalSpan - let server-side value (number_of_classes) remain
         });
     }
     

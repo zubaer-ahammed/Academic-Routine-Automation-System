@@ -3832,18 +3832,25 @@ def attendance_calendar(request):
                 print(f"DEBUG: No SemesterCourse found, using fallback: {number_of_classes}")
             
             for student in students:
-                # Simple count of present days (for now)
-                present_count = sum(1 for date in semester_dates 
-                                  if student.id in attendance_matrix and 
-                                  date in attendance_matrix[student.id] and 
-                                  attendance_matrix[student.id][date])
+                # Simple count of present days (for reference)
+                attendance_days = sum(1 for date in semester_dates 
+                                     if student.id in attendance_matrix and 
+                                     date in attendance_matrix[student.id] and 
+                                     attendance_matrix[student.id][date])
+                
+                # Calculate duration-based classes attended
+                if class_ratio != 1.0:
+                    classes_attended = round(attendance_days * class_ratio, 1)
+                else:
+                    classes_attended = attendance_days
                 
                 attendance_totals[student.id] = {
-                    'classes_attended': present_count,
+                    'attendance_days': attendance_days,
+                    'classes_attended': classes_attended,
                     'number_of_classes': number_of_classes
                 }
                 
-                print(f"DEBUG: Student {student.id} - Classes attended: {present_count}, Total classes: {number_of_classes}")
+                print(f"DEBUG: Student {student.id} - Attendance days: {attendance_days}, Classes attended: {classes_attended}, Total classes: {number_of_classes}")
             
             # Get attendance data for the selected date if provided (for backward compatibility)
             attendance_data = {}

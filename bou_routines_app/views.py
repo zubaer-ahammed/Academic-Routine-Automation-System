@@ -3838,7 +3838,7 @@ def attendance_calendar(request):
                                      date in attendance_matrix[student.id] and 
                                      attendance_matrix[student.id][date])
                 
-                # Calculate duration-based classes attended
+                # Calculate duration-based classes attended (same as CA calculation)
                 if class_ratio != 1.0:
                     classes_attended = round(attendance_days * class_ratio, 1)
                 else:

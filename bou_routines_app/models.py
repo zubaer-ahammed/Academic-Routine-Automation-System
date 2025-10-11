@@ -305,6 +305,7 @@ class CAMark(models.Model):
         attended_classes_fractional = 0.0
         
         # Get all attendance records for this student, course, and semester
+        # Only count records that have corresponding routine entries
         attendance_records = Attendance.objects.filter(
             student=self.student,
             course=self.course,
@@ -312,7 +313,21 @@ class CAMark(models.Model):
             is_present=True
         )
         
+        # Filter to only include attendance records that have corresponding routines
+        valid_attendance_records = []
         for attendance_record in attendance_records:
+            try:
+                NewRoutine.objects.get(
+                    semester=self.semester,
+                    course=self.course,
+                    class_date=attendance_record.attendance_date
+                )
+                valid_attendance_records.append(attendance_record)
+            except NewRoutine.DoesNotExist:
+                # Skip attendance records that don't have corresponding routines
+                continue
+        
+        for attendance_record in valid_attendance_records:
             # Find the routine for this specific date and course
             try:
                 routine = NewRoutine.objects.get(

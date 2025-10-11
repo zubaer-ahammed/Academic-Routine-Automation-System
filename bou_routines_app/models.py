@@ -294,8 +294,8 @@ class CAMark(models.Model):
         return f"{self.student.id} - {self.course.code} - CA: {self.total_ca_mark}"
     
     def calculate_attendance_mark(self):
-        """Calculate attendance mark based on BOU official attendance rules with duration-based class counting"""
-        # Get total classes from SemesterCourse relationship
+        """Calculate attendance mark based on simple percentage calculation"""
+        # Get total classes from SemesterCourse (same as attendance table)
         try:
             semester_course = SemesterCourse.objects.get(
                 semester=self.semester,
@@ -305,96 +305,18 @@ class CAMark(models.Model):
         except SemesterCourse.DoesNotExist:
             total_classes = 1  # Default to 1 if no SemesterCourse found
         
-        # Get standard class duration from semester settings
-        if self.course.is_lab:
-            standard_duration_minutes = self.semester.lab_class_duration_minutes
-        else:
-            standard_duration_minutes = self.semester.theory_class_duration_minutes
-        
-        # Calculate attended classes with duration consideration
-        attended_classes_fractional = 0.0
-        
-        # Get all attendance records for this student, course, and semester
-        # Only count records that have corresponding routine entries
-        attendance_records = Attendance.objects.filter(
+        # Get simple count of attended days (without filtering by NewRoutine)
+        attended_days = Attendance.objects.filter(
             student=self.student,
             course=self.course,
             semester=self.semester,
             is_present=True
-        )
-        
-        # Filter to only include attendance records that have corresponding routines
-        valid_attendance_records = []
-        for attendance_record in attendance_records:
-            try:
-                NewRoutine.objects.get(
-                    semester=self.semester,
-                    course=self.course,
-                    class_date=attendance_record.attendance_date
-                )
-                valid_attendance_records.append(attendance_record)
-            except NewRoutine.DoesNotExist:
-                # Skip attendance records that don't have corresponding routines
-                continue
-        
-        for attendance_record in valid_attendance_records:
-            # Find the routine for this specific date and course
-            try:
-                routine = NewRoutine.objects.get(
-                    semester=self.semester,
-                    course=self.course,
-                    class_date=attendance_record.attendance_date
-                )
-                
-                # Calculate actual class duration in minutes
-                if routine.start_time and routine.end_time:
-                    start_time = routine.start_time
-                    end_time = routine.end_time
-                    
-                    # Convert time to minutes for calculation
-                    start_minutes = start_time.hour * 60 + start_time.minute
-                    end_minutes = end_time.hour * 60 + end_time.minute
-                    actual_duration_minutes = end_minutes - start_minutes
-                    
-                    # Calculate fractional class count
-                    if standard_duration_minutes > 0:
-                        fractional_classes = actual_duration_minutes / standard_duration_minutes
-                        attended_classes_fractional += fractional_classes
-                    else:
-                        # Fallback to 1 class if standard duration is 0
-                        attended_classes_fractional += 1.0
-                else:
-                    # Fallback to 1 class if no time information
-                    attended_classes_fractional += 1.0
-                    
-            except NewRoutine.DoesNotExist:
-                # If no routine found for this date, count as 1 class (fallback)
-                attended_classes_fractional += 1.0
+        ).count()
         
         if total_classes > 0:
-            attendance_percentage = (attended_classes_fractional / total_classes) * 100
-            
-            # Apply BOU official attendance mark distribution
-            if attendance_percentage >= 90:
-                mark_percentage = 100
-            elif attendance_percentage >= 85:
-                mark_percentage = 90
-            elif attendance_percentage >= 80:
-                mark_percentage = 80
-            elif attendance_percentage >= 75:
-                mark_percentage = 70
-            elif attendance_percentage >= 70:
-                mark_percentage = 60
-            elif attendance_percentage >= 65:
-                mark_percentage = 50
-            elif attendance_percentage >= 60:
-                mark_percentage = 40
-            else:
-                mark_percentage = 0
-            
-            # Convert to actual mark out of the attendance weight
+            # Simple percentage calculation: attendance_weight * (attended_days / total_classes)
             attendance_weight = self.course.ca_attendance_weight if not self.course.is_lab else self.course.lab_ca_attendance_weight
-            return (mark_percentage / 100) * attendance_weight
+            return (attended_days / total_classes) * attendance_weight
         return 0
     
     def calculate_assignment_mark(self):

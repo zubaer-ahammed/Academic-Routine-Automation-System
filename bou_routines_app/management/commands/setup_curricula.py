@@ -9,7 +9,7 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         # Create default curricula
         current_curriculum, created = Curriculum.objects.get_or_create(
-            code='CURR',
+            code='OLD',
             defaults={
                 'name': 'Current Curriculum',
                 'description': 'The existing curriculum for current batches',

@@ -12,7 +12,7 @@ class Curriculum(models.Model):
     """
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=100, unique=True, help_text="Curriculum name (e.g., 'Current Curriculum', 'New Curriculum 2024')")
-    code = models.CharField(max_length=20, unique=True, help_text="Short code for curriculum (e.g., 'CURR', 'NEW2024')")
+    code = models.CharField(max_length=20, unique=True, help_text="Short code for curriculum (e.g., 'OLD', 'NEW2024')")
     description = models.TextField(blank=True, null=True, help_text="Description of the curriculum")
     is_active = models.BooleanField(default=True, help_text="Whether this curriculum is currently active")
     effective_from = models.DateField(null=True, blank=True, help_text="Date from which this curriculum is effective")

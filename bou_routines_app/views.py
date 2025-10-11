@@ -455,7 +455,9 @@ def generate_routine(request):
         # EARLY RETURN IF SAVE ONLY
         if save_only:
             messages.success(request, "Semester info and class schedule saved successfully.")
-            return redirect(f"{reverse('generate-routine')}?semester={selected_semester_id}")
+            # Preserve both curriculum and semester parameters
+            curriculum_param = f"&curriculum={selected_curriculum_id}" if selected_curriculum_id else ""
+            return redirect(f"{reverse('generate-routine')}?semester={selected_semester_id}{curriculum_param}")
         
         # Check for lunch break overlaps (always enforced)
         try:
@@ -981,6 +983,7 @@ def generate_routine(request):
         "selected_curriculum": selected_curriculum,
         "selected_curriculum_id": selected_curriculum.id if selected_curriculum else None,
     }
+    
     
     # Add calendar view data if routines were generated (either from POST or GET)
     if generated_routines:

@@ -233,24 +233,39 @@
         </div>
 
         <div id="selectSemesterMsg" class="alert alert-warning text-center mb-4" style="display:none;">
-            <strong>Please Select a Semester to get started.</strong>
+            <strong>Please Select both Curriculum and Semester to get started.</strong>
         </div>
         <form method="post" id="generateRoutineForm">
             <input type="hidden" id="hasExistingRoutine" value="{% if generated_routines %}1{% else %}0{% endif %}">
             {% csrf_token %}
+            
+            <!-- Curriculum Selection -->
+            <div class="mb-3">
+                <label for="curriculum" class="form-label">Curriculum</label>
+                <select name="curriculum" id="curriculum" class="form-control">
+                    <option value="">Select Curriculum</option>
+                    {% for curriculum in curricula %}
+                    <option value="{{ curriculum.id }}" {% if selected_curriculum_id == curriculum.id %}selected{% endif %}>
+                        {{ curriculum.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <small class="text-muted">Select the curriculum to filter courses and semesters</small>
+            </div>
+            
             <div class="mb-3">
                 <label for="semester" class="form-label">Semester</label>
                 <select name="semester" id="semester" class="form-control">
                     <option value="">Select Semester</option>
                     {% for semester in semesters %}
-                    <option value="{{ semester.id }}" {% if selected_semester_id == semester.id|stringformat:"s" %}selected{% endif %}>{{ semester.name }}</option>
+                    <option value="{{ semester.id }}" {% if selected_semester_id == semester.id %}selected{% endif %}>{{ semester.name }}</option>
                     {% endfor %}
                 </select>
                 <div id="lunchBreakInfo" class="alert alert-info mt-2" style="display: none;"></div>
             </div>
             <div class="mb-3">
                 <label for="date_range" class="form-label">Date Range</label>
-                <input type="text" name="date_range" id="date_range" class="form-control" placeholder="Select date range">
+                <input type="text" name="date_range" id="date_range" class="form-control" placeholder="Select date range" value="{% if selected_semester and selected_semester.start_date and selected_semester.end_date %}{{ selected_semester.start_date|date:'m/d/Y' }} - {{ selected_semester.end_date|date:'m/d/Y' }}{% endif %}">
             </div>
 
             <div class="mb-3">
@@ -920,6 +935,11 @@
                 let hasEmptyFields = false;
 
                 // Check for empty required fields
+                if (!$('#curriculum').val()) {
+                    alert('Please select a curriculum');
+                    e.preventDefault();
+                    return false;
+                }
                 if (!$('#semester').val()) {
                     alert('Please select a semester');
                     e.preventDefault();
@@ -1273,8 +1293,15 @@
                     $('#currentRoutineInfo').remove();
                 }
                 if (semesterId) {
-                    // Always reload the page with the selected semester, regardless of routines
-                    window.location.href = "{% url 'generate-routine' %}?semester=" + semesterId;
+                    // Always reload the page with the selected semester, preserving curriculum
+                    var url = new URL(window.location);
+                    url.searchParams.set('semester', semesterId);
+                    // Preserve curriculum parameter if it exists
+                    var curriculumId = $('#curriculum').val();
+                    if (curriculumId) {
+                        url.searchParams.set('curriculum', curriculumId);
+                    }
+                    window.location.href = url.toString();
                 } else {
                     // If no semester selected, just load courses normally
                     loadSemesterCourses(semesterId);
@@ -1525,8 +1552,13 @@
                 const routineId = cell.data('routine-id');
                 const courseId = cell.data('course-id');
                 
-                // Get current semester
+                // Get current curriculum and semester
+                const curriculumId = $('#curriculum').val();
                 const semesterId = $('#semester').val();
+                if (!curriculumId) {
+                    alert('Please select a curriculum first.');
+                    return;
+                }
                 if (!semesterId) {
                     alert('Please select a semester first.');
                     return;
@@ -1836,11 +1868,25 @@
         var generateBtn = document.getElementById('generateRoutineBtn');
         var saveBtn = document.getElementById('saveChangesBtn');
         var semesterSelect = document.getElementById('semester');
+        var curriculumSelect = document.getElementById('curriculum');
         var resetForm = document.getElementById('resetRoutineForm');
         var resetSemesterInput = document.getElementById('resetSemesterInput');
         var generateForm = document.getElementById('generateRoutineForm');
         var saveOnlyInput = document.getElementById('saveOnlyInput');
         var confirmModal = document.getElementById('generateConfirmModal');
+        
+        // Handle curriculum selection
+        if (curriculumSelect) {
+            curriculumSelect.addEventListener('change', function() {
+                var curriculumId = this.value;
+                if (curriculumId) {
+                    // Reload page with curriculum parameter
+                    var url = new URL(window.location);
+                    url.searchParams.set('curriculum', curriculumId);
+                    window.location.href = url.toString();
+                }
+            });
+        }
         var confirmGenerateBtn = document.getElementById('confirmGenerateBtn');
         var resetConfirmModal = document.getElementById('resetConfirmModal');
         var confirmResetBtn = document.getElementById('confirmResetBtn');
@@ -1849,10 +1895,10 @@
         var selectSemesterMsg = document.getElementById('selectSemesterMsg');
 
         function setFormEnabled(enabled) {
-            // Disable/enable all form fields except the semester dropdown
+            // Disable/enable all form fields except the semester and curriculum dropdowns
             var formEls = generateForm.querySelectorAll('input, select, textarea, button');
             formEls.forEach(function(el) {
-                if (el.id !== 'semester' && el.name !== 'csrfmiddlewaretoken') {
+                if (el.id !== 'semester' && el.id !== 'curriculum' && el.name !== 'csrfmiddlewaretoken') {
                     el.disabled = !enabled;
                 }
             });
@@ -1862,13 +1908,17 @@
 
         function updateBtnsAndFields() {
             var hasSemester = !!semesterSelect.value;
-            resetBtn.disabled = !hasSemester;
-            generateBtn.disabled = !hasSemester;
-            saveBtn.disabled = !hasSemester;
-            setFormEnabled(hasSemester);
+            var hasCurriculum = !!curriculumSelect.value;
+            var bothSelected = hasSemester && hasCurriculum;
+            
+            resetBtn.disabled = !bothSelected;
+            generateBtn.disabled = !bothSelected;
+            saveBtn.disabled = !bothSelected;
+            setFormEnabled(bothSelected);
         }
         updateBtnsAndFields();
         semesterSelect.addEventListener('change', updateBtnsAndFields);
+        curriculumSelect.addEventListener('change', updateBtnsAndFields);
 
         saveBtn.addEventListener('click', function(e) {
             saveOnlyInput.value = '1';
@@ -1879,7 +1929,7 @@
             saveOnlyInput.value = '0';
             if (generateBtn.disabled) {
                 e.preventDefault();
-                alert('Please select a semester before generating a routine.');
+                alert('Please select both curriculum and semester before generating a routine.');
             } else {
                 var hasExistingRoutine = document.getElementById('hasExistingRoutine').value === '1';
                 if (hasExistingRoutine) {

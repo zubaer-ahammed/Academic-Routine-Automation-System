@@ -101,6 +101,21 @@
         <h1>Semester Courses</h1>
         <form method="POST" action="{% url 'update-semester-courses' %}">
             {% csrf_token %}
+            
+            <!-- Curriculum Selection -->
+            <div class="mb-3">
+                <label for="curriculum" class="form-label">Curriculum</label>
+                <select name="curriculum" id="curriculum" class="form-control">
+                    <option value="">Select Curriculum</option>
+                    {% for curriculum in curricula %}
+                    <option value="{{ curriculum.id }}" {% if selected_curriculum_id == curriculum.id %}selected{% endif %}>
+                        {{ curriculum.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <small class="text-muted">Select the curriculum to filter courses and semesters</small>
+            </div>
+            
             <div class="mb-3">
                 <label for="semester" class="form-label">Semester</label>
                 <select name="semester" id="semester" class="form-control" required>
@@ -215,6 +230,17 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
         $(function() {
+            // Handle curriculum selection
+            $('#curriculum').change(function() {
+                var curriculumId = $(this).val();
+                if (curriculumId) {
+                    // Reload page with curriculum parameter
+                    var url = new URL(window.location);
+                    url.searchParams.set('curriculum', curriculumId);
+                    window.location.href = url.toString();
+                }
+            });
+            
             // Handle adding new course rows
             $('#addCourse').click(function () {
                 // Clone only the HTML, not data/events

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Teacher, Semester, Course, CurrentRoutine, NewRoutine, SemesterCourse, LoginLog
+from .models import Teacher, Semester, Course, CurrentRoutine, NewRoutine, SemesterCourse, LoginLog, Curriculum
 
 @admin.register(CurrentRoutine)
 class CurrentRoutineAdmin(admin.ModelAdmin):
@@ -13,12 +13,43 @@ class CurrentRoutineAdmin(admin.ModelAdmin):
     get_teacher.short_description = 'Teacher'
     get_teacher.admin_order_field = 'course__teacher'
 
+@admin.register(Curriculum)
+class CurriculumAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name', 'code', 'is_active', 'effective_from', 'created_at')
+    list_filter = ('is_active', 'created_at')
+    search_fields = ('name', 'code', 'description')
+    ordering = ('-is_active', 'name')
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('name', 'code', 'description', 'is_active')
+        }),
+        ('Timeline', {
+            'fields': ('effective_from',)
+        }),
+    )
+
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
-    list_display = ('id', 'code', 'name', 'teacher')
-    list_filter = ('teacher',)
-    search_fields = ('code', 'name', 'teacher__name')
-    ordering = ('code',)
+    list_display = ('id', 'code', 'name', 'teacher', 'curriculum', 'credits', 'course_type', 'is_theory', 'is_lab')
+    list_filter = ('teacher', 'curriculum', 'course_type', 'is_theory', 'is_lab')
+    search_fields = ('code', 'name', 'teacher__name', 'curriculum__name')
+    ordering = ('curriculum', 'code',)
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('code', 'name', 'teacher', 'curriculum', 'course_type')
+        }),
+        ('Course Details', {
+            'fields': ('credits', 'is_theory', 'is_lab', 'prerequisite_courses')
+        }),
+        ('Theory CA Distribution', {
+            'fields': ('ca_attendance_weight', 'ca_assignment_weight', 'ca_quiz_weight', 'ca_midterm_weight'),
+            'classes': ('collapse',)
+        }),
+        ('Lab CA Distribution', {
+            'fields': ('lab_ca_attendance_weight', 'lab_ca_assignment_weight', 'lab_ca_practical_weight'),
+            'classes': ('collapse',)
+        }),
+    )
 
 @admin.register(SemesterCourse)
 class SemesterCourseAdmin(admin.ModelAdmin):
@@ -35,12 +66,13 @@ class TeacherAdmin(admin.ModelAdmin):
 
 @admin.register(Semester)
 class SemesterAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'semester_full_name', 'theory_class_duration_minutes', 'lab_class_duration_minutes', 'lunch_break_start', 'lunch_break_end', 'start_date')
-    search_fields = ('name',)
+    list_display = ('id', 'name', 'semester_full_name', 'curriculum', 'theory_class_duration_minutes', 'lab_class_duration_minutes', 'lunch_break_start', 'lunch_break_end', 'start_date')
+    list_filter = ('curriculum',)
+    search_fields = ('name', 'curriculum__name')
     ordering = ('name',)
     fieldsets = (
         ('Basic Information', {
-            'fields': ('name', 'order', 'semester_full_name', 'term', 'session', 'study_center')
+            'fields': ('name', 'order', 'semester_full_name', 'term', 'session', 'study_center', 'curriculum')
         }),
         ('Contact Information', {
             'fields': ('contact_person', 'contact_person_designation', 'contact_person_phone', 'contact_person_email')

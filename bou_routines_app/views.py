@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect
-from .models import CurrentRoutine, Teacher, Semester, Course, NewRoutine, SemesterCourse
+from .models import CurrentRoutine, Teacher, Semester, Course, NewRoutine, SemesterCourse, Curriculum
 from .forms import RoutineForm
 from datetime import datetime, timedelta, date
 from collections import defaultdict
@@ -69,14 +69,63 @@ def time_overlap(start1, end1, start2, end2):
 
 @login_required
 def generate_routine(request):
-    semesters = Semester.objects.all().order_by('name')
-    courses = Course.objects.select_related('teacher').all().order_by('code')
+    # Get all curricula
+    curricula = Curriculum.objects.filter(is_active=True).order_by('name')
+    
+    # Get selected curriculum from request
+    selected_curriculum_id = request.GET.get('curriculum') or request.POST.get('curriculum')
+    selected_curriculum = None
+    
+    if selected_curriculum_id:
+        try:
+            # Convert to integer to ensure type consistency
+            selected_curriculum_id = int(selected_curriculum_id)
+            selected_curriculum = Curriculum.objects.get(id=selected_curriculum_id)
+        except (Curriculum.DoesNotExist, ValueError):
+            selected_curriculum = None
+            selected_curriculum_id = None
+    
+    # If no curriculum selected, use the Old Curriculum by default
+    if not selected_curriculum and curricula.exists():
+        try:
+            selected_curriculum = Curriculum.objects.get(code='OLD')
+            selected_curriculum_id = selected_curriculum.id
+        except Curriculum.DoesNotExist:
+            selected_curriculum = curricula.first()
+            selected_curriculum_id = selected_curriculum.id if selected_curriculum else None
+    
+    # Filter semesters and courses by selected curriculum
+    if selected_curriculum:
+        semesters = Semester.objects.filter(curriculum=selected_curriculum).order_by('name')
+        courses = Course.objects.select_related('teacher').filter(curriculum=selected_curriculum).order_by('code')
+    else:
+        semesters = Semester.objects.all().order_by('name')
+        courses = Course.objects.select_related('teacher').all().order_by('code')
+    
     teachers = Teacher.objects.all()
 
     # Pre-select semester if provided in query params (GET)
     selected_semester_id = request.GET.get('semester') or request.POST.get('semester')
+    if selected_semester_id:
+        try:
+            selected_semester_id = int(selected_semester_id)
+        except (ValueError, TypeError):
+            selected_semester_id = None
     selected_semester = None
     teacher_short_name_newline = True  # Default
+    
+    # If semester is provided but no curriculum, determine curriculum from semester
+    if selected_semester_id and not selected_curriculum:
+        try:
+            selected_semester = Semester.objects.get(id=selected_semester_id)
+            if selected_semester.curriculum:
+                selected_curriculum = selected_semester.curriculum
+                selected_curriculum_id = selected_curriculum.id
+                # Re-filter semesters and courses by the determined curriculum
+                semesters = Semester.objects.filter(curriculum=selected_curriculum).order_by('name')
+                courses = Course.objects.select_related('teacher').filter(curriculum=selected_curriculum).order_by('code')
+        except Semester.DoesNotExist:
+            selected_semester = None
 
     # Check if we have any semester courses at all
     if not SemesterCourse.objects.exists():
@@ -925,7 +974,11 @@ def generate_routine(request):
         "teachers": teachers,
         "generated_routines": generated_routines,
         "selected_semester_id": selected_semester_id,
+        "selected_semester": selected_semester,
         "teacher_short_name_newline": teacher_short_name_newline,
+        "curricula": curricula,
+        "selected_curriculum": selected_curriculum,
+        "selected_curriculum_id": selected_curriculum.id if selected_curriculum else None,
     }
     
     # Add calendar view data if routines were generated (either from POST or GET)
@@ -943,7 +996,10 @@ def generate_routine(request):
 
     # Include the selected semester ID if available in POST
     if request.method == "POST" and request.POST.get("semester"):
-        context["selected_semester_id"] = request.POST.get("semester")
+        try:
+            context["selected_semester_id"] = int(request.POST.get("semester"))
+        except (ValueError, TypeError):
+            context["selected_semester_id"] = None
         
     # After routine_table_rows is built, append selected makeup/extra class dates as empty rows (if not already present)
     if routine_table_rows and time_slot_labels:
@@ -973,15 +1029,58 @@ def generate_routine(request):
 
 @login_required
 def update_semester_courses(request):
-    semesters = Semester.objects.all().order_by('name')
-    courses = Course.objects.all().order_by('code')
+    # Get all curricula
+    curricula = Curriculum.objects.filter(is_active=True).order_by('name')
+    
+    # Get selected curriculum from request
+    selected_curriculum_id = request.GET.get('curriculum') or request.POST.get('curriculum')
+    selected_curriculum = None
+    
+    if selected_curriculum_id:
+        try:
+            # Convert to integer to ensure type consistency
+            selected_curriculum_id = int(selected_curriculum_id)
+            selected_curriculum = Curriculum.objects.get(id=selected_curriculum_id)
+        except (Curriculum.DoesNotExist, ValueError):
+            selected_curriculum = None
+            selected_curriculum_id = None
+    
+    # If no curriculum selected, use the Old Curriculum by default
+    if not selected_curriculum and curricula.exists():
+        try:
+            selected_curriculum = Curriculum.objects.get(code='OLD')
+            selected_curriculum_id = selected_curriculum.id
+        except Curriculum.DoesNotExist:
+            selected_curriculum = curricula.first()
+            selected_curriculum_id = selected_curriculum.id if selected_curriculum else None
+    
+    # Filter semesters and courses by selected curriculum
+    if selected_curriculum:
+        semesters = Semester.objects.filter(curriculum=selected_curriculum).order_by('name')
+        # Custom sorting for courses - sort by curriculum, then by code
+        courses = Course.objects.filter(curriculum=selected_curriculum).order_by('code')
+    else:
+        semesters = Semester.objects.all().order_by('name')
+        courses = Course.objects.all().order_by('code')
+    
     from .models import Teacher
     teachers = Teacher.objects.all().order_by('name')
     context = {
         "semesters": semesters,
         "courses": courses,
         "teachers": teachers,
+        "curricula": curricula,
+        "selected_curriculum": selected_curriculum,
+        "selected_curriculum_id": selected_curriculum.id if selected_curriculum else None,
     }
+    
+    # Debug output
+    print(f"DEBUG: selected_curriculum_id = {selected_curriculum_id}")
+    print(f"DEBUG: selected_curriculum = {selected_curriculum}")
+    print(f"DEBUG: context selected_curriculum_id = {context['selected_curriculum_id']}")
+    print(f"DEBUG: curricula = {[(c.id, c.name) for c in curricula]}")
+    
+    
     
     if request.method == "POST":
         semester_id = request.POST.get("semester")

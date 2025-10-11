@@ -830,6 +830,15 @@
         max-width: 90%;
     }
 
+    .header-buttons {
+        display: flex;
+        gap: 10px;
+    }
+
+    .header-buttons .btn {
+        min-width: 140px;
+    }
+
     td.student-id-cell, td.student-name-cell {
         background: #fff;
     }
@@ -901,7 +910,17 @@
 {% block content %}
 <div class="container container-box-bou attendance-container">
     <div class="page-header">
-        <h2><i class="fas fa-calendar-check"></i> Attendance Management</h2>
+        <div class="d-flex justify-content-between align-items-center">
+            <h2><i class="fas fa-calendar-check"></i> Attendance Management</h2>
+            <div class="header-buttons">
+                <a href="{% url 'attendance-calendar' %}{% if request.GET.curriculum %}?curriculum={{ request.GET.curriculum }}{% if request.GET.semester %}&semester={{ request.GET.semester }}{% endif %}{% if request.GET.course %}&course={{ request.GET.course }}{% endif %}{% endif %}" class="btn btn-primary">
+                    <i class="fas fa-calendar-check"></i> Attendance
+                </a>
+                <a href="{% url 'ca-management' %}{% if request.GET.curriculum %}?curriculum={{ request.GET.curriculum }}{% if request.GET.semester %}&semester={{ request.GET.semester }}{% endif %}{% if request.GET.course %}&course={{ request.GET.course }}{% endif %}{% endif %}" class="btn btn-outline-primary">
+                    <i class="fas fa-chart-line"></i> CA Management
+                </a>
+            </div>
+        </div>
     </div>
 
     <!-- Curriculum, Semester and Course Selection -->

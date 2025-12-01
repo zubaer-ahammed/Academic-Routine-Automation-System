@@ -29,7 +29,8 @@ urlpatterns = [
     path('teacher/register/', views.teacher_register, name='teacher-register'),
     path('teacher/dashboard/', views.teacher_dashboard, name='teacher-dashboard'),
     
-    # CA Management URLs
-    path('ca/', views.ca_management, name='ca-management'),
-    path('ca/save/', views.save_ca_marks, name='save-ca-marks'),
+    # Marks Management URLs
+    path('marks/', views.ca_management, name='ca-management'),
+    path('marks/save/', views.save_ca_marks, name='save-ca-marks'),
+    path('marks/save-final-exam/', views.save_final_exam_marks, name='save-final-exam-marks'),
 ]

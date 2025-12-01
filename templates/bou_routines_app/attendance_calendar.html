@@ -3,7 +3,7 @@
 {% load attendance_extras %}
 {% load attendance_tags %}
 
-{% block title %}Attendance Management - BOUSST CSE Routine Generator{% endblock %}
+{% block title %}Attendance Management - BOUSST CSE{% endblock %}
 
 {% block extra_head %}
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -954,7 +954,7 @@
                             <i class="fas fa-calendar-check"></i> Attendance
                         </a>
                         <a href="{% url 'ca-management' %}{% if request.GET.curriculum %}?curriculum={{ request.GET.curriculum }}{% if request.GET.semester %}&semester={{ request.GET.semester }}{% endif %}{% if request.GET.course %}&course={{ request.GET.course }}{% endif %}{% endif %}" class="btn btn-outline-primary">
-                            <i class="fas fa-chart-line"></i> CA Management
+                            <i class="fas fa-chart-line"></i> Marks
                         </a>
                     </div>
                 </div>

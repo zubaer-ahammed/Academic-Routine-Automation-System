@@ -42,7 +42,6 @@ class Command(BaseCommand):
                     'semester_full_name': f'{semester_name} - New Curriculum',
                     'term': 'Regular',
                     'session': '2024-25',
-                    'study_center': 'BOUSST',
                     'contact_person': 'Academic Coordinator',
                     'contact_person_designation': 'Academic Coordinator',
                     'contact_person_phone': '+880-XXX-XXXXXXX',

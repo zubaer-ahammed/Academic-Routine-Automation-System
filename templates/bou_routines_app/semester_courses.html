@@ -38,6 +38,25 @@
         .form-control.mdtimepicker {
             background: #ccc;
         }
+        select.form-select {
+            color: #212529 !important;
+        }
+        select.form-select:invalid {
+            color: #6c757d;
+        }
+        select.form-select option {
+            color: #212529;
+        }
+        select.form-select option[value=""] {
+            color: #6c757d;
+        }
+        select.form-select option:first-child {
+            color: #6c757d;
+        }
+        /* Update select color based on selected value for Program Coordinator */
+        select.form-select#program_coordinator:not([value=""]) {
+            color: #212529;
+        }
         .bou-logo {
             height: 70px;
             margin-right: 12px;
@@ -61,7 +80,7 @@
         <div class="container container-bou bou-header">
             <a class="navbar-brand d-flex align-items-center" href="{% url 'home' %}">
                 <img src="{% static 'bou_logo_icon.png' %}" alt="BOU Logo" class="bou-logo">
-                <span>BOUSST  CSE Routine Generator</span>
+                <span>BOUSST CSE</span>
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -81,14 +100,10 @@
                         <a class="nav-link" href="{% url 'download-routines' %}">Download Routines</a>
                     </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'attendance-calendar' %}">
-                                <i class="fas fa-calendar-check"></i> Attendance
-                            </a>
+                            <a class="nav-link" href="{% url 'attendance-calendar' %}">Attendance</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'ca-management' %}">
-                                <i class="fas fa-chart-line"></i> CA Management
-                            </a>
+                            <a class="nav-link" href="{% url 'ca-management' %}">Marks</a>
                         </li>
                     {% if user.is_authenticated %}
                         <li class="nav-item">
@@ -112,18 +127,36 @@
         <form method="POST" action="{% url 'update-semester-courses' %}">
             {% csrf_token %}
             
-            <!-- Curriculum Selection -->
-            <div class="mb-3">
-                <label for="curriculum" class="form-label">Curriculum</label>
-                <select name="curriculum" id="curriculum" class="form-control">
-                    <option value="">Select Curriculum</option>
-                    {% for curriculum in curricula %}
-                    <option value="{{ curriculum.id }}" {% if selected_curriculum_id == curriculum.id %}selected{% endif %}>
-                        {{ curriculum.name }}
-                    </option>
-                    {% endfor %}
-                </select>
-                <small class="text-muted">Select the curriculum to filter courses and semesters</small>
+            <!-- Curriculum and Centre Selection -->
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="curriculum" class="form-label">Curriculum</label>
+                        <select name="curriculum" id="curriculum" class="form-control">
+                            <option value="">Select Curriculum</option>
+                            {% for curriculum in curricula %}
+                            <option value="{{ curriculum.id }}" {% if selected_curriculum_id == curriculum.id %}selected{% endif %}>
+                                {{ curriculum.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">Select the curriculum to filter courses and semesters</small>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="centre" class="form-label">Study Centre</label>
+                        <select name="centre" id="centre" class="form-control">
+                            <option value="">Select Centre</option>
+                            {% for centre in centres %}
+                            <option value="{{ centre.id }}" {% if selected_centre_id == centre.id %}selected{% endif %}>
+                                {{ centre.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">Select the centre to filter courses, semesters, and teachers</small>
+                    </div>
+                </div>
             </div>
             
             <div class="mb-3">
@@ -151,25 +184,18 @@
                         <label for="session" class="form-label">Session:</label>
                         <input type="text" class="form-control" name="session" id="session">
                     </div>
-                    <div class="col-md-6">
-                        <label for="study_center" class="form-label">Study center:</label>
-                        <input type="text" class="form-control" name="study_center" id="study_center">
-                    </div>
-                    <div class="col-md-6">
-                        <label for="contact_person" class="form-label">Contact person:</label>
-                        <input type="text" class="form-control" name="contact_person" id="contact_person">
-                    </div>
-                    <div class="col-md-6">
-                        <label for="contact_person_designation" class="form-label">Contact person designation:</label>
-                        <input type="text" class="form-control" name="contact_person_designation" id="contact_person_designation">
-                    </div>
-                    <div class="col-md-6">
-                        <label for="contact_person_phone" class="form-label">Contact person phone:</label>
-                        <input type="text" class="form-control" name="contact_person_phone" id="contact_person_phone">
-                    </div>
-                    <div class="col-md-6">
-                        <label for="contact_person_email" class="form-label">Contact person email:</label>
-                        <input type="email" class="form-control" name="contact_person_email" id="contact_person_email">
+                    <div class="col-md-12">
+                        <label for="program_coordinator" class="form-label">Program Coordinator:</label>
+                        <select name="program_coordinator" id="program_coordinator" class="form-select">
+                            <option value="" selected style="color: #6c757d;">Select Program Coordinator</option>
+                            {% for coordinator in program_coordinators %}
+                            <option value="{{ coordinator.id }}" style="color: #212529;">
+                                {{ coordinator.teacher.name }} - {{ coordinator.centre.name }}
+                                {% if coordinator.designation %} ({{ coordinator.designation }}){% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">Select the program coordinator for this semester</small>
                     </div>
                     <div class="col-md-6">
                         <label for="theory_class_duration_minutes" class="form-label">Theory class duration (minutes) for class count:</label>
@@ -192,7 +218,7 @@
                             <select name="courses[]" class="form-select course-select" required>
                                 <option value="">Select Course</option>
                                 {% for course in courses %}
-                                <option value="{{ course.id }}" data-teacher-id="{{ course.teacher.id }}">{{ course.code }} - {{ course.name }} ({{ course.teacher.name }})</option>
+                                <option value="{{ course.id }}">{{ course.code }} - {{ course.name }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -243,12 +269,44 @@
             // Handle curriculum selection
             $('#curriculum').change(function() {
                 var curriculumId = $(this).val();
+                var centreId = $('#centre').val();
+                // Reload page with curriculum and centre parameters
+                var url = new URL(window.location);
                 if (curriculumId) {
-                    // Reload page with curriculum parameter
-                    var url = new URL(window.location);
                     url.searchParams.set('curriculum', curriculumId);
-                    window.location.href = url.toString();
+                } else {
+                    url.searchParams.delete('curriculum');
                 }
+                if (centreId) {
+                    url.searchParams.set('centre', centreId);
+                } else {
+                    url.searchParams.delete('centre');
+                }
+                window.location.href = url.toString();
+            });
+            
+            // Handle centre selection
+            $('#centre').change(function() {
+                var centreId = $(this).val();
+                var curriculumId = $('#curriculum').val();
+                // Reload courses for the selected semester when centre changes
+                const semesterId = $('#semester').val();
+                if (semesterId) {
+                    loadSemesterCourses(semesterId);
+                }
+                // Reload page with curriculum and centre parameters
+                var url = new URL(window.location);
+                if (curriculumId) {
+                    url.searchParams.set('curriculum', curriculumId);
+                } else {
+                    url.searchParams.delete('curriculum');
+                }
+                if (centreId) {
+                    url.searchParams.set('centre', centreId);
+                } else {
+                    url.searchParams.delete('centre');
+                }
+                window.location.href = url.toString();
             });
             
             // Handle adding new course rows
@@ -304,11 +362,17 @@
                     $('.course-row:first select').val('');
                     $('.course-row:first input[name="classes"]').val('1');
 
+                    // Get the selected centre ID and curriculum ID
+                    var centreId = $('#centre').val();
+                    var curriculumId = $('#curriculum').val();
+
                     // Fetch courses and semester info for the selected semester
                     $.ajax({
                         url: "{% url 'get-semester-courses' %}",
                         data: {
-                            'semester_id': semesterId
+                            'semester_id': semesterId,
+                            'centre_id': centreId,
+                            'curriculum_id': curriculumId
                         },
                         dataType: 'json',
                         success: function(data) {
@@ -321,7 +385,21 @@
                                         row = $('.course-row:first').clone();
                                         $('#courseRepeater').append(row);
                                     }
-                                    row.find('select.course-select').val(course.id);
+                                    
+                                    // Get the course select dropdown
+                                    var courseSelect = row.find('select.course-select');
+                                    
+                                    // Check if the course option exists in the dropdown
+                                    if (courseSelect.find('option[value="' + course.id + '"]').length === 0) {
+                                        // Only add the course option if it matches the selected curriculum
+                                        // (courses are already filtered by curriculum in the backend, but double-check)
+                                        var selectedCurriculumId = $('#curriculum').val();
+                                        // Add the course option if it doesn't exist
+                                        courseSelect.append('<option value="' + course.id + '">' + course.code + ' - ' + course.name + '</option>');
+                                    }
+                                    
+                                    // Set the course value
+                                    courseSelect.val(course.id);
                                     row.find('input[name="classes"]').val(course.number_of_classes || 0);
                                     row.find('select.teacher-select').val(course.teacher_id);
                                 });
@@ -331,11 +409,19 @@
                                 $('#semester_full_name').val(data.semester_data.semester_full_name || '');
                                 $('#term').val(data.semester_data.term || '');
                                 $('#session').val(data.semester_data.session || '');
-                                $('#study_center').val(data.semester_data.study_center || '');
-                                $('#contact_person').val(data.semester_data.contact_person || '');
-                                $('#contact_person_designation').val(data.semester_data.contact_person_designation || '');
-                                $('#contact_person_phone').val(data.semester_data.contact_person_phone || '');
-                                $('#contact_person_email').val(data.semester_data.contact_person_email || '');
+                                // Set program coordinator, default to empty string to show placeholder
+                                var programCoordinatorId = data.semester_data.program_coordinator_id || '';
+                                if (programCoordinatorId) {
+                                    $('#program_coordinator').val(programCoordinatorId);
+                                } else {
+                                    // Ensure first option (placeholder) is selected
+                                    $('#program_coordinator').val('');
+                                    $('#program_coordinator').prop('selectedIndex', 0);
+                                }
+                                // Update color based on selection
+                                if (typeof updateProgramCoordinatorColor === 'function') {
+                                    updateProgramCoordinatorColor();
+                                }
                                 $('#theory_class_duration_minutes').val(data.semester_data.theory_class_duration_minutes || 60);
                                 $('#lab_class_duration_minutes').val(data.semester_data.lab_class_duration_minutes || 90);
                             }
@@ -429,6 +515,25 @@
             });
             // Also check on page load
             checkDuplicateCourses();
+            
+            // Function to update Program Coordinator select color
+            function updateProgramCoordinatorColor() {
+                var $select = $('#program_coordinator');
+                if ($select.val() === '' || $select.val() === null) {
+                    $select.css('color', '#6c757d');
+                } else {
+                    $select.css('color', '#212529');
+                }
+            }
+            
+            // Handle Program Coordinator color change
+            $('#program_coordinator').on('change', updateProgramCoordinatorColor);
+            
+            // Set initial color on page load and ensure first option is selected if no value
+            if (!$('#program_coordinator').val()) {
+                $('#program_coordinator').prop('selectedIndex', 0);
+            }
+            updateProgramCoordinatorColor();
 
             // Prevent form submission if duplicate courses exist
             $('form').on('submit', function(e) {
@@ -446,7 +551,7 @@
     <footer class="bg-dark text-white text-center py-3 mt-5">
         <div class="container bou-footer-container container-bou">
             <p class="mb-0">
-                © <span id="currentYear"></span> BOUSST  CSE Routine Generator. Developed by
+                © <span id="currentYear"></span> BOUSST CSE. Developed by
                 <a href="https://github.com/zubaer-ahammed/" target="_blank" class="text-info">Md. Zubaer Ahammed</a> and
                 <a href="https://github.com/Mojahidul21" target="_blank" class="text-info">Mojahidul Alam</a>
             </p>

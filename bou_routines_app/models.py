@@ -6,6 +6,26 @@ DAYS = [
     ("Saturday", "Saturday")
 ]
 
+class Centre(models.Model):
+    """
+    Represents study centres (DRC Centre, DUET Centre, etc.)
+    """
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=100, unique=True, help_text="Centre name (e.g., 'DRC Centre', 'DUET Centre')")
+    code = models.CharField(max_length=20, unique=True, help_text="Short code for centre (e.g., 'DRC', 'DUET')")
+    description = models.TextField(blank=True, null=True, help_text="Description of the centre")
+    is_active = models.BooleanField(default=True, help_text="Whether this centre is currently active")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['name']
+        verbose_name = "Centre"
+        verbose_name_plural = "Centres"
+    
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
 class Curriculum(models.Model):
     """
     Represents different curriculum versions (Current, New, etc.)
@@ -37,6 +57,7 @@ class Teacher(models.Model):
     designation = models.CharField(max_length=100, blank=True, null=True)
     department = models.CharField(max_length=100, blank=True, null=True)
     join_date = models.DateField(null=True, blank=True)
+    centre = models.ForeignKey('Centre', on_delete=models.PROTECT, help_text="Centre this teacher belongs to (required - a teacher can teach at one centre only)")
     
     class Meta:
         permissions = [
@@ -56,6 +77,35 @@ class Teacher(models.Model):
     def username(self):
         return self.user.username if self.user else ""
 
+
+class ProgramCoordinator(models.Model):
+    """
+    Program Coordinator information - links a teacher with their coordinator details
+    """
+    id = models.AutoField(primary_key=True)
+    teacher = models.ForeignKey(Teacher, on_delete=models.CASCADE, help_text="Teacher who is the program coordinator")
+    designation = models.CharField(max_length=100, blank=True, null=True, help_text="Primary designation (e.g., 'Professor and Program Coordinator')")
+    secondary_designation = models.CharField(max_length=100, blank=True, null=True, help_text="Secondary designation (e.g., 'School of Science and Technology')")
+    phone = models.CharField(max_length=30, blank=True, null=True, help_text="Contact phone number")
+    email = models.EmailField(blank=True, null=True, help_text="Contact email address")
+    centre = models.ForeignKey('Centre', on_delete=models.PROTECT, help_text="Centre this coordinator belongs to (required)")
+    is_active = models.BooleanField(default=True, help_text="Whether this coordinator is currently active")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['centre', 'teacher__name']
+        verbose_name = "Program Coordinator"
+        verbose_name_plural = "Program Coordinators"
+    
+    def __str__(self):
+        return f"{self.teacher.name} - {self.centre.name}"
+    
+    @property
+    def name(self):
+        """Return the teacher's name for convenience"""
+        return self.teacher.name if self.teacher else ""
+
 class Semester(models.Model):
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=10)
@@ -63,11 +113,7 @@ class Semester(models.Model):
     semester_full_name = models.CharField(max_length=100, blank=True, null=True)
     term = models.CharField(max_length=50, blank=True, null=True)
     session = models.CharField(max_length=50, blank=True, null=True)
-    study_center = models.CharField(max_length=100, blank=True, null=True)
-    contact_person = models.CharField(max_length=100, blank=True, null=True)
-    contact_person_designation = models.CharField(max_length=100, blank=True, null=True)
-    contact_person_phone = models.CharField(max_length=30, blank=True, null=True)
-    contact_person_email = models.EmailField(blank=True, null=True)
+    program_coordinator = models.ForeignKey('ProgramCoordinator', on_delete=models.SET_NULL, null=True, blank=True, help_text="Program Coordinator for this semester")
     lunch_break_start = models.TimeField(null=True, blank=True)
     lunch_break_end = models.TimeField(null=True, blank=True)
     start_date = models.DateField(null=True, blank=True)
@@ -83,7 +129,7 @@ class Semester(models.Model):
 
     class Meta:
         ordering = ['curriculum', 'order', 'name']
-        unique_together = [['name', 'curriculum']]  # Same semester name can exist in different curricula
+        unique_together = [['name', 'curriculum']]  # Same semester name can exist in different curricula and centres
     
     def __str__(self):
         curriculum_suffix = f" ({self.curriculum.code})" if self.curriculum else ""
@@ -93,7 +139,6 @@ class Course(models.Model):
     id = models.AutoField(primary_key=True)
     code = models.CharField(max_length=20, unique=True)
     name = models.CharField(max_length=100, default="")
-    teacher = models.ForeignKey(Teacher, on_delete=models.CASCADE)
     curriculum = models.ForeignKey(Curriculum, on_delete=models.CASCADE, null=True, blank=True, help_text="Curriculum this course belongs to")
     
     # Curriculum-specific fields
@@ -152,14 +197,21 @@ class SemesterCourse(models.Model):
     id = models.AutoField(primary_key=True)
     semester = models.ForeignKey(Semester, on_delete=models.CASCADE)
     course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    centre = models.ForeignKey('Centre', on_delete=models.PROTECT, help_text="Study Centre this course is offered in for this semester (required)")
+    teacher = models.ForeignKey(Teacher, on_delete=models.SET_NULL, null=True, blank=True, 
+                                help_text="Teacher for this course in this specific semester/centre.")
     number_of_classes = models.PositiveIntegerField(default=1)  # Default to 1 class
-    # Removed teacher field as it's already in the Course model
 
     class Meta:
-        unique_together = ('semester', 'course')
+        unique_together = ('semester', 'course', 'centre')
 
     def __str__(self):
-        return f"{self.semester.name} - {self.course.code}"
+        return f"{self.semester.name} - {self.course.code} ({self.centre.code})"
+    
+    @property
+    def effective_teacher(self):
+        """Returns the teacher assigned to this semester course"""
+        return self.teacher
 
 class CurrentRoutine(models.Model):
     id = models.AutoField(primary_key=True)
@@ -176,10 +228,13 @@ class CurrentRoutine(models.Model):
     @property
     def teacher(self):
         """
-        Get the teacher from the associated course
-        This maintains backward compatibility with existing code
+        Get the teacher from the SemesterCourse for this semester and course
         """
-        return self.course.teacher
+        try:
+            semester_course = SemesterCourse.objects.get(semester=self.semester, course=self.course)
+            return semester_course.teacher
+        except SemesterCourse.DoesNotExist:
+            return None
 
 class NewRoutine(models.Model):
     id = models.AutoField(primary_key=True)
@@ -197,10 +252,13 @@ class NewRoutine(models.Model):
     @property
     def teacher(self):
         """
-        Get the teacher from the associated course
-        This maintains backward compatibility with existing code
+        Get the teacher from the SemesterCourse for this semester and course
         """
-        return self.course.teacher
+        try:
+            semester_course = SemesterCourse.objects.get(semester=self.semester, course=self.course)
+            return semester_course.teacher
+        except SemesterCourse.DoesNotExist:
+            return None
     
     class Meta:
         ordering = ['class_date', 'start_time']
@@ -216,15 +274,21 @@ class LoginLog(models.Model):
 
 class Student(models.Model):
     id = models.CharField(max_length=20, primary_key=True, help_text="Student ID")
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
     name = models.CharField(max_length=100)
     semesters = models.ManyToManyField(Semester, help_text="Semesters this student is enrolled in")
     session = models.CharField(max_length=20, help_text="Academic session (e.g., 2020-21)")
     roll_number = models.CharField(max_length=20, blank=True, null=True)
     email = models.EmailField(blank=True, null=True)
     phone = models.CharField(max_length=15, blank=True, null=True)
+    centre = models.ForeignKey('Centre', on_delete=models.SET_NULL, null=True, blank=True, help_text="Centre this student belongs to")
     
     def __str__(self):
         return f"{self.id} - {self.name}"
+    
+    @property
+    def username(self):
+        return self.user.username if self.user else ""
     
     class Meta:
         ordering = ['id']
@@ -368,5 +432,153 @@ class CAMark(models.Model):
         
         # Calculate total CA mark
         self.total_ca_mark = self.calculate_total_ca_mark()
+        
+        super().save(*args, **kwargs)
+
+
+class FinalExamMark(models.Model):
+    """
+    Semester Final Examination marks for students
+    Theory course: 70 marks (7 question sets, max 5 can be entered, max 14 per set)
+    Lab course: 60 marks (single field)
+    """
+    student = models.ForeignKey(Student, on_delete=models.CASCADE)
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    semester = models.ForeignKey(Semester, on_delete=models.CASCADE)
+    
+    # Theory course: 7 question sets (each max 14 marks, total max 70)
+    # Teacher 1 evaluation
+    teacher1_q1 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 1 - Question Set 1 (max 14)")
+    teacher1_q2 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 1 - Question Set 2 (max 14)")
+    teacher1_q3 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 1 - Question Set 3 (max 14)")
+    teacher1_q4 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 1 - Question Set 4 (max 14)")
+    teacher1_q5 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 1 - Question Set 5 (max 14)")
+    teacher1_q6 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 1 - Question Set 6 (max 14)")
+    teacher1_q7 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 1 - Question Set 7 (max 14)")
+    teacher1_total = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Teacher 1 total (auto-calculated, max 70)")
+    
+    # Teacher 2 evaluation
+    teacher2_q1 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 2 - Question Set 1 (max 14)")
+    teacher2_q2 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 2 - Question Set 2 (max 14)")
+    teacher2_q3 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 2 - Question Set 3 (max 14)")
+    teacher2_q4 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 2 - Question Set 4 (max 14)")
+    teacher2_q5 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 2 - Question Set 5 (max 14)")
+    teacher2_q6 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 2 - Question Set 6 (max 14)")
+    teacher2_q7 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 2 - Question Set 7 (max 14)")
+    teacher2_total = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Teacher 2 total (auto-calculated, max 70)")
+    
+    # Teacher 3 evaluation (only if difference > 20% or > 14 marks)
+    teacher3_q1 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 3 - Question Set 1 (max 14)")
+    teacher3_q2 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 3 - Question Set 2 (max 14)")
+    teacher3_q3 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 3 - Question Set 3 (max 14)")
+    teacher3_q4 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 3 - Question Set 4 (max 14)")
+    teacher3_q5 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 3 - Question Set 5 (max 14)")
+    teacher3_q6 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 3 - Question Set 6 (max 14)")
+    teacher3_q7 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 3 - Question Set 7 (max 14)")
+    teacher3_total = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Teacher 3 total (auto-calculated, max 70)")
+    
+    # Lab course: single field (max 60)
+    lab_final_exam_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Lab course final exam mark (max 60)")
+    
+    # Final total (for theory: average of teachers, for lab: single value)
+    final_exam_total = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Final exam total mark")
+    
+    # Metadata
+    teacher1_evaluator = models.ForeignKey(Teacher, on_delete=models.CASCADE, related_name='final_exam_marks_teacher1', null=True, blank=True)
+    teacher2_evaluator = models.ForeignKey(Teacher, on_delete=models.CASCADE, related_name='final_exam_marks_teacher2', null=True, blank=True)
+    teacher3_evaluator = models.ForeignKey(Teacher, on_delete=models.CASCADE, related_name='final_exam_marks_teacher3', null=True, blank=True)
+    marked_by = models.ForeignKey(Teacher, on_delete=models.CASCADE, related_name='final_exam_marks_marked_by')
+    marked_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    notes = models.TextField(blank=True, null=True)
+    
+    # Flag to indicate if there's a discrepancy requiring third teacher
+    requires_third_teacher = models.BooleanField(default=False, help_text="True if difference between teacher1 and teacher2 > 20% or > 14 marks")
+    
+    class Meta:
+        unique_together = ('student', 'course', 'semester')
+        ordering = ['student__id']
+    
+    def __str__(self):
+        return f"{self.student.id} - {self.course.code} - Final: {self.final_exam_total}"
+    
+    def calculate_teacher_total(self, teacher_num):
+        """Calculate total for a specific teacher (1, 2, or 3)"""
+        from decimal import Decimal
+        total = Decimal('0')
+        for i in range(1, 8):
+            field_name = f'teacher{teacher_num}_q{i}'
+            value = getattr(self, field_name, None)
+            if value:
+                total += Decimal(str(value))
+        return total
+    
+    def check_discrepancy(self):
+        """Check if difference between teacher1 and teacher2 is > 20% or > 14 marks"""
+        if not self.course.is_lab:
+            teacher1_total = float(self.teacher1_total or 0)
+            teacher2_total = float(self.teacher2_total or 0)
+            
+            # Calculate difference
+            difference = abs(teacher1_total - teacher2_total)
+            
+            # Check if difference > 14 marks (20% of 70)
+            if difference > 14:
+                return True
+            
+            # Check if difference > 20% of the average
+            if teacher1_total > 0 or teacher2_total > 0:
+                avg = (teacher1_total + teacher2_total) / 2
+                if avg > 0:
+                    percentage_diff = (difference / avg) * 100
+                    if percentage_diff > 20:
+                        return True
+        return False
+    
+    def calculate_final_total(self):
+        """Calculate final exam total based on course type"""
+        from decimal import Decimal
+        
+        if self.course.is_lab:
+            # Lab course: use single field
+            return Decimal(str(self.lab_final_exam_mark or 0))
+        else:
+            # Theory course: use average of available teachers
+            totals = []
+            
+            # If third teacher is required and has marks, use all three
+            if self.requires_third_teacher and self.teacher3_total > 0:
+                if self.teacher1_total > 0:
+                    totals.append(self.teacher1_total)
+                if self.teacher2_total > 0:
+                    totals.append(self.teacher2_total)
+                if self.teacher3_total > 0:
+                    totals.append(self.teacher3_total)
+            else:
+                # Use teacher1 and teacher2
+                if self.teacher1_total > 0:
+                    totals.append(self.teacher1_total)
+                if self.teacher2_total > 0:
+                    totals.append(self.teacher2_total)
+            
+            if totals:
+                avg = sum(totals) / len(totals)
+                return Decimal(str(avg))
+            return Decimal('0')
+    
+    def save(self, *args, **kwargs):
+        from decimal import Decimal
+        
+        if not self.course.is_lab:
+            # Theory course: calculate totals for each teacher
+            self.teacher1_total = Decimal(str(self.calculate_teacher_total(1)))
+            self.teacher2_total = Decimal(str(self.calculate_teacher_total(2)))
+            self.teacher3_total = Decimal(str(self.calculate_teacher_total(3)))
+            
+            # Check for discrepancy
+            self.requires_third_teacher = self.check_discrepancy()
+        
+        # Calculate final total
+        self.final_exam_total = self.calculate_final_total()
         
         super().save(*args, **kwargs)

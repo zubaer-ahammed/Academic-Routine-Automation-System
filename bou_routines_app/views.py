@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect
-from .models import CurrentRoutine, Teacher, Semester, Course, NewRoutine, SemesterCourse, Student, Attendance, Curriculum, CAMark
+from .models import CurrentRoutine, Teacher, Semester, Course, NewRoutine, SemesterCourse, Student, Attendance, Curriculum, CAMark, FinalExamMark, Centre, ProgramCoordinator
 from .forms import RoutineForm, TeacherRegistrationForm
 from datetime import datetime, timedelta, date
 from collections import defaultdict
@@ -25,8 +25,8 @@ from django.utils import timezone
 
 @login_required
 def routine_entry(request):
-    # Updated select_related to include course__teacher since teacher is now accessed through course
-    routines = CurrentRoutine.objects.select_related("course", "course__teacher", "semester")
+    # Teacher is now accessed through SemesterCourse
+    routines = CurrentRoutine.objects.select_related("course", "semester")
     if request.method == "POST":
         form = RoutineForm(request.POST)
         if form.is_valid():
@@ -73,6 +73,9 @@ def generate_routine(request):
     # Get all curricula
     curricula = Curriculum.objects.filter(is_active=True).order_by('name')
     
+    # Get all centres
+    centres = Centre.objects.filter(is_active=True).order_by('name')
+    
     # Get selected curriculum from request
     selected_curriculum_id = request.GET.get('curriculum') or request.POST.get('curriculum')
     selected_curriculum = None
@@ -95,15 +98,36 @@ def generate_routine(request):
             selected_curriculum = curricula.first()
             selected_curriculum_id = selected_curriculum.id if selected_curriculum else None
     
-    # Filter semesters and courses by selected curriculum
-    if selected_curriculum:
-        semesters = Semester.objects.filter(curriculum=selected_curriculum).order_by('name')
-        courses = Course.objects.select_related('teacher').filter(curriculum=selected_curriculum).order_by('code')
-    else:
-        semesters = Semester.objects.all().order_by('name')
-        courses = Course.objects.select_related('teacher').all().order_by('code')
+    # Get selected centre from request
+    selected_centre_id = request.GET.get('centre') or request.POST.get('centre')
+    selected_centre = None
     
-    teachers = Teacher.objects.all()
+    if selected_centre_id:
+        try:
+            selected_centre_id = int(selected_centre_id)
+            selected_centre = Centre.objects.get(id=selected_centre_id)
+        except (Centre.DoesNotExist, ValueError):
+            selected_centre = None
+            selected_centre_id = None
+    
+    # Filter semesters and courses by selected curriculum and centre
+    if selected_curriculum:
+        semesters = Semester.objects.filter(curriculum=selected_curriculum)
+        courses = Course.objects.filter(curriculum=selected_curriculum)
+    else:
+        semesters = Semester.objects.all()
+        courses = Course.objects.all()
+    
+    # Note: Semesters are now shared across centres. Centre-specific filtering happens at SemesterCourse level.
+    
+    semesters = semesters.order_by('name')
+    courses = courses.order_by('code')
+    
+    # Filter teachers by centre if selected
+    if selected_centre:
+        teachers = Teacher.objects.filter(centre=selected_centre)
+    else:
+        teachers = Teacher.objects.all()
 
     # Pre-select semester if provided in query params (GET)
     selected_semester_id = request.GET.get('semester') or request.POST.get('semester')
@@ -116,6 +140,7 @@ def generate_routine(request):
     teacher_short_name_newline = True  # Default
     
     # If semester is provided but no curriculum, determine curriculum from semester
+    # Also determine centre from semester if not already selected
     if selected_semester_id and not selected_curriculum:
         try:
             selected_semester = Semester.objects.get(id=selected_semester_id)
@@ -124,7 +149,8 @@ def generate_routine(request):
                 selected_curriculum_id = selected_curriculum.id
                 # Re-filter semesters and courses by the determined curriculum
                 semesters = Semester.objects.filter(curriculum=selected_curriculum).order_by('name')
-                courses = Course.objects.select_related('teacher').filter(curriculum=selected_curriculum).order_by('code')
+                courses = Course.objects.filter(curriculum=selected_curriculum).order_by('code')
+            # Note: Semesters no longer have a centre. Centre is selected separately.
         except Semester.DoesNotExist:
             selected_semester = None
 
@@ -151,6 +177,18 @@ def generate_routine(request):
         try:
             selected_semester = Semester.objects.get(id=selected_semester_id)
             teacher_short_name_newline = selected_semester.teacher_short_name_newline
+            # Note: Semesters no longer have a centre. Centre is selected separately.
+            # Re-filter by curriculum (centre filtering happens at SemesterCourse level)
+            if selected_curriculum:
+                semesters = Semester.objects.filter(curriculum=selected_curriculum).order_by('name')
+                courses = Course.objects.filter(curriculum=selected_curriculum).order_by('code')
+            else:
+                semesters = Semester.objects.all().order_by('name')
+                courses = Course.objects.all().order_by('code')
+            if selected_centre:
+                teachers = Teacher.objects.filter(centre=selected_centre)
+            else:
+                teachers = Teacher.objects.all()
         except Semester.DoesNotExist:
             selected_semester = None
 
@@ -158,7 +196,9 @@ def generate_routine(request):
     if selected_semester_id and request.method == "GET":
         try:
             selected_semester = Semester.objects.get(id=selected_semester_id)
-            existing_routines = NewRoutine.objects.filter(semester=selected_semester).select_related('course', 'course__teacher').order_by('class_date', 'start_time')
+            existing_routines = NewRoutine.objects.filter(semester=selected_semester).select_related('course', 'semester').order_by('class_date', 'start_time')
+            # Filter by centre if selected (semester already has centre, so routines are implicitly filtered)
+            # Note: Teacher filtering is no longer needed since teacher is per semester via SemesterCourse
             
             if existing_routines.exists():
                 for routine in existing_routines:
@@ -169,7 +209,7 @@ def generate_routine(request):
                         'day': routine.day,
                         'course_code': routine.course.code,
                         'course_name': routine.course.name,
-                        'teacher': routine.course.teacher.name,
+                        'teacher': routine.teacher.name if routine.teacher else 'N/A',
                         'start_time': routine.start_time.strftime('%H:%M'),
                         'end_time': routine.end_time.strftime('%H:%M')
                     })
@@ -504,27 +544,36 @@ def generate_routine(request):
             end = datetime.strptime(end_times[i], "%H:%M").time()
             course_id = course_codes[i]
             
-            # Get the teacher ID for this course
+            # Get the teacher for this course from SemesterCourse
             try:
                 course = Course.objects.get(id=course_id)
-                teacher_id = course.teacher.id
+                # Get teacher from SemesterCourse for the selected semester
+                semester_course = SemesterCourse.objects.filter(
+                    semester=selected_semester,
+                    course=course
+                ).select_related('teacher').first()
                 
-                # Only check for routines with the same teacher, same day, and overlapping time
-                # But exclude the course we're currently checking
-                for routine in CurrentRoutine.objects.filter(day=day, course__teacher_id=teacher_id).exclude(course_id=course_id):
-                    if time_overlap(start, end, routine.start_time, routine.end_time):
-                        # Create a unique key for this conflict to avoid duplicates
-                        conflict_key = f"{routine.course.code}_{routine.day}_{routine.start_time}_{routine.end_time}"
-                        
-                        if conflict_key not in unique_conflicts:
-                            unique_conflicts.add(conflict_key)
-                            overlap_conflicts.append({
-                                "course": routine.course.code,
-                                "teacher": routine.course.teacher.name,
-                                "day": routine.day,
-                                "start": routine.start_time.strftime("%H:%M"),
-                                "end": routine.end_time.strftime("%H:%M"),
-                            })
+                if semester_course and semester_course.teacher:
+                    teacher_id = semester_course.teacher.id
+                    
+                    # Only check for routines with the same teacher, same day, and overlapping time
+                    # But exclude the course we're currently checking
+                    # Note: We need to check routines by their teacher property, not course__teacher
+                    for routine in CurrentRoutine.objects.filter(day=day).exclude(course_id=course_id):
+                        if routine.teacher and routine.teacher.id == teacher_id:
+                            if time_overlap(start, end, routine.start_time, routine.end_time):
+                                # Create a unique key for this conflict to avoid duplicates
+                                conflict_key = f"{routine.course.code}_{routine.day}_{routine.start_time}_{routine.end_time}"
+                                
+                                if conflict_key not in unique_conflicts:
+                                    unique_conflicts.add(conflict_key)
+                                    overlap_conflicts.append({
+                                        "course": routine.course.code,
+                                        "teacher": routine.teacher.name if routine.teacher else 'N/A',
+                                        "day": routine.day,
+                                        "start": routine.start_time.strftime("%H:%M"),
+                                        "end": routine.end_time.strftime("%H:%M"),
+                                    })
             except Course.DoesNotExist:
                 # Skip if course doesn't exist
                 continue
@@ -982,6 +1031,9 @@ def generate_routine(request):
         "curricula": curricula,
         "selected_curriculum": selected_curriculum,
         "selected_curriculum_id": selected_curriculum.id if selected_curriculum else None,
+        "centres": centres,
+        "selected_centre": selected_centre,
+        "selected_centre_id": selected_centre.id if selected_centre else None,
     }
     
     
@@ -1036,6 +1088,9 @@ def update_semester_courses(request):
     # Get all curricula
     curricula = Curriculum.objects.filter(is_active=True).order_by('name')
     
+    # Get all centres
+    centres = Centre.objects.filter(is_active=True).order_by('name')
+    
     # Get selected curriculum from request
     selected_curriculum_id = request.GET.get('curriculum') or request.POST.get('curriculum')
     selected_curriculum = None
@@ -1058,17 +1113,44 @@ def update_semester_courses(request):
             selected_curriculum = curricula.first()
             selected_curriculum_id = selected_curriculum.id if selected_curriculum else None
     
-    # Filter semesters and courses by selected curriculum
-    if selected_curriculum:
-        semesters = Semester.objects.filter(curriculum=selected_curriculum).order_by('name')
-        # Custom sorting for courses - sort by curriculum, then by code
-        courses = Course.objects.filter(curriculum=selected_curriculum).order_by('code')
-    else:
-        semesters = Semester.objects.all().order_by('name')
-        courses = Course.objects.all().order_by('code')
+    # Get selected centre from request
+    selected_centre_id = request.GET.get('centre') or request.POST.get('centre')
+    selected_centre = None
     
+    if selected_centre_id:
+        try:
+            selected_centre_id = int(selected_centre_id)
+            selected_centre = Centre.objects.get(id=selected_centre_id)
+        except (Centre.DoesNotExist, ValueError):
+            selected_centre = None
+            selected_centre_id = None
+    
+    # Filter semesters and courses by selected curriculum and centre
+    if selected_curriculum:
+        semesters = Semester.objects.filter(curriculum=selected_curriculum)
+        courses = Course.objects.filter(curriculum=selected_curriculum)
+    else:
+        semesters = Semester.objects.all()
+        courses = Course.objects.all()
+    
+    # Note: Semesters are now shared across centres. Centre-specific filtering happens at SemesterCourse level.
+    
+    semesters = semesters.order_by('name')
+    courses = courses.order_by('code')
+    
+    # Filter teachers by centre if selected
     from .models import Teacher
-    teachers = Teacher.objects.all().order_by('name')
+    if selected_centre:
+        teachers = Teacher.objects.filter(centre=selected_centre).order_by('name')
+    else:
+        teachers = Teacher.objects.all().order_by('name')
+    
+    # Get program coordinators (filter by centre if selected)
+    if selected_centre:
+        program_coordinators = ProgramCoordinator.objects.filter(centre=selected_centre, is_active=True).select_related('teacher', 'centre').order_by('teacher__name')
+    else:
+        program_coordinators = ProgramCoordinator.objects.filter(is_active=True).select_related('teacher', 'centre').order_by('centre', 'teacher__name')
+    
     context = {
         "semesters": semesters,
         "courses": courses,
@@ -1076,6 +1158,10 @@ def update_semester_courses(request):
         "curricula": curricula,
         "selected_curriculum": selected_curriculum,
         "selected_curriculum_id": selected_curriculum.id if selected_curriculum else None,
+        "centres": centres,
+        "selected_centre": selected_centre,
+        "selected_centre_id": selected_centre.id if selected_centre else None,
+        "program_coordinators": program_coordinators,
     }
     
     # Debug output
@@ -1095,11 +1181,16 @@ def update_semester_courses(request):
         semester.semester_full_name = request.POST.get("semester_full_name", semester.semester_full_name)
         semester.term = request.POST.get("term", semester.term)
         semester.session = request.POST.get("session", semester.session)
-        semester.study_center = request.POST.get("study_center", semester.study_center)
-        semester.contact_person = request.POST.get("contact_person", semester.contact_person)
-        semester.contact_person_designation = request.POST.get("contact_person_designation", semester.contact_person_designation)
-        semester.contact_person_phone = request.POST.get("contact_person_phone", semester.contact_person_phone)
-        semester.contact_person_email = request.POST.get("contact_person_email", semester.contact_person_email)
+        
+        # Update program coordinator
+        program_coordinator_id = request.POST.get("program_coordinator")
+        if program_coordinator_id:
+            try:
+                semester.program_coordinator = ProgramCoordinator.objects.get(id=program_coordinator_id)
+            except ProgramCoordinator.DoesNotExist:
+                pass
+        elif program_coordinator_id == '':
+            semester.program_coordinator = None
         
         # Update class duration fields
         theory_duration = request.POST.get("theory_class_duration_minutes")
@@ -1117,33 +1208,52 @@ def update_semester_courses(request):
         
         semester.save()
 
-        SemesterCourse.objects.filter(semester=semester).delete()
+        # Get centre from request (required for SemesterCourse)
+        centre_id = request.POST.get("centre")
+        if not centre_id:
+            messages.error(request, "Centre is required when updating semester courses.")
+            return redirect('update-semester-courses')
+        
+        try:
+            centre = Centre.objects.get(id=centre_id)
+        except Centre.DoesNotExist:
+            messages.error(request, "Invalid centre selected.")
+            return redirect('update-semester-courses')
+        
+        # Delete existing SemesterCourse records for this semester and centre
+        SemesterCourse.objects.filter(semester=semester, centre=centre).delete()
+        
         course_ids = request.POST.getlist("courses[]")
         teacher_ids = request.POST.getlist("teachers[]")
         number_of_classes = request.POST.getlist("classes")
         for i, course_id in enumerate(course_ids):
             course = Course.objects.get(id=course_id)
-            # Update teacher if changed
-            if i < len(teacher_ids):
-                teacher_id = teacher_ids[i]
-                if teacher_id and str(course.teacher.id) != str(teacher_id):
-                    course.teacher = Teacher.objects.get(id=teacher_id)
-                    course.save()
             try:
                 num_classes = int(number_of_classes[i]) if i < len(number_of_classes) else 1
                 if num_classes < 1:
                     num_classes = 0
             except (ValueError, IndexError):
                 num_classes = 0
-            SemesterCourse.objects.create(
+            
+            # Create SemesterCourse with centre
+            semester_course = SemesterCourse.objects.create(
                 semester=semester,
                 course=course,
+                centre=centre,
                 number_of_classes=num_classes
             )
+            if i < len(teacher_ids) and teacher_ids[i]:
+                semester_course.teacher = Teacher.objects.get(id=teacher_ids[i])
+                semester_course.save()
         #messages.success(request, f"Successfully updated courses for {semester.name}")
-        # Redirect to the same page with selected semester and success param
+        # Redirect to the same page with selected semester, curriculum, centre and success param
         base_url = reverse('update-semester-courses')
-        query_string = urlencode({'semester': semester_id, 'success': 1})
+        params = {'semester': semester_id, 'success': 1}
+        if selected_curriculum_id:
+            params['curriculum'] = selected_curriculum_id
+        if selected_centre_id:
+            params['centre'] = selected_centre_id
+        query_string = urlencode(params)
         url = f"{base_url}?{query_string}"
         return redirect(url)
 
@@ -1158,16 +1268,35 @@ def get_semester_courses(request):
     """AJAX view to get courses for a specific semester"""
     if request.method == "GET":
         semester_id = request.GET.get("semester_id")
+        centre_id = request.GET.get("centre_id")
+        curriculum_id = request.GET.get("curriculum_id")
         if semester_id:
             try:
                 semester = Semester.objects.get(id=semester_id)
-                semester_courses = SemesterCourse.objects.filter(semester_id=semester_id).select_related('course', 'course__teacher')
+                semester_courses = SemesterCourse.objects.filter(semester_id=semester_id).select_related('course', 'course__curriculum', 'teacher', 'centre')
+                
+                # Filter by centre if provided
+                if centre_id:
+                    try:
+                        centre = Centre.objects.get(id=centre_id)
+                        semester_courses = semester_courses.filter(centre=centre)
+                    except Centre.DoesNotExist:
+                        pass
+                
+                # Filter by curriculum if provided
+                if curriculum_id:
+                    try:
+                        curriculum = Curriculum.objects.get(id=curriculum_id)
+                        semester_courses = semester_courses.filter(course__curriculum=curriculum)
+                    except Curriculum.DoesNotExist:
+                        pass
+                
                 courses_data = [{
                     'id': sc.course.id,
                     'code': sc.course.code,
                     'name': sc.course.name,
-                    'teacher_name': sc.course.teacher.name,
-                    'teacher_id': sc.course.teacher.id,
+                    'teacher_name': sc.effective_teacher.name if sc.effective_teacher else 'N/A',
+                    'teacher_id': sc.effective_teacher.id if sc.effective_teacher else None,
                     'number_of_classes': sc.number_of_classes
                 } for sc in semester_courses]
                 lunch_break_info = None
@@ -1191,15 +1320,18 @@ def get_semester_courses(request):
                     makeup_dates_info = semester.makeup_dates
                 
                 # Add all semester info fields
+                coordinator = semester.program_coordinator
                 semester_data = {
                     'semester_full_name': semester.semester_full_name,
                     'term': semester.term,
                     'session': semester.session,
-                    'study_center': semester.study_center,
-                    'contact_person': semester.contact_person,
-                    'contact_person_designation': semester.contact_person_designation,
-                    'contact_person_phone': semester.contact_person_phone,
-                    'contact_person_email': semester.contact_person_email,
+                    'centre': '',  # Centre is now at SemesterCourse level, not Semester level
+                    'program_coordinator_id': coordinator.id if coordinator else None,
+                    'contact_person': coordinator.teacher.name if coordinator and coordinator.teacher else '',
+                    'contact_person_designation': coordinator.designation if coordinator else '',
+                    'contact_person_secondary_designation': coordinator.secondary_designation if coordinator else '',
+                    'contact_person_phone': coordinator.phone if coordinator else '',
+                    'contact_person_email': coordinator.email if coordinator else '',
                     'theory_class_duration_minutes': semester.theory_class_duration_minutes,
                     'lab_class_duration_minutes': semester.lab_class_duration_minutes,
                 }
@@ -1223,7 +1355,7 @@ def get_existing_generated_routines(request):
         if semester_id:
             try:
                 semester = Semester.objects.get(id=semester_id)
-                existing_routines = NewRoutine.objects.filter(semester=semester).select_related('course', 'course__teacher').order_by('class_date', 'start_time')
+                existing_routines = NewRoutine.objects.filter(semester=semester).select_related('course', 'semester').order_by('class_date', 'start_time')
                 
                 routines_data = []
                 if existing_routines.exists():
@@ -1234,7 +1366,7 @@ def get_existing_generated_routines(request):
                             'day': routine.day,
                             'course_code': routine.course.code,
                             'course_name': routine.course.name,
-                            'teacher': routine.course.teacher.name,
+                            'teacher': routine.teacher.name if routine.teacher else 'N/A',
                             'start_time': routine.start_time.strftime('%H:%M'),
                             'end_time': routine.end_time.strftime('%H:%M')
                         })
@@ -1257,15 +1389,15 @@ def check_time_overlap(request):
             if semester_id:
                 try:
                     # Get all CurrentRoutine objects for this semester
-                    routines = CurrentRoutine.objects.filter(semester_id=semester_id).select_related('course', 'course__teacher')
+                    routines = CurrentRoutine.objects.filter(semester_id=semester_id).select_related('course', 'semester')
                     
                     # Format the data for response
                     routines_data = [{
                         'course_id': routine.course.id,
                         'course_code': routine.course.code,
                         'course_name': routine.course.name,
-                        'teacher_name': routine.course.teacher.name,
-                        'teacher_id': routine.course.teacher.id,
+                        'teacher_name': routine.teacher.name if routine.teacher else 'N/A',
+                        'teacher_id': routine.teacher.id if routine.teacher else None,
                         'day': routine.day,
                         'start_time': routine.start_time.strftime('%H:%M'),
                         'end_time': routine.end_time.strftime('%H:%M')
@@ -1335,23 +1467,26 @@ def check_time_overlap(request):
                     pass
             
             # Find routines with the same day and same teacher
-            query = CurrentRoutine.objects.filter(day=day, course__teacher_id=teacher_id)
+            # Note: We can't filter by course__teacher_id anymore, so we filter by day and check teacher in Python
+            query = CurrentRoutine.objects.filter(day=day)
             
             # Exclude current course if provided (for editing scenarios)
             if course_id:
                 query = query.exclude(course_id=course_id)
                 
             for routine in query:
-                if time_overlap(start, end, routine.start_time, routine.end_time):
-                    overlaps.append({
-                        "course": routine.course.code,
-                        "course_name": routine.course.name,
-                        "teacher": routine.course.teacher.name,
-                        "day": routine.day,
-                        "start": routine.start_time.strftime("%H:%M"),
-                        "end": routine.end_time.strftime("%H:%M"),
-                        "is_lunch_break": False
-                    })
+                # Check if routine has the same teacher
+                if routine.teacher and routine.teacher.id == teacher_id:
+                    if time_overlap(start, end, routine.start_time, routine.end_time):
+                        overlaps.append({
+                            "course": routine.course.code,
+                            "course_name": routine.course.name,
+                            "teacher": routine.teacher.name if routine.teacher else 'N/A',
+                            "day": routine.day,
+                            "start": routine.start_time.strftime("%H:%M"),
+                            "end": routine.end_time.strftime("%H:%M"),
+                            "is_lunch_break": False
+                        })
             
             return JsonResponse({
                 "overlaps": overlaps,
@@ -1383,13 +1518,18 @@ def update_routine_course(request):
                     routine.course = new_course
                     routine.save()
                     
+                    # Get teacher from SemesterCourse
+                    teacher = routine.teacher
+                    teacher_name = teacher.name if teacher else 'N/A'
+                    teacher_short_name = teacher.short_name if teacher and teacher.short_name else teacher_name
+                    
                     # Return updated course information
                     return JsonResponse({
                         "success": True,
                         "course_code": new_course.code,
                         "course_name": new_course.name,
-                        "teacher_name": new_course.teacher.name,
-                        "teacher_short_name": new_course.teacher.short_name if new_course.teacher.short_name else new_course.teacher.name
+                        "teacher_name": teacher_name,
+                        "teacher_short_name": teacher_short_name
                     })
                 except NewRoutine.DoesNotExist:
                     return JsonResponse({"error": "Routine not found"}, status=404)
@@ -1421,14 +1561,19 @@ def update_routine_course(request):
                         end_time=end_time
                     )
                     
+                    # Get teacher from SemesterCourse
+                    teacher = new_routine.teacher
+                    teacher_name = teacher.name if teacher else 'N/A'
+                    teacher_short_name = teacher.short_name if teacher and teacher.short_name else teacher_name
+                    
                     # Return new routine information
                     return JsonResponse({
                         "success": True,
                         "routine_id": new_routine.id,
                         "course_code": new_course.code,
                         "course_name": new_course.name,
-                        "teacher_name": new_course.teacher.name,
-                        "teacher_short_name": new_course.teacher.short_name if new_course.teacher.short_name else new_course.teacher.name
+                        "teacher_name": teacher_name,
+                        "teacher_short_name": teacher_short_name
                     })
                     
                 except Semester.DoesNotExist:
@@ -1637,7 +1782,7 @@ def export_to_excel(request, semester_id):
                 if r.class_date == date and r.day == day:
                     routines_for_row.append({
                         'course_code': r.course.code,
-                        'teacher': 'Supervisor' if r.course.code == 'CSE4246' else r.course.teacher.short_name,
+                        'teacher': 'Supervisor' if r.course.code == 'CSE4246' else (r.teacher.short_name if r.teacher and r.teacher.short_name else (r.teacher.name if r.teacher else 'N/A')),
                         'start_time': r.start_time.strftime('%H:%M'),
                         'end_time': r.end_time.strftime('%H:%M'),
                         'is_lunch_break': False
@@ -1787,7 +1932,7 @@ def download_routines(request):
                     if r.class_date == date and r.day == day:
                         routines_for_row.append({
                             'course_code': r.course.code,
-                            'teacher': 'Supervisor' if r.course.code == 'CSE4246' else r.course.teacher.short_name,
+                            'teacher': 'Supervisor' if r.course.code == 'CSE4246' else (r.teacher.short_name if r.teacher and r.teacher.short_name else (r.teacher.name if r.teacher else 'N/A')),
                             'start_time': r.start_time.strftime('%H:%M'),
                             'end_time': r.end_time.strftime('%H:%M'),
                             'is_lunch_break': False
@@ -1843,12 +1988,17 @@ def download_routines(request):
                     for date in semester.makeup_dates.split(',')
                     if date.strip()
                 ]
+            # Get centre from first SemesterCourse for this semester (for PDF export)
+            first_sc = SemesterCourse.objects.filter(semester=semester).select_related('centre').first()
+            centre_id = first_sc.centre.id if first_sc and first_sc.centre else None
+            
             semester_routines.append({
                 'semester': semester,
                 'routine_table_rows': routine_table_rows,
                 'time_slot_labels': [label for _, _, label in slot_ranges],
                 'routine_count': latest_routines.count(),
-                'makeup_dates': makeup_dates,  # <-- Add this line
+                'makeup_dates': makeup_dates,
+                'centre_id': centre_id,  # Add centre_id for PDF export links
             })
     
     return render(request, 'bou_routines_app/download_routines.html', {
@@ -1860,6 +2010,15 @@ def export_to_pdf(request, semester_id):
     """Export the routine to PDF file"""
     try:
         selected_semester = Semester.objects.get(id=semester_id)
+        # Get centre from request parameter
+        centre_id = request.GET.get('centre')
+        centre_name = ''
+        if centre_id:
+            try:
+                centre = Centre.objects.get(id=centre_id)
+                centre_name = centre.name
+            except Centre.DoesNotExist:
+                pass
 
         # Read the teacher short name display option from GET params
         teacher_short_name_newline = request.GET.get('teacher_short_name_newline', '1') == '1'
@@ -1964,15 +2123,23 @@ def export_to_pdf(request, semester_id):
         left_content.append(Spacer(1, 2))  # Reduced from 8
         left_content.append(Paragraph('Class Routine', header_style_bold))
         commencement = selected_semester.start_date.strftime('%d %B %Y') if selected_semester.start_date else ''
-        study_center = selected_semester.study_center or ''
+        # centre_name is already set from request parameter above (in export_to_pdf function)
+        # If not set, try to get from first SemesterCourse for this semester
+        if not centre_name:
+            first_sc = SemesterCourse.objects.filter(semester=selected_semester).select_related('centre').first()
+            if first_sc and first_sc.centre:
+                centre_name = first_sc.centre.name
         if commencement:
             left_content.append(Paragraph(f'<b>Date of Commencement:</b> {commencement}', header_style_normal))
-        if study_center:
-            left_content.append(Paragraph(f'<b>Study Center:</b> {study_center}', header_style_normal))
+        if centre_name:
+            left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
 
         # Build right column (contact person box)
         contact_lines = []
-        if selected_semester.contact_person:
+        coordinator = selected_semester.program_coordinator
+        contact_info_lines = []
+        
+        if coordinator:
             contact_label = Paragraph(
                 'Contact Person',
                 ParagraphStyle(
@@ -1998,16 +2165,48 @@ def export_to_pdf(request, semester_id):
                     ('RIGHTPADDING', (0,0), (-1,-1), 0),
                 ])
             )
-            contact_info_lines = []
-            contact_info_lines.append(selected_semester.contact_person)
-        if selected_semester.contact_person_designation:
-            contact_info_lines.append(selected_semester.contact_person_designation)
-        contact_info_lines.append('School of Science and Technology')
-        contact_info_lines.append('Bangladesh Open University')
-        if selected_semester.contact_person_phone:
-            contact_info_lines.append(f'Phone/Whatsapp: {selected_semester.contact_person_phone}')
-        if selected_semester.contact_person_email:
-            contact_info_lines.append(f'email:{selected_semester.contact_person_email}')
+            if coordinator.teacher:
+                contact_info_lines.append(coordinator.teacher.name)
+            if coordinator.designation:
+                contact_info_lines.append(coordinator.designation)
+            if coordinator.secondary_designation:
+                contact_info_lines.append(coordinator.secondary_designation)
+            contact_info_lines.append('School of Science and Technology')
+            contact_info_lines.append('Bangladesh Open University')
+            if coordinator.phone:
+                contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
+            if coordinator.email:
+                contact_info_lines.append(f'email:{coordinator.email}')
+        else:
+            # Default contact info if no coordinator
+            contact_info_lines.append('School of Science and Technology')
+            contact_info_lines.append('Bangladesh Open University')
+            # Create a simple label table for when there's no coordinator
+            contact_label = Paragraph(
+                'Contact Person',
+                ParagraphStyle(
+                    'ContactLabel',
+                    fontName='Helvetica-Bold',
+                    fontSize=11,
+                    alignment=0,  # Left align
+                    textColor=colors.white,
+                    spaceAfter=0,
+                    spaceBefore=0,
+                    leading=14,
+                )
+            )
+            contact_label_table = Table(
+                [[contact_label]],
+                colWidths=[180],
+                hAlign='RIGHT',
+                style=TableStyle([
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+                    ('TOPPADDING', (0,0), (-1,-1), -3),
+                    ('LEFTPADDING', (0,0), (-1,-1), 0),
+                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                ])
+            )
+        
         contact_info_para = Paragraph(
             '<br/>'.join(contact_info_lines),
             ParagraphStyle(
@@ -2167,7 +2366,7 @@ def export_to_pdf(request, semester_id):
                 if r.class_date == date:
                     routines_for_row.append({
                         'course_code': r.course.code,
-                        'teacher': 'Supervisor' if r.course.code == 'CSE4246' else r.course.teacher.short_name,
+                        'teacher': 'Supervisor' if r.course.code == 'CSE4246' else (r.teacher.short_name if r.teacher and r.teacher.short_name else (r.teacher.name if r.teacher else 'N/A')),
                         'start_time': r.start_time.strftime('%H:%M'),
                         'end_time': r.end_time.strftime('%H:%M'),
                         'is_lunch_break': False
@@ -2380,13 +2579,17 @@ def export_to_pdf(request, semester_id):
         elements.append(Paragraph("<br/>", styles['Normal']))
 
         # Add the summary table of semester courses
-        semester_courses = SemesterCourse.objects.filter(semester=selected_semester).select_related('course', 'course__teacher')
+        semester_courses = SemesterCourse.objects.filter(semester=selected_semester).select_related('course', 'teacher')
         summary_data = [[
             'Course Code', 'Title', 'Number of Class', 'Course Teacher'
         ]]
         for sc in semester_courses:
-            teacher_full_name = sc.course.teacher.name + ' ('+sc.course.teacher.short_name+')'
-            if(sc.course.teacher.name == "N/A"):
+            effective_teacher = sc.effective_teacher
+            if effective_teacher:
+                teacher_full_name = effective_teacher.name + ' ('+effective_teacher.short_name+')' if effective_teacher.short_name else effective_teacher.name
+                if effective_teacher.name == "N/A":
+                    teacher_full_name = ""
+            else:
                 teacher_full_name = ""
             
             if(sc.number_of_classes == 0):
@@ -2512,6 +2715,15 @@ def export_academic_calendar_pdf(request, semester_id):
     """Export the academic calendar as a PDF file with monthly grid layout"""
     try:
         selected_semester = Semester.objects.get(id=semester_id)
+        # Get centre from request parameter
+        centre_id = request.GET.get('centre')
+        centre_name = ''
+        if centre_id:
+            try:
+                centre = Centre.objects.get(id=centre_id)
+                centre_name = centre.name
+            except Centre.DoesNotExist:
+                pass
         buffer = io.BytesIO()
         
         # Use the same page size as the routine (landscape A4)
@@ -2637,11 +2849,11 @@ def export_academic_calendar_pdf(request, semester_id):
         left_content.append(Spacer(1, 2))  # Reduced from 8
         left_content.append(Paragraph('Academic Calendar', header_style_bold))
         commencement = selected_semester.start_date.strftime('%d %B %Y') if selected_semester.start_date else ''
-        study_center = selected_semester.study_center or ''
+        # centre_name is now set from request parameter above
         if commencement:
             left_content.append(Paragraph(f'<b>Date of Commencement:</b> {commencement}', header_style_normal))
-        if study_center:
-            left_content.append(Paragraph(f'<b>Study Center:</b> {study_center}', header_style_normal))
+        if centre_name:
+            left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
 
         # Build right column (contact person box)
         contact_label = Paragraph(
@@ -2670,16 +2882,19 @@ def export_academic_calendar_pdf(request, semester_id):
             ])
         )
         contact_info_lines = []
-        if selected_semester.contact_person:
-            contact_info_lines.append(selected_semester.contact_person)
-        if selected_semester.contact_person_designation:
-            contact_info_lines.append(selected_semester.contact_person_designation)
+        coordinator = selected_semester.program_coordinator
+        if coordinator and coordinator.teacher:
+            contact_info_lines.append(coordinator.teacher.name)
+        if coordinator and coordinator.designation:
+            contact_info_lines.append(coordinator.designation)
+        if coordinator and coordinator.secondary_designation:
+            contact_info_lines.append(coordinator.secondary_designation)
         contact_info_lines.append('School of Science and Technology')
         contact_info_lines.append('Bangladesh Open University')
-        if selected_semester.contact_person_phone:
-            contact_info_lines.append(f'Phone/Whatsapp: {selected_semester.contact_person_phone}')
-        if selected_semester.contact_person_email:
-            contact_info_lines.append(f'email:{selected_semester.contact_person_email}')
+        if coordinator and coordinator.phone:
+            contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
+        if coordinator and coordinator.email:
+            contact_info_lines.append(f'email:{coordinator.email}')
         contact_info_para = Paragraph(
             '<br/>'.join(contact_info_lines),
             ParagraphStyle(
@@ -3911,12 +4126,18 @@ def get_semesters_for_curriculum(request):
         return JsonResponse({'error': 'Permission denied'}, status=403)
     
     curriculum_id = request.GET.get('curriculum_id')
+    centre_id = request.GET.get('centre_id')
+    
     if not curriculum_id:
         return JsonResponse({'error': 'Curriculum ID required'}, status=400)
     
     try:
         curriculum = Curriculum.objects.get(id=curriculum_id)
-        semesters = Semester.objects.filter(curriculum=curriculum).order_by('order', 'name')
+        semesters = Semester.objects.filter(curriculum=curriculum)
+        
+        # Note: Semesters are now shared across centres. Centre-specific filtering happens at SemesterCourse level.
+        
+        semesters = semesters.order_by('order', 'name')
         
         semesters_data = []
         for semester in semesters:
@@ -4256,6 +4477,9 @@ def ca_management(request):
     # Get all curricula
     curricula = Curriculum.objects.filter(is_active=True).order_by('name')
     
+    # Get all centres
+    centres = Centre.objects.filter(is_active=True).order_by('name')
+    
     # Get selected curriculum from request
     selected_curriculum_id = request.GET.get('curriculum') or request.POST.get('curriculum')
     selected_curriculum = None
@@ -4277,11 +4501,35 @@ def ca_management(request):
             selected_curriculum = curricula.first()
             selected_curriculum_id = selected_curriculum.id if selected_curriculum else None
     
+    # Get selected centre from request
+    selected_centre_id = request.GET.get('centre') or request.POST.get('centre')
+    selected_centre = None
+    
+    if selected_centre_id:
+        try:
+            selected_centre_id = int(selected_centre_id)
+            selected_centre = Centre.objects.get(id=selected_centre_id)
+        except (Centre.DoesNotExist, ValueError):
+            selected_centre = None
+            selected_centre_id = None
+    
+    # If no centre selected, default to DRC BEFORE filtering semesters
+    if not selected_centre:
+        try:
+            selected_centre = Centre.objects.get(code='DRC')
+            selected_centre_id = selected_centre.id
+        except Centre.DoesNotExist:
+            selected_centre = None
+            selected_centre_id = None
+    
     # Filter semesters by selected curriculum
+    # Note: Semesters are now shared across centres. Centre-specific filtering happens at SemesterCourse level.
     if selected_curriculum:
-        semesters = Semester.objects.filter(curriculum=selected_curriculum).order_by('order', 'name')
+        semesters = Semester.objects.filter(curriculum=selected_curriculum)
     else:
-        semesters = Semester.objects.all().order_by('order', 'name')
+        semesters = Semester.objects.all()
+    
+    semesters = semesters.order_by('order', 'name')
     
     # Get semester and course from request
     semester_id = request.GET.get('semester') or request.POST.get('semester')
@@ -4305,10 +4553,41 @@ def ca_management(request):
     # Get students for the selected course and semester
     students = Student.objects.none()
     ca_marks = {}
+    final_exam_marks = {}
     if semester_id and course_id:
         try:
             semester = Semester.objects.get(id=semester_id)
-            course = Course.objects.get(id=course_id)
+            # Get the course from SemesterCourse to ensure we get the correct course
+            # for this specific semester (which is already filtered by centre)
+            # Get centre from request for filtering SemesterCourse
+            centre_id = request.GET.get('centre') or request.POST.get('centre')
+            semester_course = None
+            if centre_id:
+                try:
+                    centre = Centre.objects.get(id=centre_id)
+                    semester_course = SemesterCourse.objects.filter(
+                        semester=semester,
+                        course_id=course_id,
+                        centre=centre
+                    ).select_related('course', 'teacher', 'teacher__centre').first()
+                except Centre.DoesNotExist:
+                    pass
+            
+            # Fallback: get any SemesterCourse for this semester and course if centre not provided
+            if not semester_course:
+                semester_course = SemesterCourse.objects.filter(
+                    semester=semester,
+                    course_id=course_id
+                ).select_related('course', 'teacher', 'teacher__centre').first()
+            
+            if semester_course:
+                course = semester_course.course
+                # Use semester-specific teacher
+                course_teacher = semester_course.teacher
+            else:
+                # Fallback to direct course lookup if SemesterCourse not found
+                course = Course.objects.get(id=course_id)
+                course_teacher = None  # No teacher if SemesterCourse doesn't exist
             
             # Get students enrolled in this semester
             students = Student.objects.filter(semesters=semester).order_by('id')
@@ -4336,32 +4615,216 @@ def ca_management(request):
                     # Calculate attendance mark
                     temp_mark.attendance_mark = temp_mark.calculate_attendance_mark()
                     ca_marks[student.id] = temp_mark
+            
+            # Get existing Final Exam marks for these students
+            existing_final_marks = FinalExamMark.objects.filter(
+                student__in=students,
+                course=course,
+                semester=semester
+            )
+            
+            # Create a dictionary for easy lookup
+            for mark in existing_final_marks:
+                final_exam_marks[mark.student.id] = mark
                 
         except (Semester.DoesNotExist, Course.DoesNotExist):
             messages.error(request, "Invalid semester or course selected.")
     
+    # Determine teacher role based on user type
+    is_admin = request.user.is_superuser or request.user.is_staff
+    teacher_role = None
+    can_select_evaluator = False
+    
+    if is_admin:
+        # Administrators can select any evaluator
+        teacher_role = request.GET.get('teacher_role', 'teacher1')
+        if teacher_role not in ['teacher1', 'teacher2', 'teacher3']:
+            teacher_role = 'teacher1'
+        can_select_evaluator = True
+    elif teacher:
+        # Teachers can only see their own role
+        # Check which evaluator role this teacher has for this course/semester
+        if semester_id and course_id:
+            try:
+                semester = Semester.objects.get(id=semester_id)
+                course = Course.objects.get(id=course_id)
+                
+                # First, check if teacher is assigned as any evaluator in existing marks
+                sample_mark = FinalExamMark.objects.filter(
+                    course=course,
+                    semester=semester
+                ).first()
+                
+                if sample_mark:
+                    if sample_mark.teacher1_evaluator == teacher:
+                        teacher_role = 'teacher1'
+                    elif sample_mark.teacher2_evaluator == teacher:
+                        teacher_role = 'teacher2'
+                    elif sample_mark.teacher3_evaluator == teacher:
+                        teacher_role = 'teacher3'
+                
+                # If not found in existing marks, determine role based on teacher's centre
+                # Teacher 1 is from DRC, Teacher 2 is from DUET (for the same course)
+                if not teacher_role:
+                    if teacher.centre.code == 'DRC':
+                        teacher_role = 'teacher1'
+                    elif teacher.centre.code == 'DUET':
+                        teacher_role = 'teacher2'
+                    else:
+                        # Default: if teacher is the course teacher, assign based on centre
+                        # Otherwise, default to teacher1
+                        teacher_role = 'teacher1'
+                    
+            except (Semester.DoesNotExist, Course.DoesNotExist):
+                teacher_role = 'teacher1'
+        else:
+            teacher_role = 'teacher1'
+        can_select_evaluator = False
+    else:
+        # Default for other users
+        teacher_role = 'teacher1'
+        can_select_evaluator = False
+    
     context = {
         'teacher': teacher,
-        'is_admin': request.user.is_superuser or request.user.is_staff,
+        'is_admin': is_admin,
         'curricula': curricula,
         'selected_curriculum_id': selected_curriculum_id,
         'selected_curriculum': selected_curriculum,
+        'centres': centres,
+        'selected_centre': selected_centre,
+        'selected_centre_id': selected_centre_id,
         'semesters': semesters,
         'courses': courses_queryset.order_by('code'),
         'selected_semester_id': semester_id,
         'selected_course_id': course_id,
         'students': students,
         'ca_marks': ca_marks,
+        'final_exam_marks': final_exam_marks,
+        'teacher_role': teacher_role,
+        'can_select_evaluator': can_select_evaluator,
     }
+    
+    # Get evaluator teachers for the selected course
+    teacher1_evaluator_obj = None
+    teacher2_evaluator_obj = None
+    teacher3_evaluator_obj = None
     
     if semester_id and course_id:
         try:
             semester = Semester.objects.get(id=semester_id)
-            course = Course.objects.get(id=course_id)
+            # Get the course from SemesterCourse to ensure we get the correct course
+            # for this specific semester (which is already filtered by centre)
+            # Get centre from request for filtering SemesterCourse
+            centre_id = request.GET.get('centre') or request.POST.get('centre')
+            semester_course = None
+            if centre_id:
+                try:
+                    centre = Centre.objects.get(id=centre_id)
+                    semester_course = SemesterCourse.objects.filter(
+                        semester=semester,
+                        course_id=course_id,
+                        centre=centre
+                    ).select_related('course', 'teacher', 'teacher__centre').first()
+                except Centre.DoesNotExist:
+                    pass
+            
+            # Fallback: get any SemesterCourse for this semester and course if centre not provided
+            if not semester_course:
+                semester_course = SemesterCourse.objects.filter(
+                    semester=semester,
+                    course_id=course_id
+                ).select_related('course', 'teacher', 'teacher__centre').first()
+            
+            if semester_course:
+                course = semester_course.course
+                # Use semester-specific teacher
+                course_teacher = semester_course.teacher
+            else:
+                # Fallback to direct course lookup if SemesterCourse not found
+                course = Course.objects.get(id=course_id)
+                course_teacher = None  # No teacher if SemesterCourse doesn't exist
+            
             context['selected_semester'] = semester
             context['selected_course'] = course
+            # Add effective teacher to context for template use
+            context['course_teacher'] = course_teacher
+            
+            # Find teachers for this course from different centres
+            # Teacher 1 is from DRC, Teacher 2 is from DUET
+            drc_centre = Centre.objects.filter(code='DRC').first()
+            duet_centre = Centre.objects.filter(code='DUET').first()
+            
+            # First, check existing marks to see which teachers are assigned as evaluators
+            sample_mark = FinalExamMark.objects.filter(
+                course=course,
+                semester=semester
+            ).first()
+            
+            if sample_mark:
+                # Use evaluators from existing marks if available
+                if sample_mark.teacher1_evaluator:
+                    teacher1_evaluator_obj = sample_mark.teacher1_evaluator
+                if sample_mark.teacher2_evaluator:
+                    teacher2_evaluator_obj = sample_mark.teacher2_evaluator
+                if sample_mark.teacher3_evaluator:
+                    teacher3_evaluator_obj = sample_mark.teacher3_evaluator
+            
+            # If not found in marks, find teachers from the same course in different centre semesters
+            # The same course is taught in both DRC and DUET semesters
+            # Teacher 1 must be from DRC, Teacher 2 must be from DUET
+            if not teacher1_evaluator_obj and drc_centre:
+                # Find the course in DRC centre for this semester
+                drc_semester_course = SemesterCourse.objects.filter(
+                    semester=semester,
+                    course__code=course.code,
+                    course__curriculum=course.curriculum,
+                    centre=drc_centre
+                ).select_related('teacher', 'teacher__centre').first()
+                
+                if drc_semester_course and drc_semester_course.teacher:
+                    # Verify the teacher is actually from DRC centre
+                    if drc_semester_course.teacher.centre == drc_centre:
+                        teacher1_evaluator_obj = drc_semester_course.teacher
+            
+            if not teacher2_evaluator_obj and duet_centre:
+                # Find the course in DUET centre for this semester
+                duet_semester_course = SemesterCourse.objects.filter(
+                    semester=semester,
+                    course__code=course.code,
+                    course__curriculum=course.curriculum,
+                    centre=duet_centre
+                ).select_related('teacher', 'teacher__centre').first()
+                
+                if duet_semester_course and duet_semester_course.teacher:
+                    # Verify the teacher is actually from DUET centre
+                    # Also ensure it's not the same teacher as teacher1
+                    if (duet_semester_course.teacher.centre == duet_centre and 
+                        duet_semester_course.teacher != teacher1_evaluator_obj):
+                        teacher2_evaluator_obj = duet_semester_course.teacher
+            
+            # If teacher2 is still not found and we have teacher1, try to find any teacher from DUET
+            # (in case the course doesn't exist in DUET but we need a second evaluator)
+            if not teacher2_evaluator_obj and teacher1_evaluator_obj and duet_centre:
+                # Find any teacher from DUET centre who teaches this course
+                duet_semester_course = SemesterCourse.objects.filter(
+                    semester=semester,
+                    course__code=course.code,
+                    course__curriculum=course.curriculum,
+                    centre=duet_centre
+                ).exclude(teacher=teacher1_evaluator_obj).select_related('teacher', 'teacher__centre').first()
+                
+                if duet_semester_course and duet_semester_course.teacher:
+                    if (duet_semester_course.teacher.centre == duet_centre and 
+                        duet_semester_course.teacher != teacher1_evaluator_obj):
+                        teacher2_evaluator_obj = duet_semester_course.teacher
+            
         except (Semester.DoesNotExist, Course.DoesNotExist):
             pass
+    
+    context['teacher1_evaluator'] = teacher1_evaluator_obj
+    context['teacher2_evaluator'] = teacher2_evaluator_obj
+    context['teacher3_evaluator'] = teacher3_evaluator_obj
     
     return render(request, 'bou_routines_app/ca_management.html', context)
 
@@ -4393,8 +4856,30 @@ def save_ca_marks(request):
         if hasattr(request.user, 'teacher'):
             teacher = request.user.teacher
         elif request.user.is_superuser or request.user.is_staff:
-            # For admin users, we need to get the course teacher
-            teacher = course.teacher
+            # For admin users, we need to get the course teacher from SemesterCourse
+            # Get centre from request if available
+            centre_id = request.POST.get('centre_id')
+            semester_course = None
+            if centre_id:
+                try:
+                    centre = Centre.objects.get(id=centre_id)
+                    semester_course = SemesterCourse.objects.filter(
+                        semester=semester,
+                        course=course,
+                        centre=centre
+                    ).select_related('teacher').first()
+                except Centre.DoesNotExist:
+                    pass
+            
+            # Fallback: get any SemesterCourse for this semester and course
+            if not semester_course:
+                semester_course = SemesterCourse.objects.filter(
+                    semester=semester,
+                    course=course
+                ).select_related('teacher').first()
+            
+            if semester_course:
+                teacher = semester_course.teacher
         
         if not teacher:
             return JsonResponse({'error': 'Teacher not found'}, status=400)
@@ -4445,6 +4930,177 @@ def save_ca_marks(request):
                     continue
         
         return JsonResponse({'success': True, 'message': 'CA marks saved successfully'})
+        
+    except (Semester.DoesNotExist, Course.DoesNotExist):
+        return JsonResponse({'error': 'Invalid semester or course'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@require_POST
+def save_final_exam_marks(request):
+    """
+    Save Semester Final Examination marks for students
+    """
+    # Check permissions
+    if not (request.user.is_superuser or request.user.is_staff or check_teacher_permission(request.user, 'can_manage_final_marks')):
+        return JsonResponse({'error': 'Permission denied'}, status=403)
+    
+    try:
+        semester_id = request.POST.get('semester_id')
+        course_id = request.POST.get('course_id')
+        teacher_role = request.POST.get('teacher_role', 'teacher1')  # teacher1, teacher2, or teacher3
+        
+        if not semester_id or not course_id:
+            return JsonResponse({'error': 'Semester and course are required'}, status=400)
+        
+        semester = Semester.objects.get(id=semester_id)
+        course = Course.objects.get(id=course_id)
+        
+        # Get teacher based on role
+        teacher = None
+        if hasattr(request.user, 'teacher'):
+            # Regular teacher users use their own profile
+            teacher = request.user.teacher
+        elif request.user.is_superuser or request.user.is_staff:
+            # For admin users, determine teacher based on teacher_role
+            # Teacher 1 should be from DRC, Teacher 2 should be from DUET
+            drc_centre = Centre.objects.filter(code='DRC').first()
+            duet_centre = Centre.objects.filter(code='DUET').first()
+            
+            if teacher_role == 'teacher1':
+                # Teacher 1 is from DRC
+                if drc_centre:
+                    semester_course = SemesterCourse.objects.filter(
+                        semester=semester,
+                        course=course,
+                        centre=drc_centre
+                    ).select_related('teacher', 'teacher__centre').first()
+                    if semester_course and semester_course.teacher and semester_course.teacher.centre == drc_centre:
+                        teacher = semester_course.teacher
+            elif teacher_role == 'teacher2':
+                # Teacher 2 is from DUET
+                if duet_centre:
+                    semester_course = SemesterCourse.objects.filter(
+                        semester=semester,
+                        course=course,
+                        centre=duet_centre
+                    ).select_related('teacher', 'teacher__centre').first()
+                    if semester_course and semester_course.teacher and semester_course.teacher.centre == duet_centre:
+                        teacher = semester_course.teacher
+            elif teacher_role == 'teacher3':
+                # Teacher 3 can be manually selected, try to get from existing marks first
+                sample_mark = FinalExamMark.objects.filter(
+                    course=course,
+                    semester=semester
+                ).first()
+                if sample_mark and sample_mark.teacher3_evaluator:
+                    teacher = sample_mark.teacher3_evaluator
+                else:
+                    # Fallback: get from request if provided
+                    teacher_id = request.POST.get('teacher3_id')
+                    if teacher_id:
+                        try:
+                            teacher = Teacher.objects.get(id=teacher_id)
+                        except Teacher.DoesNotExist:
+                            pass
+            
+            # Fallback: if still no teacher found, try to get from any SemesterCourse
+            if not teacher:
+                centre_id = request.POST.get('centre_id')
+                semester_course = None
+                if centre_id:
+                    try:
+                        centre = Centre.objects.get(id=centre_id)
+                        semester_course = SemesterCourse.objects.filter(
+                            semester=semester,
+                            course=course,
+                            centre=centre
+                        ).select_related('teacher').first()
+                    except Centre.DoesNotExist:
+                        pass
+                
+                if not semester_course:
+                    semester_course = SemesterCourse.objects.filter(
+                        semester=semester,
+                        course=course
+                    ).select_related('teacher').first()
+                
+                if semester_course:
+                    teacher = semester_course.teacher
+        
+        if not teacher:
+            return JsonResponse({'error': 'Teacher not found'}, status=400)
+        
+        # Process each student's marks
+        students_data = request.POST.get('students_data')
+        if students_data:
+            import json
+            students_marks = json.loads(students_data)
+            
+            for student_id, marks_data in students_marks.items():
+                try:
+                    student = Student.objects.get(id=student_id)
+                    
+                    # Get or create Final Exam mark record
+                    final_mark, created = FinalExamMark.objects.get_or_create(
+                        student=student,
+                        course=course,
+                        semester=semester,
+                        defaults={'marked_by': teacher}
+                    )
+                    
+                    # Update marks based on course type
+                    if course.is_lab:
+                        # Lab course: single field
+                        final_mark.lab_final_exam_mark = float(marks_data.get('lab_final_exam_mark', 0))
+                        final_mark.marked_by = teacher
+                    else:
+                        # Theory course: 7 question sets
+                        if teacher_role == 'teacher1':
+                            final_mark.teacher1_q1 = float(marks_data.get('q1', 0)) if marks_data.get('q1') else None
+                            final_mark.teacher1_q2 = float(marks_data.get('q2', 0)) if marks_data.get('q2') else None
+                            final_mark.teacher1_q3 = float(marks_data.get('q3', 0)) if marks_data.get('q3') else None
+                            final_mark.teacher1_q4 = float(marks_data.get('q4', 0)) if marks_data.get('q4') else None
+                            final_mark.teacher1_q5 = float(marks_data.get('q5', 0)) if marks_data.get('q5') else None
+                            final_mark.teacher1_q6 = float(marks_data.get('q6', 0)) if marks_data.get('q6') else None
+                            final_mark.teacher1_q7 = float(marks_data.get('q7', 0)) if marks_data.get('q7') else None
+                            final_mark.teacher1_evaluator = teacher
+                        elif teacher_role == 'teacher2':
+                            final_mark.teacher2_q1 = float(marks_data.get('q1', 0)) if marks_data.get('q1') else None
+                            final_mark.teacher2_q2 = float(marks_data.get('q2', 0)) if marks_data.get('q2') else None
+                            final_mark.teacher2_q3 = float(marks_data.get('q3', 0)) if marks_data.get('q3') else None
+                            final_mark.teacher2_q4 = float(marks_data.get('q4', 0)) if marks_data.get('q4') else None
+                            final_mark.teacher2_q5 = float(marks_data.get('q5', 0)) if marks_data.get('q5') else None
+                            final_mark.teacher2_q6 = float(marks_data.get('q6', 0)) if marks_data.get('q6') else None
+                            final_mark.teacher2_q7 = float(marks_data.get('q7', 0)) if marks_data.get('q7') else None
+                            final_mark.teacher2_evaluator = teacher
+                        elif teacher_role == 'teacher3':
+                            final_mark.teacher3_q1 = float(marks_data.get('q1', 0)) if marks_data.get('q1') else None
+                            final_mark.teacher3_q2 = float(marks_data.get('q2', 0)) if marks_data.get('q2') else None
+                            final_mark.teacher3_q3 = float(marks_data.get('q3', 0)) if marks_data.get('q3') else None
+                            final_mark.teacher3_q4 = float(marks_data.get('q4', 0)) if marks_data.get('q4') else None
+                            final_mark.teacher3_q5 = float(marks_data.get('q5', 0)) if marks_data.get('q5') else None
+                            final_mark.teacher3_q6 = float(marks_data.get('q6', 0)) if marks_data.get('q6') else None
+                            final_mark.teacher3_q7 = float(marks_data.get('q7', 0)) if marks_data.get('q7') else None
+                            final_mark.teacher3_evaluator = teacher
+                        
+                        final_mark.marked_by = teacher
+                    
+                    # Update notes if provided
+                    if 'notes' in marks_data:
+                        final_mark.notes = marks_data.get('notes', '')
+                    
+                    # Save (this will trigger auto-calculation of totals and discrepancy check)
+                    final_mark.save()
+                    
+                except Student.DoesNotExist:
+                    continue
+                except (ValueError, TypeError) as e:
+                    continue
+        
+        return JsonResponse({'success': True, 'message': 'Final exam marks saved successfully'})
         
     except (Semester.DoesNotExist, Course.DoesNotExist):
         return JsonResponse({'error': 'Invalid semester or course'}, status=400)

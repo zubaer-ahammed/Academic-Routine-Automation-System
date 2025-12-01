@@ -1,7 +1,8 @@
 {% extends 'bou_routines_app/base.html' %}
 {% load static %}
+{% load attendance_extras %}
 
-{% block title %}CA Management - BOUSST CSE Routine Generator{% endblock %}
+{% block title %}Marks Distribution - BOUSST CSE{% endblock %}
 
 {% block extra_head %}
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -277,6 +278,50 @@
         min-width: 140px;
         font-size: 1em;
     }
+
+    .discrepancy-row {
+        background-color: #fff3cd !important;
+        border-left: 4px solid #ffc107;
+    }
+
+    .discrepancy-row:hover {
+        background-color: #ffe69c !important;
+    }
+
+    .final-exam-section {
+        margin-top: 40px;
+        padding-top: 20px;
+        border-top: 2px solid #dee2e6;
+    }
+
+    .teacher-role-selector {
+        margin-bottom: 20px;
+        padding: 15px;
+        background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+        border-radius: 8px;
+        border-left: 4px solid #2196f3;
+    }
+
+    .question-set-input {
+        width: 60px;
+        padding: 4px 6px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        text-align: center;
+        font-size: 0.85rem;
+    }
+
+    .question-set-input:focus {
+        border-color: #80bdff;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        outline: none;
+    }
+
+    .question-set-input.disabled {
+        background-color: #e9ecef;
+        color: #6c757d;
+        cursor: not-allowed;
+    }
 </style>
 {% endblock %}
 
@@ -286,13 +331,13 @@
         <div class="col-12">
             <div class="container-box-bou">
                 <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h2><i class="fas fa-chart-line"></i> CA Management</h2>
+                    <h2><i class="fas fa-chart-line"></i> Marks Distribution</h2>
                     <div class="header-buttons">
                         <a href="{% url 'attendance-calendar' %}{% if request.GET.curriculum %}?curriculum={{ request.GET.curriculum }}{% if request.GET.semester %}&semester={{ request.GET.semester }}{% endif %}{% if request.GET.course %}&course={{ request.GET.course }}{% endif %}{% endif %}" class="btn btn-outline-primary">
                             <i class="fas fa-calendar-check"></i> Attendance
                         </a>
                         <a href="{% url 'ca-management' %}{% if request.GET.curriculum %}?curriculum={{ request.GET.curriculum }}{% if request.GET.semester %}&semester={{ request.GET.semester }}{% endif %}{% if request.GET.course %}&course={{ request.GET.course }}{% endif %}{% endif %}" class="btn btn-primary">
-                            <i class="fas fa-chart-line"></i> CA Management
+                            <i class="fas fa-chart-line"></i> Marks Distribution
                         </a>
                     </div>
                 </div>
@@ -300,7 +345,7 @@
                 <!-- Selection Form -->
                 <form method="get" action="{% url 'ca-management' %}">
                     <div class="row">
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <div class="form-group">
                                 <label for="curriculum">Select Curriculum:</label>
                                 <select name="curriculum" id="curriculum" onchange="loadSemestersForCurriculum(this.value)">
@@ -313,7 +358,20 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
+                            <div class="form-group">
+                                <label for="centre">Select Study Centre:</label>
+                                <select name="centre" id="centre" onchange="loadSemestersForCentre(this.value)">
+                                    <option value="">-- Select Centre --</option>
+                                    {% for centre in centres %}
+                                        <option value="{{ centre.id }}" {% if selected_centre_id|stringformat:"s" == centre.id|stringformat:"s" %}selected{% endif %}>
+                                            {{ centre.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
                             <div class="form-group">
                                 <label for="semester">Select Semester:</label>
                                 <input type="hidden" name="semester" id="semester-hidden" value="{{ selected_semester_id }}">
@@ -356,11 +414,11 @@
                 {% if selected_semester and selected_course %}
                     <!-- Course Information -->
                     <div class="course-info">
-                        <h4><i class="fas fa-graduation-cap"></i> CA Management - {{ selected_semester.name }}</h4>
+                        <h4><i class="fas fa-graduation-cap"></i> Marks Distribution - {{ selected_semester.name }}</h4>
                         <div class="row">
                             <div class="col-md-6">
                                 <p><strong><i class="fas fa-book"></i> Course:</strong> {{ selected_course.code }} - {{ selected_course.name }}</p>
-                                <p><strong><i class="fas fa-chalkboard-teacher"></i> Teacher:</strong> {{ selected_course.teacher.name }}</p>
+                                <p><strong><i class="fas fa-chalkboard-teacher"></i> Teacher:</strong> {% if course_teacher %}{{ course_teacher.name }}{% else %}{{ selected_course.teacher.name|default:"N/A" }}{% endif %}</p>
                             </div>
                             <div class="col-md-6">
                                 <p><strong><i class="fas fa-tag"></i> Course Type:</strong> 
@@ -624,6 +682,247 @@
                                 </button>
                             </div>
                         </div>
+
+                        <!-- Semester Final Examination Section -->
+                        <div class="final-exam-section">
+                            <div class="table-header">
+                                <h4><i class="fas fa-file-alt"></i> Semester Final Examination Marks</h4>
+                            </div>
+
+                            {% if selected_course.is_lab %}
+                                <!-- Lab Course Final Exam -->
+                                <div class="ca-distribution">
+                                    <p><strong>Lab Course Final Exam:</strong> Maximum 60 marks</p>
+                                </div>
+                            {% else %}
+                                <!-- Theory Course Final Exam -->
+                                <div class="ca-distribution">
+                                    <p><strong>Theory Course Final Exam:</strong> Maximum 70 marks</p>
+                                    <p><small>Students can answer a maximum of 5 question sets out of 7. Each set has a maximum of 14 marks.</small></p>
+                                </div>
+                                
+                                <!-- Teacher Role Selector for Theory Course -->
+                                <div class="teacher-role-selector">
+                                    {% if can_select_evaluator %}
+                                        <label for="teacher-role"><strong>Select Evaluator:</strong></label>
+                                        <select id="teacher-role" class="form-control" style="width: 300px; display: inline-block; margin-left: 10px;" onchange="updateTeacherRole()">
+                                            <option value="teacher1" {% if teacher_role == 'teacher1' %}selected{% endif %}>
+                                                {% if teacher1_evaluator %}{{ teacher1_evaluator.name }} (First Evaluator - DRC){% else %}Teacher 1 (First Evaluator - DRC){% endif %}
+                                            </option>
+                                            <option value="teacher2" {% if teacher_role == 'teacher2' %}selected{% endif %}>
+                                                {% if teacher2_evaluator %}{{ teacher2_evaluator.name }} (Second Evaluator - DUET){% else %}Teacher 2 (Second Evaluator - DUET){% endif %}
+                                            </option>
+                                            <option value="teacher3" {% if teacher_role == 'teacher3' %}selected{% endif %}>
+                                                {% if teacher3_evaluator %}{{ teacher3_evaluator.name }} (Third Evaluator){% else %}Teacher 3 (Third Evaluator - TBD){% endif %}
+                                            </option>
+                                        </select>
+                                    {% else %}
+                                        <label for="teacher-role"><strong>Your Role:</strong></label>
+                                        <select id="teacher-role" class="form-control" style="width: 300px; display: inline-block; margin-left: 10px; background-color: #e9ecef; cursor: not-allowed;" disabled>
+                                            <option value="teacher1" {% if teacher_role == 'teacher1' %}selected{% endif %}>
+                                                {% if teacher1_evaluator %}{{ teacher1_evaluator.name }} (First Evaluator - DRC){% else %}Teacher 1 (First Evaluator - DRC){% endif %}
+                                            </option>
+                                            <option value="teacher2" {% if teacher_role == 'teacher2' %}selected{% endif %}>
+                                                {% if teacher2_evaluator %}{{ teacher2_evaluator.name }} (Second Evaluator - DUET){% else %}Teacher 2 (Second Evaluator - DUET){% endif %}
+                                            </option>
+                                            <option value="teacher3" {% if teacher_role == 'teacher3' %}selected{% endif %}>
+                                                {% if teacher3_evaluator %}{{ teacher3_evaluator.name }} (Third Evaluator){% else %}Teacher 3 (Third Evaluator - TBD){% endif %}
+                                            </option>
+                                        </select>
+                                        <input type="hidden" id="hidden-teacher-role" value="{{ teacher_role }}">
+                                        <p class="mt-2 mb-0"><small class="text-info"><i class="fas fa-info-circle"></i> You can only view and enter marks for your assigned evaluator role.</small></p>
+                                    {% endif %}
+                                    <p class="mt-2 mb-0"><small class="text-muted">If the difference between Teacher 1 and Teacher 2 is more than 20% (or 14 marks), Teacher 3 evaluation is required.</small></p>
+                                </div>
+                            {% endif %}
+
+                            <div class="table-responsive">
+                                <form id="final-exam-marks-form">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="semester_id" value="{{ selected_semester.id }}">
+                                    <input type="hidden" name="course_id" value="{{ selected_course.id }}">
+                                    <input type="hidden" name="teacher_role" id="hidden-teacher-role" value="{{ teacher_role|default:'teacher1' }}">
+                                    {% if not can_select_evaluator %}
+                                        <input type="hidden" id="teacher-role-disabled" value="true">
+                                    {% endif %}
+                                    
+                                    <table class="ca-table">
+                                        <thead>
+                                            <tr>
+                                                <th rowspan="2" class="student-info">Student ID</th>
+                                                <th rowspan="2" class="student-info">Name</th>
+                                                {% if selected_course.is_lab %}
+                                                    <th colspan="2">Lab Course Final Exam (Total: 60 marks)</th>
+                                                {% else %}
+                                                    <th colspan="9">Theory Course Final Exam (Total: 70 marks)</th>
+                                                {% endif %}
+                                                <th rowspan="2">Total</th>
+                                                <th rowspan="2">Notes</th>
+                                            </tr>
+                                            {% if selected_course.is_lab %}
+                                                <tr>
+                                                    <th>Final Exam Mark</th>
+                                                    <th>Status</th>
+                                                </tr>
+                                            {% else %}
+                                                <tr>
+                                                    <th>Q1<br><small>(max 14)</small></th>
+                                                    <th>Q2<br><small>(max 14)</small></th>
+                                                    <th>Q3<br><small>(max 14)</small></th>
+                                                    <th>Q4<br><small>(max 14)</small></th>
+                                                    <th>Q5<br><small>(max 14)</small></th>
+                                                    <th>Q6<br><small>(max 14)</small></th>
+                                                    <th>Q7<br><small>(max 14)</small></th>
+                                                    <th>Teacher Total</th>
+                                                    <th>Status</th>
+                                                </tr>
+                                            {% endif %}
+                                        </thead>
+                                        <tbody>
+                                            {% for student in students %}
+                                                {% with final_mark=final_exam_marks|dict_key:student.id %}
+                                                <tr id="final-exam-row-{{ student.id }}" {% if final_mark and final_mark.requires_third_teacher %}class="discrepancy-row"{% endif %}>
+                                                    <td class="student-info">{{ student.id }}</td>
+                                                    <td class="student-info">{{ student.name }}</td>
+                                                    
+                                                    {% if selected_course.is_lab %}
+                                                        <!-- Lab Course Final Exam -->
+                                                        <td>
+                                                            <input type="number" 
+                                                                   name="students_data[{{ student.id }}][lab_final_exam_mark]"
+                                                                   value="{% if final_mark %}{{ final_mark.lab_final_exam_mark|floatformat:2 }}{% else %}0.00{% endif %}"
+                                                                   min="0" 
+                                                                   max="60"
+                                                                   step="0.01"
+                                                                   class="mark-input"
+                                                                   oninput="calculateFinalExamTotal(this)">
+                                                        </td>
+                                                        <td>
+                                                            <span class="badge badge-info">Single Entry</span>
+                                                        </td>
+                                                    {% else %}
+                                                        <!-- Theory Course Final Exam - 7 Question Sets -->
+                                                        <td>
+                                                            <input type="number" 
+                                                                   name="students_data[{{ student.id }}][q1]"
+                                                                   value="{% if final_mark %}{% if teacher_role == 'teacher1' and final_mark.teacher1_q1 %}{{ final_mark.teacher1_q1|floatformat:2 }}{% elif teacher_role == 'teacher2' and final_mark.teacher2_q1 %}{{ final_mark.teacher2_q1|floatformat:2 }}{% elif teacher_role == 'teacher3' and final_mark.teacher3_q1 %}{{ final_mark.teacher3_q1|floatformat:2 }}{% endif %}{% endif %}"
+                                                                   min="0" 
+                                                                   max="14"
+                                                                   step="0.01"
+                                                                   class="question-set-input"
+                                                                   data-student-id="{{ student.id }}"
+                                                                   data-question="1"
+                                                                   oninput="validateQuestionSet(this)">
+                                                        </td>
+                                                        <td>
+                                                            <input type="number" 
+                                                                   name="students_data[{{ student.id }}][q2]"
+                                                                   value="{% if final_mark %}{% if teacher_role == 'teacher1' and final_mark.teacher1_q2 %}{{ final_mark.teacher1_q2|floatformat:2 }}{% elif teacher_role == 'teacher2' and final_mark.teacher2_q2 %}{{ final_mark.teacher2_q2|floatformat:2 }}{% elif teacher_role == 'teacher3' and final_mark.teacher3_q2 %}{{ final_mark.teacher3_q2|floatformat:2 }}{% endif %}{% endif %}"
+                                                                   min="0" 
+                                                                   max="14"
+                                                                   step="0.01"
+                                                                   class="question-set-input"
+                                                                   data-student-id="{{ student.id }}"
+                                                                   data-question="2"
+                                                                   oninput="validateQuestionSet(this)">
+                                                        </td>
+                                                        <td>
+                                                            <input type="number" 
+                                                                   name="students_data[{{ student.id }}][q3]"
+                                                                   value="{% if final_mark %}{% if teacher_role == 'teacher1' and final_mark.teacher1_q3 %}{{ final_mark.teacher1_q3|floatformat:2 }}{% elif teacher_role == 'teacher2' and final_mark.teacher2_q3 %}{{ final_mark.teacher2_q3|floatformat:2 }}{% elif teacher_role == 'teacher3' and final_mark.teacher3_q3 %}{{ final_mark.teacher3_q3|floatformat:2 }}{% endif %}{% endif %}"
+                                                                   min="0" 
+                                                                   max="14"
+                                                                   step="0.01"
+                                                                   class="question-set-input"
+                                                                   data-student-id="{{ student.id }}"
+                                                                   data-question="3"
+                                                                   oninput="validateQuestionSet(this)">
+                                                        </td>
+                                                        <td>
+                                                            <input type="number" 
+                                                                   name="students_data[{{ student.id }}][q4]"
+                                                                   value="{% if final_mark %}{% if teacher_role == 'teacher1' and final_mark.teacher1_q4 %}{{ final_mark.teacher1_q4|floatformat:2 }}{% elif teacher_role == 'teacher2' and final_mark.teacher2_q4 %}{{ final_mark.teacher2_q4|floatformat:2 }}{% elif teacher_role == 'teacher3' and final_mark.teacher3_q4 %}{{ final_mark.teacher3_q4|floatformat:2 }}{% endif %}{% endif %}"
+                                                                   min="0" 
+                                                                   max="14"
+                                                                   step="0.01"
+                                                                   class="question-set-input"
+                                                                   data-student-id="{{ student.id }}"
+                                                                   data-question="4"
+                                                                   oninput="validateQuestionSet(this)">
+                                                        </td>
+                                                        <td>
+                                                            <input type="number" 
+                                                                   name="students_data[{{ student.id }}][q5]"
+                                                                   value="{% if final_mark %}{% if teacher_role == 'teacher1' and final_mark.teacher1_q5 %}{{ final_mark.teacher1_q5|floatformat:2 }}{% elif teacher_role == 'teacher2' and final_mark.teacher2_q5 %}{{ final_mark.teacher2_q5|floatformat:2 }}{% elif teacher_role == 'teacher3' and final_mark.teacher3_q5 %}{{ final_mark.teacher3_q5|floatformat:2 }}{% endif %}{% endif %}"
+                                                                   min="0" 
+                                                                   max="14"
+                                                                   step="0.01"
+                                                                   class="question-set-input"
+                                                                   data-student-id="{{ student.id }}"
+                                                                   data-question="5"
+                                                                   oninput="validateQuestionSet(this)">
+                                                        </td>
+                                                        <td>
+                                                            <input type="number" 
+                                                                   name="students_data[{{ student.id }}][q6]"
+                                                                   value="{% if final_mark %}{% if teacher_role == 'teacher1' and final_mark.teacher1_q6 %}{{ final_mark.teacher1_q6|floatformat:2 }}{% elif teacher_role == 'teacher2' and final_mark.teacher2_q6 %}{{ final_mark.teacher2_q6|floatformat:2 }}{% elif teacher_role == 'teacher3' and final_mark.teacher3_q6 %}{{ final_mark.teacher3_q6|floatformat:2 }}{% endif %}{% endif %}"
+                                                                   min="0" 
+                                                                   max="14"
+                                                                   step="0.01"
+                                                                   class="question-set-input"
+                                                                   data-student-id="{{ student.id }}"
+                                                                   data-question="6"
+                                                                   oninput="validateQuestionSet(this)">
+                                                        </td>
+                                                        <td>
+                                                            <input type="number" 
+                                                                   name="students_data[{{ student.id }}][q7]"
+                                                                   value="{% if final_mark %}{% if teacher_role == 'teacher1' and final_mark.teacher1_q7 %}{{ final_mark.teacher1_q7|floatformat:2 }}{% elif teacher_role == 'teacher2' and final_mark.teacher2_q7 %}{{ final_mark.teacher2_q7|floatformat:2 }}{% elif teacher_role == 'teacher3' and final_mark.teacher3_q7 %}{{ final_mark.teacher3_q7|floatformat:2 }}{% endif %}{% endif %}"
+                                                                   min="0" 
+                                                                   max="14"
+                                                                   step="0.01"
+                                                                   class="question-set-input"
+                                                                   data-student-id="{{ student.id }}"
+                                                                   data-question="7"
+                                                                   oninput="validateQuestionSet(this)">
+                                                        </td>
+                                                        <td class="total-mark">
+                                                            <span id="teacher-total-{{ student.id }}" class="teacher-total-value" data-teacher-role="{{ teacher_role }}">
+                                                                {% if final_mark %}
+                                                                    {% if teacher_role == 'teacher1' %}{{ final_mark.teacher1_total|floatformat:2 }}{% elif teacher_role == 'teacher2' %}{{ final_mark.teacher2_total|floatformat:2 }}{% elif teacher_role == 'teacher3' %}{{ final_mark.teacher3_total|floatformat:2 }}{% else %}0.00{% endif %}
+                                                                {% else %}0.00{% endif %}
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            {% if final_mark and final_mark.requires_third_teacher %}
+                                                                <span class="badge badge-warning">Discrepancy</span>
+                                                            {% else %}
+                                                                <span class="badge badge-info">OK</span>
+                                                            {% endif %}
+                                                        </td>
+                                                    {% endif %}
+                                                    
+                                                    <td>
+                                                        <input type="text" 
+                                                               name="students_data[{{ student.id }}][notes]"
+                                                               value="{% if final_mark %}{{ final_mark.notes }}{% endif %}"
+                                                               placeholder="Notes..."
+                                                               style="width: 100px; padding: 4px; border: 1px solid #ced4da; border-radius: 4px;">
+                                                    </td>
+                                                </tr>
+                                                {% endwith %}
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </form>
+                            </div>
+                            
+                            <div class="text-right mt-3">
+                                <button type="button" class="btn-save-ca" onclick="saveFinalExamMarks()">
+                                    <i class="fas fa-save"></i> Save Final Exam Marks
+                                </button>
+                            </div>
+                        </div>
                     {% else %}
                         <div class="info-message">
                             <i class="fas fa-info-circle"></i> No students found for the selected semester and course.
@@ -640,10 +939,12 @@
 </div>
 
 <script>
-// Function to load semesters for a selected curriculum
+// Function to load semesters for a selected curriculum and centre
 function loadSemestersForCurriculum(curriculumId) {
+    const centreSelect = document.getElementById('centre');
     const semesterSelect = document.getElementById('semester');
     const courseSelect = document.getElementById('course');
+    const centreId = centreSelect ? centreSelect.value : '';
     
     semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
     courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
@@ -654,7 +955,13 @@ function loadSemestersForCurriculum(curriculumId) {
     
     semesterSelect.innerHTML = '<option value="">Loading semesters...</option>';
     
-    fetch(`{% url 'get-semesters-for-curriculum' %}?curriculum_id=${curriculumId}&t=${Date.now()}`)
+    let url = `{% url 'get-semesters-for-curriculum' %}?curriculum_id=${curriculumId}`;
+    if (centreId) {
+        url += `&centre_id=${centreId}`;
+    }
+    url += `&t=${Date.now()}`;
+    
+    fetch(url)
         .then(response => response.json())
         .then(data => {
             semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
@@ -671,6 +978,22 @@ function loadSemestersForCurriculum(curriculumId) {
             console.error('Error loading semesters:', error);
             semesterSelect.innerHTML = '<option value="">Error loading semesters</option>';
         });
+}
+
+// Function to load semesters when centre changes
+function loadSemestersForCentre(centreId) {
+    const curriculumSelect = document.getElementById('curriculum');
+    const curriculumId = curriculumSelect ? curriculumSelect.value : '';
+    
+    if (curriculumId) {
+        loadSemestersForCurriculum(curriculumId);
+    } else {
+        // Clear semesters and courses if no curriculum selected
+        const semesterSelect = document.getElementById('semester');
+        const courseSelect = document.getElementById('course');
+        semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
+        courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
+    }
 }
 
 // Function to load courses for a selected semester
@@ -709,25 +1032,32 @@ function loadCoursesForSemester(semesterId) {
 // Function to update URL parameters and reload page
 function loadStudentsForCourse() {
     const curriculumSelect = document.getElementById('curriculum');
+    const centreSelect = document.getElementById('centre');
     const semesterSelect = document.getElementById('semester');
     const courseSelect = document.getElementById('course');
     
     const curriculumId = curriculumSelect.value;
+    const centreId = centreSelect ? centreSelect.value : '';
     const semesterId = semesterSelect.value;
     const courseId = courseSelect.value;
     
-    // Only reload if we have all three selections
+    // Only reload if we have all required selections
     if (curriculumId && semesterId && courseId) {
-        updateUrlParams(curriculumId, semesterId, courseId);
+        updateUrlParams(curriculumId, centreId, semesterId, courseId);
     }
 }
 
-function updateUrlParams(curriculumId, semesterId, courseId) {
+function updateUrlParams(curriculumId, centreId, semesterId, courseId) {
     const url = new URL(window.location.href);
     if (curriculumId) {
         url.searchParams.set('curriculum', curriculumId);
     } else {
         url.searchParams.delete('curriculum');
+    }
+    if (centreId) {
+        url.searchParams.set('centre', centreId);
+    } else {
+        url.searchParams.delete('centre');
     }
     if (semesterId) {
         url.searchParams.set('semester', semesterId);
@@ -884,43 +1214,133 @@ function saveCAMarks() {
 document.addEventListener('DOMContentLoaded', function() {
     const urlParams = new URLSearchParams(window.location.search);
     const curriculumId = urlParams.get('curriculum');
+    const centreId = urlParams.get('centre');
     const semesterId = urlParams.get('semester');
     const courseId = urlParams.get('course');
     
     
     const curriculumSelect = document.getElementById('curriculum');
+    const centreSelect = document.getElementById('centre');
     const semesterSelect = document.getElementById('semester');
     const courseSelect = document.getElementById('course');
     const loadStudentsBtn = document.getElementById('loadStudentsBtn');
 
     // Set up event listeners
-    curriculumSelect.addEventListener('change', function() {
-        const curriculumId = this.value;
-        if (curriculumId) {
-            loadSemestersForCurriculum(curriculumId);
-        }
-    });
+    if (curriculumSelect) {
+        curriculumSelect.addEventListener('change', function() {
+            const curriculumId = this.value;
+            // Clear semester and course when curriculum changes
+            if (semesterSelect) {
+                semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
+            }
+            if (courseSelect) {
+                courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
+            }
+            if (curriculumId) {
+                // Reload semesters with current centre
+                loadSemestersForCurriculum(curriculumId);
+            }
+        });
+    }
     
-    semesterSelect.addEventListener('change', function() {
-        const semesterId = this.value;
-        if (semesterId) {
-            loadCoursesForSemester(semesterId);
-        }
-    });
+    if (centreSelect) {
+        centreSelect.addEventListener('change', function() {
+            const centreId = this.value;
+            const curriculumId = curriculumSelect ? curriculumSelect.value : '';
+            const semesterId = semesterSelect ? semesterSelect.value : '';
+            const courseId = courseSelect ? courseSelect.value : '';
+            
+            // Always update URL with centre parameter
+            const url = new URL(window.location.href);
+            if (centreId) {
+                url.searchParams.set('centre', centreId);
+            } else {
+                url.searchParams.delete('centre');
+            }
+            if (curriculumId) {
+                url.searchParams.set('curriculum', curriculumId);
+            }
+            if (semesterId) {
+                url.searchParams.set('semester', semesterId);
+            }
+            if (courseId) {
+                url.searchParams.set('course', courseId);
+            }
+            window.history.replaceState({}, '', url.toString());
+            
+            // Reload semesters with both curriculum and centre filters
+            if (curriculumId) {
+                loadSemestersForCentre(centreId);
+            } else {
+                // Clear semesters if no curriculum selected
+                const semesterSelect = document.getElementById('semester');
+                const courseSelect = document.getElementById('course');
+                if (semesterSelect) {
+                    semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
+                }
+                if (courseSelect) {
+                    courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
+                }
+            }
+            
+            // Update URL with centre parameter and reload if all selections are made
+            if (curriculumId && semesterId && courseId) {
+                updateUrlParams(curriculumId, centreId, semesterId, courseId);
+            }
+        });
+    }
     
-    courseSelect.addEventListener('change', function() {
-        loadStudentsForCourse();
-    });
+    if (semesterSelect) {
+        semesterSelect.addEventListener('change', function() {
+            const semesterId = this.value;
+            if (semesterId) {
+                loadCoursesForSemester(semesterId);
+            }
+        });
+    }
     
-    loadStudentsBtn.addEventListener('click', function() {
-        loadStudentsForCourse();
-    });
+    if (courseSelect) {
+        courseSelect.addEventListener('change', function() {
+            loadStudentsForCourse();
+        });
+    }
+    
+    if (loadStudentsBtn) {
+        loadStudentsBtn.addEventListener('click', function() {
+            loadStudentsForCourse();
+        });
+    }
 
     // Initialize page state from URL parameters (without triggering events)
-    if (curriculumId) {
+    // First, set the centre (default to DRC if not in URL)
+    let finalCentreId = centreId;
+    if (centreSelect) {
+        if (centreId) {
+            centreSelect.value = centreId;
+        } else {
+            // If no centre in URL, set to DRC (default)
+            const drcOption = Array.from(centreSelect.options).find(opt => opt.text.includes('Dhaka Regional'));
+            if (drcOption) {
+                centreSelect.value = drcOption.value;
+                finalCentreId = drcOption.value; // Update finalCentreId for later use
+                // Update URL to include DRC centre
+                const url = new URL(window.location.href);
+                url.searchParams.set('centre', drcOption.value);
+                if (curriculumId) {
+                    url.searchParams.set('curriculum', curriculumId);
+                }
+                window.history.replaceState({}, '', url.toString());
+            }
+        }
+    }
+    
+    // Then load semesters with both curriculum and centre filters
+    if (curriculumId && finalCentreId) {
         curriculumSelect.value = curriculumId;
-        // Load semesters if curriculum is selected
+        // Load semesters with both curriculum and centre filters
         loadSemestersForCurriculum(curriculumId);
+    } else if (curriculumId) {
+        curriculumSelect.value = curriculumId;
     }
     
     // If semester and course are already selected (from server-side), load their data
@@ -931,5 +1351,153 @@ document.addEventListener('DOMContentLoaded', function() {
         loadStudentsForCourse();
     }
 });
+
+// Function to update teacher role selector and reload values
+function updateTeacherRole() {
+    const roleSelect = document.getElementById('teacher-role');
+    const hiddenRole = document.getElementById('hidden-teacher-role');
+    if (roleSelect && hiddenRole) {
+        hiddenRole.value = roleSelect.value;
+        // Only reload if dropdown is enabled (for administrators)
+        if (!roleSelect.disabled) {
+            // Update URL with teacher_role parameter and reload
+            const url = new URL(window.location.href);
+            url.searchParams.set('teacher_role', roleSelect.value);
+            window.location.href = url.toString();
+        }
+    }
+}
+
+// Function to validate question sets (max 5 sets can have values, max 14 per set)
+function validateQuestionSet(inputElement) {
+    const studentId = inputElement.getAttribute('data-student-id');
+    const row = inputElement.closest('tr');
+    const questionInputs = row.querySelectorAll('.question-set-input');
+    
+    let filledCount = 0;
+    let total = 0;
+    
+    questionInputs.forEach(input => {
+        const value = parseFloat(input.value) || 0;
+        if (value > 0) {
+            filledCount++;
+            total += value;
+        }
+        
+        // Validate max 14 per set
+        if (value > 14) {
+            input.value = 14;
+            alert('Maximum mark per question set is 14.');
+        }
+    });
+    
+    // Check if more than 5 sets are filled
+    if (filledCount > 5) {
+        // Disable the last filled input
+        let enabledCount = 0;
+        questionInputs.forEach(input => {
+            const value = parseFloat(input.value) || 0;
+            if (value > 0) {
+                enabledCount++;
+                if (enabledCount > 5) {
+                    input.value = '';
+                    input.classList.add('disabled');
+                } else {
+                    input.classList.remove('disabled');
+                }
+            } else {
+                input.classList.remove('disabled');
+            }
+        });
+        alert('Maximum 5 question sets can be entered. Please clear one of the sets.');
+    } else {
+        // Enable all inputs if 5 or fewer are filled
+        questionInputs.forEach(input => {
+            input.classList.remove('disabled');
+        });
+    }
+    
+    // Calculate and update teacher's total (not final exam total)
+    const teacherTotalElement = document.getElementById('teacher-total-' + studentId);
+    if (teacherTotalElement) {
+        teacherTotalElement.textContent = total.toFixed(2);
+    }
+}
+
+// Function to calculate final exam total for lab course
+function calculateFinalExamTotal(inputElement) {
+    const value = parseFloat(inputElement.value) || 0;
+    if (value > 60) {
+        inputElement.value = 60;
+        alert('Maximum mark for lab final exam is 60.');
+    }
+}
+
+// Function to save final exam marks
+function saveFinalExamMarks() {
+    const form = document.getElementById('final-exam-marks-form');
+    const formData = new FormData(form);
+    const studentsData = {};
+    const isLabCourse = {% if selected_course.is_lab %}true{% else %}false{% endif %};
+    const teacherRole = document.getElementById('hidden-teacher-role').value;
+    
+    // Collect all student marks
+    form.querySelectorAll('tbody tr').forEach(row => {
+        const studentId = row.querySelector('.student-info').textContent.trim();
+        const notes = row.querySelector('input[name$="[notes]"]').value;
+        
+        const marks = {
+            'notes': notes
+        };
+        
+        if (isLabCourse) {
+            marks['lab_final_exam_mark'] = parseFloat(row.querySelector('input[name$="[lab_final_exam_mark]"]').value) || 0;
+        } else {
+            // Theory course: collect all 7 question sets
+            for (let i = 1; i <= 7; i++) {
+                const input = row.querySelector(`input[name$="[q${i}]"]`);
+                if (input) {
+                    const value = parseFloat(input.value) || 0;
+                    if (value > 0) {
+                        marks[`q${i}`] = value;
+                    }
+                }
+            }
+        }
+        
+        studentsData[studentId] = marks;
+    });
+    
+    const postData = {
+        'csrfmiddlewaretoken': formData.get('csrfmiddlewaretoken'),
+        'semester_id': formData.get('semester_id'),
+        'course_id': formData.get('course_id'),
+        'teacher_role': teacherRole,
+        'students_data': JSON.stringify(studentsData)
+    };
+    
+    fetch('{% url "save-final-exam-marks" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': postData['csrfmiddlewaretoken']
+        },
+        body: new URLSearchParams(postData).toString()
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            // Reload the page to show updated marks
+            window.location.reload(); 
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error saving final exam marks:', error);
+        alert('An error occurred while saving final exam marks.');
+    });
+}
 </script>
 {% endblock %}

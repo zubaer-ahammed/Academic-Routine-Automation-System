@@ -165,7 +165,7 @@
         <div class="container container-bou bou-header">
             <a class="navbar-brand d-flex align-items-center" href="{% url 'home' %}">
                 <img src="{% static 'bou_logo_icon.png' %}" alt="BOU Logo" class="bou-logo">
-                <span>BOUSST  CSE Routine Generator</span>
+                <span>BOUSST CSE</span>
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -182,14 +182,10 @@
                         <a class="nav-link active" href="{% url 'download-routines' %}">Download Routines</a>
                     </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'attendance-calendar' %}">
-                                <i class="fas fa-calendar-check"></i> Attendance
-                            </a>
+                            <a class="nav-link" href="{% url 'attendance-calendar' %}">Attendance</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'ca-management' %}">
-                                <i class="fas fa-chart-line"></i> CA Management
-                            </a>
+                            <a class="nav-link" href="{% url 'ca-management' %}">Marks</a>
                         </li>
                     {% if user.is_authenticated %}
                         <li class="nav-item">
@@ -240,7 +236,7 @@
                                 <a href="{% url 'export-to-excel' semester_data.semester.id %}" class="btn btn-success btn-sm">
                                     <i class="bi bi-file-earmark-excel"></i> Excel
                                 </a>
-                                <a href="{% url 'export-to-pdf' semester_data.semester.id %}?teacher_short_name_newline={% if semester_data.semester.teacher_short_name_newline %}1{% else %}0{% endif %}" class="btn btn-danger btn-sm">
+                                <a href="{% url 'export-to-pdf' semester_data.semester.id %}?teacher_short_name_newline={% if semester_data.semester.teacher_short_name_newline %}1{% else %}0{% endif %}{% if semester_data.centre_id %}&centre={{ semester_data.centre_id }}{% endif %}" class="btn btn-danger btn-sm">
                                     <i class="bi bi-file-earmark-pdf"></i> PDF
                                 </a>
                                 <a href="{% url 'generate-routine' %}?semester={{ semester_data.semester.id }}" class="btn btn-primary btn-sm">
@@ -252,7 +248,7 @@
                             </div>
 
                             <div class="academic-calender">
-                                <a href="{% url 'export-academic-calendar-pdf' semester_data.semester.id %}" class="btn btn-info btn-sm" style="background-color: #0dcaf0; color: #fff; min-width: 180px;">
+                                <a href="{% url 'export-academic-calendar-pdf' semester_data.semester.id %}{% if semester_data.centre_id %}?centre={{ semester_data.centre_id }}{% endif %}" class="btn btn-info btn-sm" style="background-color: #0dcaf0; color: #fff; min-width: 180px;">
                                     <i class="bi bi-calendar-event"></i> Academic Calendar
                                 </a>
                             </div>
@@ -343,7 +339,7 @@
     <footer class="bg-dark text-white text-center py-3 mt-5">
         <div class="container bou-footer-container container-bou">
             <p class="mb-0">
-                © <span id="currentYear"></span> BOUSST  CSE Routine Generator. Developed by
+                © <span id="currentYear"></span> BOUSST CSE. Developed by
                 <a href="https://github.com/zubaer-ahammed/" target="_blank" class="text-info">Md. Zubaer Ahammed</a> and
                 <a href="https://github.com/Mojahidul21" target="_blank" class="text-info">Mojahidul Alam</a>
             </p>

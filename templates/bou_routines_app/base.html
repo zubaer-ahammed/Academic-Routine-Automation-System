@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}BOUSST  CSE Routine Generator{% endblock %}</title>
+    <title>{% block title %}BOUSST CSE{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="{% static 'global.css' %}?ver=1.0.2">
@@ -16,7 +16,7 @@
         <div class="container container-bou bou-header">
             <a class="navbar-brand d-flex align-items-center" href="{% url 'home' %}">
                 <img src="{% static 'bou_logo_icon.png' %}" alt="BOU Logo" class="bou-logo">
-                <span>BOUSST  CSE Routine Generator</span>
+                <span>BOUSST CSE</span>
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -33,20 +33,14 @@
                         <a class="nav-link" href="{% url 'download-routines' %}">Download Routines</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'attendance-calendar' %}">
-                            <i class="fas fa-calendar-check"></i> Attendance
-                        </a>
+                        <a class="nav-link" href="{% url 'attendance-calendar' %}">Attendance</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'ca-management' %}">
-                            <i class="fas fa-chart-line"></i> CA Management
-                        </a>
+                        <a class="nav-link" href="{% url 'ca-management' %}">Marks</a>
                     </li>
                     {% if user.is_authenticated %}
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'teacher-dashboard' %}">
-                                <i class="fas fa-chalkboard-teacher"></i> Dashboard
-                            </a>
+                            <a class="nav-link" href="{% url 'teacher-dashboard' %}">Dashboard</a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="/admin/">Admin</a>
@@ -59,9 +53,7 @@
                             <a class="nav-link" href="{% url 'login' %}?next={{ request.path }}">Login</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'teacher-register' %}">
-                                <i class="fas fa-user-plus"></i> Register
-                            </a>
+                            <a class="nav-link" href="{% url 'teacher-register' %}">Register</a>
                         </li>
                     {% endif %}
                 </ul>
@@ -72,7 +64,7 @@
     <footer class="bg-dark text-white text-center py-3 mt-5">
         <div class="container bou-footer-container container-bou">
             <p class="mb-0">
-                © <span id="currentYear"></span> BOUSST  CSE Routine Generator. Developed by
+                © <span id="currentYear"></span> BOUSST CSE. Developed by
                 <a href="https://github.com/zubaer-ahammed/" target="_blank" class="text-info">Md. Zubaer Ahammed</a> and
                 <a href="https://github.com/Mojahidul21" target="_blank" class="text-info">Mojahidul Alam</a>
             </p>

@@ -36,10 +36,99 @@ class CurriculumAdmin(admin.ModelAdmin):
         ('Timeline', {
             'fields': ('effective_from',)
         }),
+        ('Theory CA Distribution', {
+            'fields': ('theory_ca_attendance_weight', 'theory_ca_assignment_weight', 'theory_ca_quiz_weight', 'theory_ca_midterm_weight'),
+            'description': 'Default CA mark distribution for Theory courses in this curriculum. Total should be 30% (for 70% final exam).'
+        }),
+        ('Lab CA Distribution', {
+            'fields': ('lab_ca_attendance_weight', 'lab_ca_assignment_weight', 'lab_ca_practical_weight', 'lab_ca_quiz_weight'),
+            'description': 'Default CA mark distribution for Lab courses in this curriculum. Total should be 40% (for 60% final exam).'
+        }),
+        ('Project Work Distribution', {
+            'fields': ('project_supervisor_weight', 'project_evaluation_weight', 'project_presentation_weight'),
+            'description': 'Mark distribution for Project Work courses. Total should be 100%.'
+        }),
     )
+
+class CourseAdminForm(forms.ModelForm):
+    """Custom form for Course admin with radio buttons for course type"""
+    
+    COURSE_TYPE_CHOICES = [
+        ('theory', 'Theory Course'),
+        ('lab', 'Lab Course'),
+        ('project', 'Project Work'),
+    ]
+    
+    course_type_selection = forms.ChoiceField(
+        choices=COURSE_TYPE_CHOICES,
+        widget=forms.RadioSelect(attrs={'class': 'course-type-radio', 'style': 'list-style: none; padding: 0;'}),
+        label='Course Type',
+        help_text='Select whether this is a Theory course, Lab course, or Project Work'
+    )
+    
+    class Meta:
+        model = Course
+        fields = '__all__'
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Set initial value for radio button based on existing is_lab/is_theory/course_type values
+        if self.instance and self.instance.pk:
+            if self.instance.course_type == 'PROJECT':
+                self.fields['course_type_selection'].initial = 'project'
+            elif self.instance.is_lab:
+                self.fields['course_type_selection'].initial = 'lab'
+            elif self.instance.is_theory:
+                self.fields['course_type_selection'].initial = 'theory'
+            else:
+                # Default to theory if neither is set
+                self.fields['course_type_selection'].initial = 'theory'
+        else:
+            # For new courses, default to theory
+            self.fields['course_type_selection'].initial = 'theory'
+        
+        # Hide the original is_lab and is_theory fields
+        self.fields['is_lab'].widget = forms.HiddenInput()
+        self.fields['is_theory'].widget = forms.HiddenInput()
+        
+        # Hide CA distribution fields - now managed at Curriculum level
+        # Only hide if they exist in the form (they might be excluded)
+        ca_fields_to_hide = [
+            'ca_attendance_weight', 'ca_assignment_weight', 'ca_quiz_weight', 'ca_midterm_weight',
+            'lab_ca_attendance_weight', 'lab_ca_assignment_weight', 'lab_ca_practical_weight'
+        ]
+        for field_name in ca_fields_to_hide:
+            if field_name in self.fields:
+                self.fields[field_name].widget = forms.HiddenInput()
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        course_type = cleaned_data.get('course_type_selection')
+        
+        # Set is_lab, is_theory, and course_type based on radio button selection
+        if course_type == 'lab':
+            cleaned_data['is_lab'] = True
+            cleaned_data['is_theory'] = False
+            # If course_type is PROJECT, change it to CORE (project work should use project type)
+            if cleaned_data.get('course_type') == 'PROJECT':
+                cleaned_data['course_type'] = 'CORE'
+        elif course_type == 'theory':
+            cleaned_data['is_lab'] = False
+            cleaned_data['is_theory'] = True
+            # If course_type is PROJECT, change it to CORE (project work should use project type)
+            if cleaned_data.get('course_type') == 'PROJECT':
+                cleaned_data['course_type'] = 'CORE'
+        elif course_type == 'project':
+            cleaned_data['is_lab'] = False
+            cleaned_data['is_theory'] = False
+            cleaned_data['course_type'] = 'PROJECT'  # Set the course_type field to PROJECT
+        
+        return cleaned_data
 
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
+    form = CourseAdminForm
     list_display = ('id', 'code', 'name', 'curriculum', 'credits', 'course_type', 'is_theory', 'is_lab')
     list_filter = ('curriculum', 'course_type', 'is_theory', 'is_lab')
     search_fields = ('code', 'name', 'curriculum__name')
@@ -49,17 +138,16 @@ class CourseAdmin(admin.ModelAdmin):
             'fields': ('code', 'name', 'curriculum', 'course_type')
         }),
         ('Course Details', {
-            'fields': ('credits', 'is_theory', 'is_lab', 'prerequisite_courses')
+            'fields': ('credits', 'course_type_selection', 'is_theory', 'is_lab', 'prerequisite_courses'),
+            'description': 'Select whether this is a Theory course, Lab course, or Project Work. Note: "Course type" field (Core/Elective/General/Project) in Basic Information is separate from the course type selection above.'
         }),
-        ('Theory CA Distribution', {
-            'fields': ('ca_attendance_weight', 'ca_assignment_weight', 'ca_quiz_weight', 'ca_midterm_weight'),
-            'classes': ('collapse',)
-        }),
-        ('Lab CA Distribution', {
-            'fields': ('lab_ca_attendance_weight', 'lab_ca_assignment_weight', 'lab_ca_practical_weight'),
-            'classes': ('collapse',)
-        }),
+        # CA Distribution fields removed - now managed at Curriculum level
     )
+    
+    class Media:
+        css = {
+            'all': ('admin/css/course_type_radio.css',)
+        }
 
 @admin.register(SemesterCourse)
 class SemesterCourseAdmin(admin.ModelAdmin):

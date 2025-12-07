@@ -378,7 +378,126 @@
   ul.object-tools li a {
     color: #fff !important;
   }
+  
+  /* Hide theme toggle button completely */
+  .theme-toggle,
+  button.theme-toggle {
+    display: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    opacity: 0 !important;
+  }
+  
+  /* Force light mode - override any dark mode */
+  :root {
+    color-scheme: light !important;
+  }
+  
+  /* Force light mode variables */
+  :root {
+    --body-bg: #fff !important;
+    --body-fg: #212529 !important;
+    --body-quiet-color: #666 !important;
+    --body-loud-color: #000 !important;
+    --link-fg: #417690 !important;
+    --link-hover-color: #205067 !important;
+    --link-selected-fg: #5b80b2 !important;
+    --header-bg: #212529 !important;
+    --header-link-color: #fff !important;
+    --breadcrumbs-bg: #343a40 !important;
+    --breadcrumbs-fg: #fff !important;
+  }
+  
+  /* Override dark mode media query - force light mode */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: light !important;
+      --body-bg: #fff !important;
+      --body-fg: #212529 !important;
+    }
+    
+    body {
+      background-color: #fff !important;
+      color: #212529 !important;
+    }
+    
+    #content,
+    #content-main {
+      background-color: #fff !important;
+      color: #212529 !important;
+    }
+  }
 </style>
+<script>
+  // Force light mode and remove theme toggle
+  (function() {
+    // Remove theme toggle button immediately
+    function removeThemeToggle() {
+      var themeToggle = document.querySelector('.theme-toggle, button.theme-toggle');
+      if (themeToggle) {
+        themeToggle.style.display = 'none';
+        themeToggle.style.visibility = 'hidden';
+        themeToggle.remove();
+      }
+    }
+    
+    // Force light mode
+    function forceLightMode() {
+      // Remove dark mode classes
+      document.documentElement.classList.remove('dark');
+      document.body.classList.remove('dark');
+      
+      // Set color scheme to light
+      if (document.documentElement.style) {
+        document.documentElement.style.colorScheme = 'light';
+      }
+      
+      // Override any dark mode styles
+      var style = document.createElement('style');
+      style.textContent = `
+        :root { color-scheme: light !important; }
+        body { background-color: #fff !important; color: #212529 !important; }
+        #content { background-color: #fff !important; color: #212529 !important; }
+        #content-main { background-color: #fff !important; color: #212529 !important; }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    // Run immediately
+    removeThemeToggle();
+    forceLightMode();
+    
+    // Run on DOM ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() {
+        removeThemeToggle();
+        forceLightMode();
+      });
+    } else {
+      removeThemeToggle();
+      forceLightMode();
+    }
+    
+    // Also run after a short delay to catch dynamically added elements
+    setTimeout(function() {
+      removeThemeToggle();
+      forceLightMode();
+    }, 100);
+    
+    // Watch for theme toggle being added dynamically
+    var observer = new MutationObserver(function(mutations) {
+      removeThemeToggle();
+    });
+    
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+  })();
+</script>
 {% endblock %}
 
 {% block branding %}

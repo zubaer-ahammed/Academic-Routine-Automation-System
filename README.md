@@ -32,5 +32,26 @@ Watch the Video of BOU Routine Generator: https://drive.google.com/file/d/1M_A4g
 ## Download Previously Generated Routines
 <img width="1295" alt="download_routines_page" src="https://github.com/user-attachments/assets/21d41e24-68d5-4fed-832b-776e760e1230" />
 
+## Documentation
+
+All project documentation is available in the [`docs/`](docs/) folder:
+
+- **[Mark Distribution Guide](docs/MARK_DISTRIBUTION.md)** - Comprehensive guide on how mark distribution works for Old and New Curricula
+- **[User Manual](docs/USER_MANUAL.md)** - User guide for operating the system
+- **[Technical Documentation](docs/TECHNICAL_DOCUMENTATION.md)** - Developer guide and technical reference
+- **[Multi-Curriculum Guide](docs/MULTI_CURRICULUM_GUIDE.md)** - Guide for managing multiple curricula
+- **[Commands Reference](docs/COMMANDS.md)** - Management commands reference
+- **[Project Proposal](docs/PROJECT_PROPOSAL.md)** - Original project proposal
+- **[Final Project Report](docs/FINAL_PROJECT_REPORT.md)** - Complete project report
+- **[Design Decisions](docs/DESIGN_DECISION.md)** - Important design decisions and rationale
+
+## Quick Start
+
+See [docs/COMMANDS.md](docs/COMMANDS.md) for commands to run and manage the project.
+
+## Mark Distribution
+
+For detailed information on how marks are distributed for Theory, Lab, and Project Work courses in both Old and New Curricula, see [docs/MARK_DISTRIBUTION.md](docs/MARK_DISTRIBUTION.md).
+
 
 

@@ -162,6 +162,63 @@
         margin-bottom: 20px;
         border-left: 4px solid #2196f3;
     }
+    
+    /* Compact info sections */
+    .compact-info-section {
+        margin-bottom: 15px;
+    }
+    
+    .compact-info-box {
+        background: #f8f9fa;
+        padding: 10px 12px;
+        border-radius: 6px;
+        border-left: 3px solid #007bff;
+        font-size: 0.875rem;
+        margin-bottom: 10px;
+    }
+    
+    .compact-info-content {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        line-height: 1.6;
+    }
+    
+    .compact-info-content span {
+        white-space: nowrap;
+    }
+    
+    .compact-info-box strong {
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+    
+    .compact-info-box .fa {
+        font-size: 0.85rem;
+    }
+    
+    .course-type-badge {
+        margin-left: 15px;
+        padding-left: 8px;
+    }
+    
+    .compact-info-box .badge {
+        font-size: 0.85rem;
+        padding: 4px 8px;
+    }
+    
+    @media (max-width: 768px) {
+        .compact-info-content {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        
+        .compact-info-content span {
+            display: block;
+            width: 100%;
+        }
+    }
 
     .btn-save-ca {
         background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
@@ -200,6 +257,103 @@
         color: #17a2b8;
     }
 
+    /* Uniform height for all form controls and alignment */
+    .container-box-bou form select {
+        height: 38px;
+        box-sizing: border-box;
+        line-height: 26px; /* Adjusted to fit within 38px height with padding */
+        padding: 6px 12px;
+        overflow: visible;
+        vertical-align: middle;
+    }
+    
+    .container-box-bou form .btn-primary {
+        height: 38px;
+        box-sizing: border-box;
+        line-height: 1.5;
+        padding-top: 6px;
+        padding-bottom: 6px;
+        overflow: visible;
+    }
+    
+    /* Align form groups vertically */
+    .container-box-bou .form-group {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        min-height: 70px; /* Ensure enough space for label + field + padding */
+        padding-bottom: 8px; /* Add padding to prevent cut-off */
+        overflow: visible;
+    }
+    
+    /* Ensure labels have consistent spacing */
+    .container-box-bou .form-group label {
+        margin-bottom: 5px;
+        min-height: 20px;
+        line-height: 1.2;
+    }
+    
+    /* Ensure button container doesn't overflow and aligns properly */
+    .container-box-bou .form-group > div:not(:first-child) {
+        min-height: 38px;
+        display: flex;
+        align-items: flex-end;
+        overflow: visible;
+    }
+    
+    /* Ensure selects and buttons have proper spacing and aren't cut */
+    .container-box-bou form select,
+    .container-box-bou form .btn-primary {
+        margin-bottom: 0;
+        overflow: visible;
+    }
+    
+    /* Add spacing between form and content below */
+    .container-box-bou form {
+        margin-bottom: 20px !important;
+    }
+    
+    /* Ensure course-info section has proper spacing */
+    .container-box-bou .course-info {
+        margin-top: 20px !important;
+    }
+    
+    /* Style for tabs */
+    .nav-tabs {
+        border-bottom: 2px solid #dee2e6;
+        margin-top: 20px;
+    }
+    
+    .nav-tabs .nav-link {
+        color: #495057;
+        border: 1px solid transparent;
+        border-top-left-radius: 0.25rem;
+        border-top-right-radius: 0.25rem;
+        padding: 12px 20px;
+        font-weight: 500;
+    }
+    
+    .nav-tabs .nav-link:hover {
+        border-color: #e9ecef #e9ecef #dee2e6;
+        color: #007bff;
+    }
+    
+    .nav-tabs .nav-link.active {
+        color: #495057;
+        background-color: #fff;
+        border-color: #dee2e6 #dee2e6 #fff;
+        border-bottom-color: transparent;
+        font-weight: 600;
+    }
+    
+    .tab-content {
+        margin-top: 0;
+    }
+    
+    .tab-pane {
+        padding-top: 20px;
+    }
+
     .form-group label {
         font-weight: 600;
         color: #495057;
@@ -208,11 +362,21 @@
 
     .form-group select {
         width: 100%;
-        padding: 8px 12px;
+        padding: 6px 12px;
         border: 1px solid #ced4da;
         border-radius: 4px;
         background-color: white;
         transition: border-color 0.2s ease;
+        line-height: 26px;
+        overflow: visible;
+        vertical-align: middle;
+    }
+    
+    /* Ensure select options are fully visible */
+    .form-group select option {
+        padding: 6px 12px;
+        line-height: 1.5;
+        white-space: normal;
     }
 
     .form-group select:focus {
@@ -343,8 +507,8 @@
                 </div>
 
                 <!-- Selection Form -->
-                <form method="get" action="{% url 'ca-management' %}">
-                    <div class="row">
+                <form method="get" action="{% url 'ca-management' %}" style="margin-bottom: 20px; overflow: visible;">
+                    <div class="row" style="overflow: visible;">
                         <div class="col-md-2">
                             <div class="form-group">
                                 <label for="curriculum">Select Curriculum:</label>
@@ -378,7 +542,7 @@
                                 <select name="semester" id="semester" onchange="loadCoursesForSemester(this.value)">
                                     <option value="">-- Select Semester --</option>
                                     {% for semester in semesters %}
-                                        <option value="{{ semester.id }}" {% if selected_semester_id|stringformat:"s" == semester.id|stringformat:"s" %}selected{% endif %}>
+                                        <option value="{{ semester.id }}" {% if selected_semester_id and selected_semester_id|stringformat:"s" == semester.id|stringformat:"s" %}selected{% endif %}>
                                             {{ semester.name }}
                                         </option>
                                     {% endfor %}
@@ -391,7 +555,7 @@
                                 <select name="course" id="course" onchange="loadStudentsForCourse()">
                                     <option value="">-- Select Course --</option>
                                     {% for course in courses %}
-                                        <option value="{{ course.id }}" {% if selected_course_id|stringformat:"s" == course.id|stringformat:"s" %}selected{% endif %}>
+                                        <option value="{{ course.id }}" {% if selected_course_id and selected_course_id|stringformat:"s" == course.id|stringformat:"s" %}selected{% endif %}>
                                             {{ course.code }} - {{ course.name }}
                                         </option>
                                     {% endfor %}
@@ -412,83 +576,98 @@
                 </form>
 
                 {% if selected_semester and selected_course %}
-                    <!-- Course Information -->
-                    <div class="course-info">
-                        <h4><i class="fas fa-graduation-cap"></i> Marks Distribution - {{ selected_semester.name }}</h4>
+                    <!-- Compact Course Information and CA Distribution -->
+                    <div class="compact-info-section" style="margin-top: 15px; margin-bottom: 15px;">
                         <div class="row">
+                            <!-- Marks Distribution Info -->
                             <div class="col-md-6">
-                                <p><strong><i class="fas fa-book"></i> Course:</strong> {{ selected_course.code }} - {{ selected_course.name }}</p>
-                                <p><strong><i class="fas fa-chalkboard-teacher"></i> Teacher:</strong> {% if course_teacher %}{{ course_teacher.name }}{% else %}{{ selected_course.teacher.name|default:"N/A" }}{% endif %}</p>
-                            </div>
-                            <div class="col-md-6">
-                                <p><strong><i class="fas fa-tag"></i> Course Type:</strong> 
-                                    {% if selected_course.is_lab %}
-                                        <span class="badge badge-info">Lab Course</span>
+                                <div class="compact-info-box">
+                                    <div class="d-flex align-items-center mb-2 flex-wrap">
+                                        <i class="fas fa-graduation-cap text-primary mr-2"></i>
+                                        <strong class="mb-0 mr-3">Marks Distribution - {{ selected_semester.name }}</strong>
+                                        <span class="course-type-badge">
+                                    {% if selected_course.course_type == 'PROJECT' %}
+                                                <span class="badge badge-warning">Project Work</span>
+                                    {% elif selected_course.is_lab %}
+                                                <span class="badge badge-info">Lab</span>
                                     {% else %}
-                                        <span class="badge badge-primary">Theory Course</span>
+                                                <span class="badge badge-primary">Theory</span>
                                     {% endif %}
-                                </p>
+                                        </span>
                             </div>
+                                    <div class="compact-info-content">
+                                        <span class="mr-3"><i class="fas fa-book text-muted"></i> <strong>Course:</strong> {{ selected_course.code }} - {{ selected_course.name }}</span>
+                                        <span class="mr-3"><i class="fas fa-chalkboard-teacher text-muted"></i> <strong>Teacher:</strong> {% if course_teacher %}{{ course_teacher.name }}{% else %}{{ selected_course.teacher.name|default:"N/A" }}{% endif %}</span>
                         </div>
                     </div>
-
-                    <!-- CA Distribution Information -->
-                    <div class="ca-distribution">
-                        <h5><i class="fas fa-chart-pie"></i> CA Mark Distribution:</h5>
-                        {% if selected_course.is_lab %}
-                            <p><strong>Lab Course CA Distribution:</strong></p>
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <div class="d-flex justify-content-between">
-                                        <span><i class="fas fa-calendar-check"></i> Attendance:</span>
-                                        <strong>{{ selected_course.lab_ca_attendance_weight }}%</strong>
                                     </div>
-                                    <small class="text-muted">(Auto-calculated)</small>
+                            <!-- CA Distribution Info -->
+                            <div class="col-md-6">
+                                <div class="compact-info-box">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <i class="fas fa-chart-pie text-info mr-2"></i>
+                                        <strong class="mb-0">CA Mark Distribution:</strong>
                                 </div>
-                                <div class="col-md-4">
-                                    <div class="d-flex justify-content-between">
-                                        <span><i class="fas fa-tasks"></i> Lab Assignment:</span>
-                                        <strong>{{ selected_course.lab_ca_assignment_weight }}%</strong>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="d-flex justify-content-between">
-                                        <span><i class="fas fa-flask"></i> Lab Practical:</span>
-                                        <strong>{{ selected_course.lab_ca_practical_weight }}%</strong>
-                                    </div>
-                                </div>
-                            </div>
+                                    <div class="compact-info-content">
+                                        {% if selected_course.course_type == 'PROJECT' %}
+                                            <span class="mr-3"><i class="fas fa-user-tie text-muted"></i> Supervisor: <strong>{{ selected_course.effective_project_supervisor_weight }}%</strong></span>
+                                            <span class="mr-3"><i class="fas fa-clipboard-check text-muted"></i> Evaluation: <strong>{{ selected_course.effective_project_evaluation_weight }}%</strong></span>
+                                            <span><i class="fas fa-presentation text-muted"></i> Presentation: <strong>{{ selected_course.effective_project_presentation_weight }}%</strong></span>
+                                        {% elif selected_course.is_lab %}
+                                            <span class="mr-3"><i class="fas fa-calendar-check text-muted"></i> Attendance: <strong>{{ selected_course.effective_lab_ca_attendance_weight }}%</strong> <small class="text-muted">(Auto)</small></span>
+                                            <span class="mr-3"><i class="fas fa-tasks text-muted"></i> Lab Assignment: <strong>{{ selected_course.effective_lab_ca_assignment_weight }}%</strong></span>
+                                            <span><i class="fas fa-flask text-muted"></i> Lab Practical: <strong>{{ selected_course.effective_lab_ca_practical_weight }}%</strong></span>
                         {% else %}
-                            <p><strong>Theory Course CA Distribution:</strong></p>
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <div class="d-flex justify-content-between">
-                                        <span><i class="fas fa-calendar-check"></i> Attendance:</span>
-                                        <strong>{{ selected_course.ca_attendance_weight }}%</strong>
-                                    </div>
-                                    <small class="text-muted">(Auto-calculated)</small>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="d-flex justify-content-between">
-                                        <span><i class="fas fa-tasks"></i> Assignment/Presentation:</span>
-                                        <strong>{{ selected_course.ca_assignment_weight }}%</strong>
+                                            <span class="mr-3"><i class="fas fa-calendar-check text-muted"></i> Attendance: <strong>{{ selected_course.effective_ca_attendance_weight }}%</strong> <small class="text-muted">(Auto)</small></span>
+                                            <span class="mr-3"><i class="fas fa-tasks text-muted"></i> Assignment: <strong>{{ selected_course.effective_ca_assignment_weight }}%</strong></span>
+                                            <span><i class="fas fa-file-alt text-muted"></i> Mid-Term: <strong>{{ selected_course.effective_ca_midterm_weight }}%</strong></span>
+                                        {% endif %}
                                     </div>
                                 </div>
-                                <div class="col-md-4">
-                                    <div class="d-flex justify-content-between">
-                                        <span><i class="fas fa-file-alt"></i> Mid-Term Exam:</span>
-                                        <strong>{{ selected_course.ca_midterm_weight }}%</strong>
                                     </div>
                                 </div>
-                            </div>
-                        {% endif %}
                     </div>
 
                     {% if students %}
-                        <!-- CA Marks Table -->
+                        <!-- Tabs for CA Marks and Final Exam -->
+                        <ul class="nav nav-tabs mb-3" id="marksTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="ca-marks-tab" data-bs-toggle="tab" data-bs-target="#ca-marks" type="button" role="tab" aria-controls="ca-marks" aria-selected="true">
+                                    <i class="fas fa-table"></i> CA Marks
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="final-exam-tab" data-bs-toggle="tab" data-bs-target="#final-exam" type="button" role="tab" aria-controls="final-exam" aria-selected="false">
+                                    <i class="fas fa-file-alt"></i> Semester Final Marks
+                                </button>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content" id="marksTabsContent">
+                            <!-- CA Marks Tab -->
+                            <div class="tab-pane fade show active" id="ca-marks" role="tabpanel" aria-labelledby="ca-marks-tab">
                         <div class="ca-table-section">
-                            <div class="table-header">
+                                    <div class="table-header d-flex justify-content-between align-items-center">
                                 <h4><i class="fas fa-table"></i> CA Marks for Students</h4>
+                                        {% if selected_semester_id and selected_course_id %}
+                                        <div class="dropdown">
+                                            <button class="btn btn-secondary dropdown-toggle" type="button" id="exportCAMarksDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                                <i class="fas fa-download"></i> Export
+                                            </button>
+                                            <ul class="dropdown-menu" aria-labelledby="exportCAMarksDropdown">
+                                                <li>
+                                                    <a class="dropdown-item" href="{% url 'export-ca-marks-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}">
+                                                        <i class="fas fa-file-pdf text-danger"></i> PDF
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a class="dropdown-item" href="{% url 'export-ca-marks-excel' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}">
+                                                        <i class="fas fa-file-excel text-success"></i> Excel
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                        {% endif %}
                             </div>
                             
                             <div class="table-responsive">
@@ -500,24 +679,33 @@
                                     <table class="ca-table">
                                         <thead>
                                             <tr>
-                                                <th rowspan="3" class="student-info">Student ID</th>
-                                                <th rowspan="3" class="student-info">Name</th>
-                                                {% if selected_course.is_lab %}
-                                                    <th colspan="6">Lab Course CA (Total: {{ selected_course.lab_ca_attendance_weight|add:selected_course.lab_ca_assignment_weight|add:selected_course.lab_ca_practical_weight }}%)</th>
+                                                <th rowspan="{% if selected_course.course_type == 'PROJECT' %}2{% else %}3{% endif %}" class="student-info">Student ID</th>
+                                                <th rowspan="{% if selected_course.course_type == 'PROJECT' %}2{% else %}3{% endif %}" class="student-info">Name</th>
+                                                {% if selected_course.course_type == 'PROJECT' %}
+                                                    <th colspan="3">Project Work CA (Total: {{ selected_course.effective_project_supervisor_weight|add:selected_course.effective_project_evaluation_weight|add:selected_course.effective_project_presentation_weight }}%)</th>
+                                                {% elif selected_course.is_lab %}
+                                                    <th colspan="6">Lab Course CA (Total: {{ selected_course.effective_lab_ca_attendance_weight|add:selected_course.effective_lab_ca_assignment_weight|add:selected_course.effective_lab_ca_practical_weight }}%)</th>
                                                 {% else %}
-                                                    <th colspan="6">Theory Course CA (Total: {{ selected_course.ca_attendance_weight|add:selected_course.ca_assignment_weight|add:selected_course.ca_midterm_weight }}%)</th>
+                                                    <th colspan="6">Theory Course CA (Total: {{ selected_course.effective_ca_attendance_weight|add:selected_course.effective_ca_assignment_weight|add:selected_course.effective_ca_midterm_weight }}%)</th>
                                                 {% endif %}
-                                                <th rowspan="3">Total CA Mark</th>
-                                                <th rowspan="3">Notes</th>
+                                                <th rowspan="{% if selected_course.course_type == 'PROJECT' %}2{% else %}3{% endif %}">Total CA Mark</th>
+                                                <th rowspan="{% if selected_course.course_type == 'PROJECT' %}2{% else %}3{% endif %}">Notes</th>
                                             </tr>
+                                            {% if selected_course.course_type == 'PROJECT' %}
                                             <tr>
-                                                <th>Attendance<br><small>({% if selected_course.is_lab %}{{ selected_course.lab_ca_attendance_weight }}{% else %}{{ selected_course.ca_attendance_weight }}{% endif %}%)</small></th>
+                                                <th>Supervisor<br><small>({{ selected_course.effective_project_supervisor_weight }}%)</small></th>
+                                                <th>Evaluation<br><small>({{ selected_course.effective_project_evaluation_weight }}%)</small></th>
+                                                <th>Presentation<br><small>({{ selected_course.effective_project_presentation_weight }}%)</small></th>
+                                            </tr>
+                                            {% else %}
+                                            <tr>
+                                                <th>Attendance<br><small>({% if selected_course.is_lab %}{{ selected_course.effective_lab_ca_attendance_weight }}{% else %}{{ selected_course.effective_ca_attendance_weight }}{% endif %}%)</small></th>
                                                 {% if selected_course.is_lab %}
-                                                    <th colspan="4">Assignment/Lab Report<br><small>({{ selected_course.lab_ca_assignment_weight }}%)</small></th>
-                                                    <th>Experiment/Lab Project<br><small>({{ selected_course.lab_ca_practical_weight }}%)</small></th>
+                                                    <th colspan="4">Assignment/Lab Report<br><small>({{ selected_course.effective_lab_ca_assignment_weight }}%)</small></th>
+                                                    <th>Experiment/Lab Project<br><small>({{ selected_course.effective_lab_ca_practical_weight }}%)</small></th>
                                                 {% else %}
-                                                    <th colspan="4">Assignment/Presentation<br><small>({{ selected_course.ca_assignment_weight }}%)</small></th>
-                                                    <th>Mid-Term Exam<br><small>({{ selected_course.ca_midterm_weight }}%)</small></th>
+                                                    <th colspan="4">Assignment/Presentation<br><small>({{ selected_course.effective_ca_assignment_weight }}%)</small></th>
+                                                    <th>Mid-Term Exam<br><small>({{ selected_course.effective_ca_midterm_weight }}%)</small></th>
                                                 {% endif %}
                                             </tr>
                                             {% if selected_course.is_lab %}
@@ -539,6 +727,7 @@
                                                 <th></th>
                                             </tr>
                                             {% endif %}
+                                            {% endif %}
                                         </thead>
                                         <tbody>
                                             {% for student in students %}
@@ -546,12 +735,45 @@
                                                     <td class="student-info">{{ student.id }}</td>
                                                     <td class="student-info">{{ student.name }}</td>
                                                     
+                                                    {% if selected_course.course_type == 'PROJECT' %}
+                                                        <!-- Project Work Marks -->
+                                                        <td>
+                                                            <input type="number" 
+                                                                   name="students_data[{{ student.id }}][project_supervisor_mark]"
+                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.project_supervisor_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                   min="0" 
+                                                                   max="{{ selected_course.effective_project_supervisor_weight }}"
+                                                                   step="0.01"
+                                                                   class="mark-input"
+                                                                   oninput="calculateStudentTotal(this)">
+                                                        </td>
+                                                        <td>
+                                                            <input type="number" 
+                                                                   name="students_data[{{ student.id }}][project_evaluation_mark]"
+                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.project_evaluation_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                   min="0" 
+                                                                   max="{{ selected_course.effective_project_evaluation_weight }}"
+                                                                   step="0.01"
+                                                                   class="mark-input"
+                                                                   oninput="calculateStudentTotal(this)">
+                                                        </td>
+                                                        <td>
+                                                            <input type="number" 
+                                                                   name="students_data[{{ student.id }}][project_presentation_mark]"
+                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.project_presentation_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                   min="0" 
+                                                                   max="{{ selected_course.effective_project_presentation_weight }}"
+                                                                   step="0.01"
+                                                                   class="mark-input"
+                                                                   oninput="calculateStudentTotal(this)">
+                                                        </td>
+                                                    {% else %}
                                                     <td>
                                                         <input type="number" 
                                                                name="students_data[{{ student.id }}][attendance_mark]"
                                                                value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.attendance_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
                                                                min="0" 
-                                                               max="{% if selected_course.is_lab %}{{ selected_course.lab_ca_attendance_weight }}{% else %}{{ selected_course.ca_attendance_weight }}{% endif %}"
+                                                               max="{% if selected_course.is_lab %}{{ selected_course.effective_lab_ca_attendance_weight }}{% else %}{{ selected_course.effective_ca_attendance_weight }}{% endif %}"
                                                                step="0.01"
                                                                class="mark-input"
                                                                readonly
@@ -566,7 +788,7 @@
                                                                    name="students_data[{{ student.id }}][first_lab_assignment_mark]"
                                                                    value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.first_lab_assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
                                                                    min="0" 
-                                                                   max="{{ selected_course.lab_ca_assignment_weight }}"
+                                                                   max="{{ selected_course.effective_lab_ca_assignment_weight }}"
                                                                    step="0.01"
                                                                    class="mark-input"
                                                                    oninput="calculateStudentTotal(this)">
@@ -576,7 +798,7 @@
                                                                    name="students_data[{{ student.id }}][second_lab_assignment_mark]"
                                                                    value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.second_lab_assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
                                                                    min="0" 
-                                                                   max="{{ selected_course.lab_ca_assignment_weight }}"
+                                                                   max="{{ selected_course.effective_lab_ca_assignment_weight }}"
                                                                    step="0.01"
                                                                    class="mark-input"
                                                                    oninput="calculateStudentTotal(this)">
@@ -586,7 +808,7 @@
                                                                    name="students_data[{{ student.id }}][third_lab_assignment_mark]"
                                                                    value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.third_lab_assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
                                                                    min="0" 
-                                                                   max="{{ selected_course.lab_ca_assignment_weight }}"
+                                                                   max="{{ selected_course.effective_lab_ca_assignment_weight }}"
                                                                    step="0.01"
                                                                    class="mark-input"
                                                                    oninput="calculateStudentTotal(this)">
@@ -599,7 +821,7 @@
                                                                    name="students_data[{{ student.id }}][lab_practical_mark]"
                                                                    value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.lab_practical_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
                                                                    min="0" 
-                                                                   max="{{ selected_course.lab_ca_practical_weight }}"
+                                                                   max="{{ selected_course.effective_lab_ca_practical_weight }}"
                                                                    step="0.01"
                                                                    class="mark-input"
                                                                    oninput="calculateStudentTotal(this)">
@@ -611,7 +833,7 @@
                                                                    name="students_data[{{ student.id }}][first_assignment_mark]"
                                                                    value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.first_assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
                                                                    min="0" 
-                                                                   max="{{ selected_course.ca_assignment_weight }}"
+                                                                   max="{{ selected_course.effective_ca_assignment_weight }}"
                                                                    step="0.01"
                                                                    class="mark-input"
                                                                    oninput="calculateStudentTotal(this)">
@@ -621,7 +843,7 @@
                                                                    name="students_data[{{ student.id }}][second_assignment_mark]"
                                                                    value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.second_assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
                                                                    min="0" 
-                                                                   max="{{ selected_course.ca_assignment_weight }}"
+                                                                   max="{{ selected_course.effective_ca_assignment_weight }}"
                                                                    step="0.01"
                                                                    class="mark-input"
                                                                    oninput="calculateStudentTotal(this)">
@@ -631,7 +853,7 @@
                                                                    name="students_data[{{ student.id }}][third_assignment_mark]"
                                                                    value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.third_assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
                                                                    min="0" 
-                                                                   max="{{ selected_course.ca_assignment_weight }}"
+                                                                   max="{{ selected_course.effective_ca_assignment_weight }}"
                                                                    step="0.01"
                                                                    class="mark-input"
                                                                    oninput="calculateStudentTotal(this)">
@@ -644,11 +866,12 @@
                                                                    name="students_data[{{ student.id }}][midterm_mark]"
                                                                    value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.midterm_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
                                                                    min="0" 
-                                                                   max="{{ selected_course.ca_midterm_weight }}"
+                                                                   max="{{ selected_course.effective_ca_midterm_weight }}"
                                                                    step="0.01"
                                                                    class="mark-input"
                                                                    oninput="calculateStudentTotal(this)">
                                                         </td>
+                                                    {% endif %}
                                                     {% endif %}
                                                     
                                                     <td class="total-mark total-ca-mark">
@@ -680,14 +903,35 @@
                                 <button type="button" class="btn-save-ca" onclick="saveCAMarks()">
                                     <i class="fas fa-save"></i> Save CA Marks
                                 </button>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
 
-                        <!-- Semester Final Examination Section -->
-                        <div class="final-exam-section">
-                            <div class="table-header">
-                                <h4><i class="fas fa-file-alt"></i> Semester Final Examination Marks</h4>
-                            </div>
+                            <!-- Final Exam Tab -->
+                            <div class="tab-pane fade" id="final-exam" role="tabpanel" aria-labelledby="final-exam-tab">
+                                <div class="final-exam-section">
+                                    <div class="table-header d-flex justify-content-between align-items-center">
+                                        <h4><i class="fas fa-file-alt"></i> Semester Final Examination Marks</h4>
+                                        {% if selected_semester_id and selected_course_id %}
+                                        <div class="dropdown">
+                                            <button class="btn btn-secondary dropdown-toggle" type="button" id="exportFinalExamDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                                <i class="fas fa-download"></i> Export
+                                            </button>
+                                            <ul class="dropdown-menu" aria-labelledby="exportFinalExamDropdown">
+                                                <li>
+                                                    <a class="dropdown-item" href="{% url 'export-final-exam-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}{% if teacher_role %}&teacher_role={{ teacher_role }}{% endif %}">
+                                                        <i class="fas fa-file-pdf text-danger"></i> PDF
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a class="dropdown-item" href="{% url 'export-final-exam-excel' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}{% if teacher_role %}&teacher_role={{ teacher_role }}{% endif %}">
+                                                        <i class="fas fa-file-excel text-success"></i> Excel
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                        {% endif %}
+                                    </div>
 
                             {% if selected_course.is_lab %}
                                 <!-- Lab Course Final Exam -->
@@ -917,10 +1161,12 @@
                                 </form>
                             </div>
                             
-                            <div class="text-right mt-3">
-                                <button type="button" class="btn-save-ca" onclick="saveFinalExamMarks()">
-                                    <i class="fas fa-save"></i> Save Final Exam Marks
-                                </button>
+                                    <div class="text-right mt-3">
+                                        <button type="button" class="btn-save-ca" onclick="saveFinalExamMarks()">
+                                            <i class="fas fa-save"></i> Save Final Exam Marks
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     {% else %}
@@ -940,11 +1186,15 @@
 
 <script>
 // Function to load semesters for a selected curriculum and centre
-function loadSemestersForCurriculum(curriculumId) {
+function loadSemestersForCurriculum(curriculumId, preserveSemesterId = null, centreId = null) {
     const centreSelect = document.getElementById('centre');
     const semesterSelect = document.getElementById('semester');
     const courseSelect = document.getElementById('course');
-    const centreId = centreSelect ? centreSelect.value : '';
+    
+    // Use provided centreId or get from select element
+    if (!centreId) {
+        centreId = centreSelect ? centreSelect.value : '';
+    }
     
     semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
     courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
@@ -969,10 +1219,19 @@ function loadSemestersForCurriculum(curriculumId) {
                 const option = document.createElement('option');
                 option.value = semester.id;
                 option.textContent = semester.name;
+                if (preserveSemesterId && preserveSemesterId == semester.id) {
+                    option.selected = true;
+                }
                 semesterSelect.appendChild(option);
             });
             
-            // Semester selection is handled by server-side template variables
+            // If preserveSemesterId was provided, ensure it's selected
+            // Use a small timeout to ensure DOM is ready
+            if (preserveSemesterId) {
+                setTimeout(function() {
+                    semesterSelect.value = preserveSemesterId;
+                }, 50);
+            }
         })
         .catch(error => {
             console.error('Error loading semesters:', error);
@@ -984,23 +1243,28 @@ function loadSemestersForCurriculum(curriculumId) {
 function loadSemestersForCentre(centreId) {
     const curriculumSelect = document.getElementById('curriculum');
     const curriculumId = curriculumSelect ? curriculumSelect.value : '';
+    const semesterSelect = document.getElementById('semester');
+    const courseSelect = document.getElementById('course');
+    
+    // Clear courses when centre changes
+    courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
     
     if (curriculumId) {
-        loadSemestersForCurriculum(curriculumId);
+        loadSemestersForCurriculum(curriculumId, null, centreId);
     } else {
         // Clear semesters and courses if no curriculum selected
-        const semesterSelect = document.getElementById('semester');
-        const courseSelect = document.getElementById('course');
         semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
         courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
     }
 }
 
 // Function to load courses for a selected semester
-function loadCoursesForSemester(semesterId) {
+function loadCoursesForSemester(semesterId, preserveCourseId = null) {
     const curriculumSelect = document.getElementById('curriculum');
+    const centreSelect = document.getElementById('centre');
     const courseSelect = document.getElementById('course');
     const curriculumId = curriculumSelect.value;
+    const centreId = centreSelect ? centreSelect.value : '';
     
     courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
     
@@ -1010,7 +1274,13 @@ function loadCoursesForSemester(semesterId) {
     
     courseSelect.innerHTML = '<option value="">Loading courses...</option>';
     
-    fetch(`{% url 'get-courses-for-semester' %}?semester_id=${semesterId}&t=${Date.now()}`)
+    let url = `{% url 'get-courses-for-semester' %}?semester_id=${semesterId}`;
+    if (centreId) {
+        url += `&centre_id=${centreId}`;
+    }
+    url += `&t=${Date.now()}`;
+    
+    fetch(url)
         .then(response => response.json())
         .then(data => {
             courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
@@ -1018,10 +1288,16 @@ function loadCoursesForSemester(semesterId) {
                 const option = document.createElement('option');
                 option.value = course.id;
                 option.textContent = `${course.code} - ${course.name}`;
+                if (preserveCourseId && preserveCourseId == course.id) {
+                    option.selected = true;
+                }
                 courseSelect.appendChild(option);
             });
 
-            // Course selection is handled by server-side template variables
+            // If preserveCourseId was provided, ensure it's selected
+            if (preserveCourseId) {
+                courseSelect.value = preserveCourseId;
+            }
         })
         .catch(error => {
             console.error('Error loading courses:', error);
@@ -1030,25 +1306,27 @@ function loadCoursesForSemester(semesterId) {
 }
 
 // Function to update URL parameters and reload page
-function loadStudentsForCourse() {
+function loadStudentsForCourse(skipUrlUpdate = false) {
     const curriculumSelect = document.getElementById('curriculum');
     const centreSelect = document.getElementById('centre');
     const semesterSelect = document.getElementById('semester');
     const courseSelect = document.getElementById('course');
     
-    const curriculumId = curriculumSelect.value;
+    const curriculumId = curriculumSelect ? curriculumSelect.value : '';
     const centreId = centreSelect ? centreSelect.value : '';
-    const semesterId = semesterSelect.value;
-    const courseId = courseSelect.value;
+    const semesterId = semesterSelect ? semesterSelect.value : '';
+    const courseId = courseSelect ? courseSelect.value : '';
     
-    // Only reload if we have all required selections
-    if (curriculumId && semesterId && courseId) {
+    // Only reload if we have all required selections and not skipping URL update
+    if (curriculumId && semesterId && courseId && !skipUrlUpdate) {
         updateUrlParams(curriculumId, centreId, semesterId, courseId);
     }
 }
 
-function updateUrlParams(curriculumId, centreId, semesterId, courseId) {
+function updateUrlParams(curriculumId, centreId, semesterId, courseId, skipReload = false) {
     const url = new URL(window.location.href);
+    const currentUrl = url.toString();
+    
     if (curriculumId) {
         url.searchParams.set('curriculum', curriculumId);
     } else {
@@ -1069,53 +1347,72 @@ function updateUrlParams(curriculumId, centreId, semesterId, courseId) {
     } else {
         url.searchParams.delete('course');
     }
-    window.location.href = url.toString();
+    
+    const newUrl = url.toString();
+    // Only reload if URL actually changed and skipReload is false
+    if (newUrl !== currentUrl && !skipReload) {
+        window.location.href = newUrl;
+    } else if (newUrl !== currentUrl) {
+        // Update URL without reloading
+        window.history.replaceState({}, '', newUrl);
+    }
 }
 
 // Function to calculate total CA mark for a single student row
 function calculateStudentTotal(inputElement) {
     const row = inputElement.closest('tr');
     const isLabCourse = {% if selected_course.is_lab %}true{% else %}false{% endif %};
+    const isProjectCourse = {% if selected_course.course_type == 'PROJECT' %}true{% else %}false{% endif %};
     
-    const attendanceMark = parseFloat(row.querySelector('input[name$="[attendance_mark]"]').value) || 0;
-    let total = attendanceMark; // Attendance is auto-calculated, so we include it in total
+    let total = 0;
 
-    if (isLabCourse) {
-        const firstLabAssignmentMark = parseFloat(row.querySelector('input[name$="[first_lab_assignment_mark]"]').value) || 0;
-        const secondLabAssignmentMark = parseFloat(row.querySelector('input[name$="[second_lab_assignment_mark]"]').value) || 0;
-        const thirdLabAssignmentMark = parseFloat(row.querySelector('input[name$="[third_lab_assignment_mark]"]').value) || 0;
-        
-        // Calculate average of ONLY the three lab assignment marks (NOT including attendance)
-        const labAssignmentMark = (firstLabAssignmentMark + secondLabAssignmentMark + thirdLabAssignmentMark) / 3;
-        const labPracticalMark = parseFloat(row.querySelector('input[name$="[lab_practical_mark]"]').value) || 0;
-        total += labAssignmentMark + labPracticalMark;
-        
-        // Update the average lab assignment mark display
-        const averageLabAssignmentCell = row.querySelector('.assignment-average-value');
-        if (averageLabAssignmentCell) {
-            averageLabAssignmentCell.textContent = labAssignmentMark.toFixed(2);
-        }
+    if (isProjectCourse) {
+        // Project Work: supervisor + evaluation + presentation
+        const supervisorMark = parseFloat(row.querySelector('input[name$="[project_supervisor_mark]"]').value) || 0;
+        const evaluationMark = parseFloat(row.querySelector('input[name$="[project_evaluation_mark]"]').value) || 0;
+        const presentationMark = parseFloat(row.querySelector('input[name$="[project_presentation_mark]"]').value) || 0;
+        total = supervisorMark + evaluationMark + presentationMark;
     } else {
-        const firstAssignmentMark = parseFloat(row.querySelector('input[name$="[first_assignment_mark]"]').value) || 0;
-        const secondAssignmentMark = parseFloat(row.querySelector('input[name$="[second_assignment_mark]"]').value) || 0;
-        const thirdAssignmentMark = parseFloat(row.querySelector('input[name$="[third_assignment_mark]"]').value) || 0;
-        
-        // Calculate average of ONLY the three assignment marks (NOT including attendance)
-        const assignmentMark = (firstAssignmentMark + secondAssignmentMark + thirdAssignmentMark) / 3;
-        const midtermMark = parseFloat(row.querySelector('input[name$="[midterm_mark]"]').value) || 0;
-        total += assignmentMark + midtermMark;
-        
-        // Update the average assignment mark display
-        const averageAssignmentCell = row.querySelector('.assignment-average-value');
-        console.log('Debug - First:', firstAssignmentMark, 'Second:', secondAssignmentMark, 'Third:', thirdAssignmentMark);
-        console.log('Debug - Calculated assignmentMark (average):', assignmentMark);
-        console.log('Debug - Found averageAssignmentCell:', averageAssignmentCell);
-        if (averageAssignmentCell) {
-            console.log('Debug - Current average cell value:', averageAssignmentCell.textContent);
-            averageAssignmentCell.textContent = assignmentMark.toFixed(2);
-            console.log('Debug - Updated average to:', assignmentMark.toFixed(2));
+        const attendanceMark = parseFloat(row.querySelector('input[name$="[attendance_mark]"]').value) || 0;
+        total = attendanceMark; // Attendance is auto-calculated, so we include it in total
+
+        if (isLabCourse) {
+            const firstLabAssignmentMark = parseFloat(row.querySelector('input[name$="[first_lab_assignment_mark]"]').value) || 0;
+            const secondLabAssignmentMark = parseFloat(row.querySelector('input[name$="[second_lab_assignment_mark]"]').value) || 0;
+            const thirdLabAssignmentMark = parseFloat(row.querySelector('input[name$="[third_lab_assignment_mark]"]').value) || 0;
+            
+            // Calculate average of ONLY the three lab assignment marks (NOT including attendance)
+            const labAssignmentMark = (firstLabAssignmentMark + secondLabAssignmentMark + thirdLabAssignmentMark) / 3;
+            const labPracticalMark = parseFloat(row.querySelector('input[name$="[lab_practical_mark]"]').value) || 0;
+            total += labAssignmentMark + labPracticalMark;
+            
+            // Update the average lab assignment mark display
+            const averageLabAssignmentCell = row.querySelector('.assignment-average-value');
+            if (averageLabAssignmentCell) {
+                averageLabAssignmentCell.textContent = labAssignmentMark.toFixed(2);
+            }
         } else {
-            console.log('Debug - Could not find .assignment-average-value');
+            const firstAssignmentMark = parseFloat(row.querySelector('input[name$="[first_assignment_mark]"]').value) || 0;
+            const secondAssignmentMark = parseFloat(row.querySelector('input[name$="[second_assignment_mark]"]').value) || 0;
+            const thirdAssignmentMark = parseFloat(row.querySelector('input[name$="[third_assignment_mark]"]').value) || 0;
+            
+            // Calculate average of ONLY the three assignment marks (NOT including attendance)
+            const assignmentMark = (firstAssignmentMark + secondAssignmentMark + thirdAssignmentMark) / 3;
+            const midtermMark = parseFloat(row.querySelector('input[name$="[midterm_mark]"]').value) || 0;
+            total += assignmentMark + midtermMark;
+            
+            // Update the average assignment mark display
+            const averageAssignmentCell = row.querySelector('.assignment-average-value');
+            console.log('Debug - First:', firstAssignmentMark, 'Second:', secondAssignmentMark, 'Third:', thirdAssignmentMark);
+            console.log('Debug - Calculated assignmentMark (average):', assignmentMark);
+            console.log('Debug - Found averageAssignmentCell:', averageAssignmentCell);
+            if (averageAssignmentCell) {
+                console.log('Debug - Current average cell value:', averageAssignmentCell.textContent);
+                averageAssignmentCell.textContent = assignmentMark.toFixed(2);
+                console.log('Debug - Updated average to:', assignmentMark.toFixed(2));
+            } else {
+                console.log('Debug - Could not find .assignment-average-value');
+            }
         }
     }
     
@@ -1154,27 +1451,35 @@ function saveCAMarks() {
     // Collect all student marks and notes
     form.querySelectorAll('tbody tr').forEach(row => {
         const studentId = row.querySelector('.student-info').textContent;
-        const attendanceMark = parseFloat(row.querySelector('input[name$="[attendance_mark]"]').value);
         const notes = row.querySelector('input[name$="[notes]"]').value;
         
         const marks = {
-            'attendance_mark': attendanceMark, // This will be auto-calculated on the server
             'notes': notes
         };
 
-        // Check if it's a lab course or theory course to get relevant marks
+        // Check if it's a project, lab, or theory course to get relevant marks
+        const isProjectCourse = {% if selected_course.course_type == 'PROJECT' %}true{% else %}false{% endif %};
         const isLabCourse = {% if selected_course.is_lab %}true{% else %}false{% endif %};
 
-        if (isLabCourse) {
-            marks['first_lab_assignment_mark'] = parseFloat(row.querySelector('input[name$="[first_lab_assignment_mark]"]').value);
-            marks['second_lab_assignment_mark'] = parseFloat(row.querySelector('input[name$="[second_lab_assignment_mark]"]').value);
-            marks['third_lab_assignment_mark'] = parseFloat(row.querySelector('input[name$="[third_lab_assignment_mark]"]').value);
-            marks['lab_practical_mark'] = parseFloat(row.querySelector('input[name$="[lab_practical_mark]"]').value);
+        if (isProjectCourse) {
+            marks['project_supervisor_mark'] = parseFloat(row.querySelector('input[name$="[project_supervisor_mark]"]').value) || 0;
+            marks['project_evaluation_mark'] = parseFloat(row.querySelector('input[name$="[project_evaluation_mark]"]').value) || 0;
+            marks['project_presentation_mark'] = parseFloat(row.querySelector('input[name$="[project_presentation_mark]"]').value) || 0;
         } else {
-            marks['first_assignment_mark'] = parseFloat(row.querySelector('input[name$="[first_assignment_mark]"]').value);
-            marks['second_assignment_mark'] = parseFloat(row.querySelector('input[name$="[second_assignment_mark]"]').value);
-            marks['third_assignment_mark'] = parseFloat(row.querySelector('input[name$="[third_assignment_mark]"]').value);
-            marks['midterm_mark'] = parseFloat(row.querySelector('input[name$="[midterm_mark]"]').value);
+            const attendanceMark = parseFloat(row.querySelector('input[name$="[attendance_mark]"]').value);
+            marks['attendance_mark'] = attendanceMark; // This will be auto-calculated on the server
+            
+            if (isLabCourse) {
+                marks['first_lab_assignment_mark'] = parseFloat(row.querySelector('input[name$="[first_lab_assignment_mark]"]').value);
+                marks['second_lab_assignment_mark'] = parseFloat(row.querySelector('input[name$="[second_lab_assignment_mark]"]').value);
+                marks['third_lab_assignment_mark'] = parseFloat(row.querySelector('input[name$="[third_lab_assignment_mark]"]').value);
+                marks['lab_practical_mark'] = parseFloat(row.querySelector('input[name$="[lab_practical_mark]"]').value);
+            } else {
+                marks['first_assignment_mark'] = parseFloat(row.querySelector('input[name$="[first_assignment_mark]"]').value);
+                marks['second_assignment_mark'] = parseFloat(row.querySelector('input[name$="[second_assignment_mark]"]').value);
+                marks['third_assignment_mark'] = parseFloat(row.querySelector('input[name$="[third_assignment_mark]"]').value);
+                marks['midterm_mark'] = parseFloat(row.querySelector('input[name$="[midterm_mark]"]').value);
+            }
         }
         studentsData[studentId] = marks;
     });
@@ -1218,6 +1523,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const semesterId = urlParams.get('semester');
     const courseId = urlParams.get('course');
     
+    // Flag to prevent change events from triggering reloads during initialization
+    let isInitializing = true;
     
     const curriculumSelect = document.getElementById('curriculum');
     const centreSelect = document.getElementById('centre');
@@ -1227,8 +1534,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Set up event listeners
     if (curriculumSelect) {
-        curriculumSelect.addEventListener('change', function() {
-            const curriculumId = this.value;
+    curriculumSelect.addEventListener('change', function() {
+        const curriculumId = this.value;
             // Clear semester and course when curriculum changes
             if (semesterSelect) {
                 semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
@@ -1236,11 +1543,11 @@ document.addEventListener('DOMContentLoaded', function() {
             if (courseSelect) {
                 courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
             }
-            if (curriculumId) {
+        if (curriculumId) {
                 // Reload semesters with current centre
-                loadSemestersForCurriculum(curriculumId);
-            }
-        });
+            loadSemestersForCurriculum(curriculumId);
+        }
+    });
     }
     
     if (centreSelect) {
@@ -1284,31 +1591,37 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Update URL with centre parameter and reload if all selections are made
-            if (curriculumId && semesterId && courseId) {
+            if (curriculumId && semesterId && courseId && !isInitializing) {
                 updateUrlParams(curriculumId, centreId, semesterId, courseId);
             }
         });
     }
     
     if (semesterSelect) {
-        semesterSelect.addEventListener('change', function() {
-            const semesterId = this.value;
-            if (semesterId) {
-                loadCoursesForSemester(semesterId);
-            }
-        });
+    semesterSelect.addEventListener('change', function() {
+            // Don't trigger during initialization
+            if (!isInitializing) {
+        const semesterId = this.value;
+        if (semesterId) {
+            loadCoursesForSemester(semesterId);
+                }
+        }
+    });
     }
     
     if (courseSelect) {
-        courseSelect.addEventListener('change', function() {
-            loadStudentsForCourse();
-        });
+    courseSelect.addEventListener('change', function() {
+            // Don't trigger during initialization
+            if (!isInitializing) {
+        loadStudentsForCourse();
+            }
+    });
     }
     
     if (loadStudentsBtn) {
-        loadStudentsBtn.addEventListener('click', function() {
-            loadStudentsForCourse();
-        });
+    loadStudentsBtn.addEventListener('click', function() {
+        loadStudentsForCourse();
+    });
     }
 
     // Initialize page state from URL parameters (without triggering events)
@@ -1326,7 +1639,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Update URL to include DRC centre
                 const url = new URL(window.location.href);
                 url.searchParams.set('centre', drcOption.value);
-                if (curriculumId) {
+    if (curriculumId) {
                     url.searchParams.set('curriculum', curriculumId);
                 }
                 window.history.replaceState({}, '', url.toString());
@@ -1337,18 +1650,39 @@ document.addEventListener('DOMContentLoaded', function() {
     // Then load semesters with both curriculum and centre filters
     if (curriculumId && finalCentreId) {
         curriculumSelect.value = curriculumId;
-        // Load semesters with both curriculum and centre filters
-        loadSemestersForCurriculum(curriculumId);
+        // Load semesters with both curriculum and centre filters, preserving selected semester
+        loadSemestersForCurriculum(curriculumId, semesterId);
     } else if (curriculumId) {
         curriculumSelect.value = curriculumId;
+        // Load semesters, preserving selected semester if provided
+        if (semesterId) {
+            loadSemestersForCurriculum(curriculumId, semesterId);
+        }
     }
     
     // If semester and course are already selected (from server-side), load their data
     if (semesterId && courseId) {
-        // Load courses for the selected semester
+        // Wait a bit for semesters to load, then load courses
+        setTimeout(function() {
+            // Load courses for the selected semester, preserving the selected course
+            loadCoursesForSemester(semesterId, courseId);
+            // Wait a bit more for courses to load, then load students
+            setTimeout(function() {
+                // Load students but skip URL update during initialization
+                loadStudentsForCourse(true);
+                // Mark initialization as complete after everything is loaded
+                isInitializing = false;
+            }, 500);
+        }, 500);
+    } else if (semesterId) {
+        // If only semester is selected, load courses for it
+        setTimeout(function() {
         loadCoursesForSemester(semesterId);
-        // Load students for the selected course
-        loadStudentsForCourse();
+            isInitializing = false;
+        }, 500);
+    } else {
+        // No URL parameters, initialization complete
+        isInitializing = false;
     }
 });
 

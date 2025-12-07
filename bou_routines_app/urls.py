@@ -21,6 +21,8 @@ urlpatterns = [
     path('attendance/mark/', views.mark_attendance, name='mark-attendance'),
     path('attendance/data/', views.get_attendance_data, name='get-attendance-data'),
     path('attendance/report/', views.attendance_report, name='attendance-report'),
+    path('attendance/export-pdf/', views.export_attendance_pdf, name='export-attendance-pdf'),
+    path('attendance/export-excel/', views.export_attendance_excel, name='export-attendance-excel'),
     path('attendance/courses/', views.get_courses_for_semester, name='get-courses-for-semester'),
     path('attendance/semesters/', views.get_semesters_for_curriculum, name='get-semesters-for-curriculum'),
     path('attendance/mark-individual/', views.mark_individual_attendance, name='mark-individual-attendance'),
@@ -33,4 +35,8 @@ urlpatterns = [
     path('marks/', views.ca_management, name='ca-management'),
     path('marks/save/', views.save_ca_marks, name='save-ca-marks'),
     path('marks/save-final-exam/', views.save_final_exam_marks, name='save-final-exam-marks'),
+    path('marks/export-ca-pdf/', views.export_ca_marks_pdf, name='export-ca-marks-pdf'),
+    path('marks/export-ca-excel/', views.export_ca_marks_excel, name='export-ca-marks-excel'),
+    path('marks/export-final-exam-pdf/', views.export_final_exam_pdf, name='export-final-exam-pdf'),
+    path('marks/export-final-exam-excel/', views.export_final_exam_excel, name='export-final-exam-excel'),
 ]

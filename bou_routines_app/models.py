@@ -36,6 +36,24 @@ class Curriculum(models.Model):
     description = models.TextField(blank=True, null=True, help_text="Description of the curriculum")
     is_active = models.BooleanField(default=True, help_text="Whether this curriculum is currently active")
     effective_from = models.DateField(null=True, blank=True, help_text="Date from which this curriculum is effective")
+    
+    # Theory Course CA Distribution (default values for old curriculum)
+    theory_ca_attendance_weight = models.PositiveIntegerField(default=5, help_text="Theory CA weight for attendance (%)")
+    theory_ca_assignment_weight = models.PositiveIntegerField(default=10, help_text="Theory CA weight for assignments (%)")
+    theory_ca_quiz_weight = models.PositiveIntegerField(default=15, help_text="Theory CA weight for quizzes (%)")
+    theory_ca_midterm_weight = models.PositiveIntegerField(default=0, help_text="Theory CA weight for midterm (%)")
+    
+    # Lab Course CA Distribution (default values for old curriculum)
+    lab_ca_attendance_weight = models.PositiveIntegerField(default=10, help_text="Lab CA weight for attendance (%)")
+    lab_ca_assignment_weight = models.PositiveIntegerField(default=10, help_text="Lab CA weight for assignments (%)")
+    lab_ca_practical_weight = models.PositiveIntegerField(default=10, help_text="Lab CA weight for practical exams (%)")
+    lab_ca_quiz_weight = models.PositiveIntegerField(default=10, help_text="Lab CA weight for quizzes (%)")
+    
+    # Project Work Distribution
+    project_supervisor_weight = models.PositiveIntegerField(default=30, help_text="Project supervisor weight (%)")
+    project_evaluation_weight = models.PositiveIntegerField(default=40, help_text="Project evaluation weight (%)")
+    project_presentation_weight = models.PositiveIntegerField(default=30, help_text="Project presentation weight (%)")
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -177,6 +195,109 @@ class Course(models.Model):
         curriculum_suffix = f" ({self.curriculum.code})" if self.curriculum else ""
         return f"{self.code}{curriculum_suffix}"
     
+    @property
+    def effective_ca_attendance_weight(self):
+        """Get theory CA attendance weight from curriculum or course"""
+        if self.curriculum:
+            return self.curriculum.theory_ca_attendance_weight
+        return self.ca_attendance_weight
+    
+    @property
+    def effective_ca_assignment_weight(self):
+        """Get theory CA assignment weight from curriculum or course"""
+        if self.curriculum:
+            return self.curriculum.theory_ca_assignment_weight
+        return self.ca_assignment_weight
+    
+    @property
+    def effective_ca_quiz_weight(self):
+        """Get theory CA quiz weight from curriculum or course"""
+        if self.curriculum:
+            return self.curriculum.theory_ca_quiz_weight
+        return self.ca_quiz_weight
+    
+    @property
+    def effective_ca_midterm_weight(self):
+        """Get theory CA midterm weight from curriculum or course"""
+        if self.curriculum:
+            return self.curriculum.theory_ca_midterm_weight
+        return self.ca_midterm_weight
+    
+    @property
+    def effective_lab_ca_attendance_weight(self):
+        """Get lab CA attendance weight from curriculum or course"""
+        if self.curriculum:
+            return self.curriculum.lab_ca_attendance_weight
+        return self.lab_ca_attendance_weight
+    
+    @property
+    def effective_lab_ca_assignment_weight(self):
+        """Get lab CA assignment weight from curriculum or course"""
+        if self.curriculum:
+            return self.curriculum.lab_ca_assignment_weight
+        return self.lab_ca_assignment_weight
+    
+    @property
+    def effective_lab_ca_practical_weight(self):
+        """Get lab CA practical weight from curriculum or course"""
+        if self.curriculum:
+            return self.curriculum.lab_ca_practical_weight
+        return self.lab_ca_practical_weight
+    
+    @property
+    def effective_lab_ca_quiz_weight(self):
+        """Get lab CA quiz weight from curriculum"""
+        if self.curriculum:
+            return self.curriculum.lab_ca_quiz_weight
+        return 0  # Course model doesn't have this field
+    
+    @property
+    def effective_project_supervisor_weight(self):
+        """Get project supervisor weight from curriculum"""
+        if self.curriculum:
+            return self.curriculum.project_supervisor_weight
+        return 0
+    
+    @property
+    def effective_project_evaluation_weight(self):
+        """Get project evaluation weight from curriculum"""
+        if self.curriculum:
+            return self.curriculum.project_evaluation_weight
+        return 0
+    
+    @property
+    def effective_project_presentation_weight(self):
+        """Get project presentation weight from curriculum"""
+        if self.curriculum:
+            return self.curriculum.project_presentation_weight
+        return 0
+    
+    def clean(self):
+        """Validate that a course cannot be both lab and theory, and handle project work"""
+        from django.core.exceptions import ValidationError
+        
+        # Project work courses don't need is_lab or is_theory set
+        if self.course_type == 'PROJECT':
+            # Project work courses can have both False
+            return
+        
+        if self.is_lab and self.is_theory:
+            raise ValidationError({
+                'is_lab': 'A course cannot be both a lab course and a theory course. Please select only one.',
+                'is_theory': 'A course cannot be both a lab course and a theory course. Please select only one.',
+            })
+        
+        if not self.is_lab and not self.is_theory:
+            raise ValidationError({
+                'is_lab': 'A course must be either a lab course, theory course, or project work. Please select one.',
+                'is_theory': 'A course must be either a lab course, theory course, or project work. Please select one.',
+            })
+    
+    def save(self, *args, **kwargs):
+        """Override save to call clean()"""
+        self.full_clean()
+        super().save(*args, **kwargs)
+    
     def get_ca_distribution(self):
         """Get CA distribution based on course type"""
         if self.is_lab:
@@ -229,11 +350,16 @@ class CurrentRoutine(models.Model):
     def teacher(self):
         """
         Get the teacher from the SemesterCourse for this semester and course
+        Note: There may be multiple SemesterCourse objects for different centres,
+        so we use filter().first() to get the first one
         """
         try:
-            semester_course = SemesterCourse.objects.get(semester=self.semester, course=self.course)
-            return semester_course.teacher
-        except SemesterCourse.DoesNotExist:
+            semester_course = SemesterCourse.objects.filter(
+                semester=self.semester, 
+                course=self.course
+            ).first()
+            return semester_course.teacher if semester_course else None
+        except Exception:
             return None
 
 class NewRoutine(models.Model):
@@ -253,11 +379,16 @@ class NewRoutine(models.Model):
     def teacher(self):
         """
         Get the teacher from the SemesterCourse for this semester and course
+        Note: There may be multiple SemesterCourse objects for different centres,
+        so we use filter().first() to get the first one
         """
         try:
-            semester_course = SemesterCourse.objects.get(semester=self.semester, course=self.course)
-            return semester_course.teacher
-        except SemesterCourse.DoesNotExist:
+            semester_course = SemesterCourse.objects.filter(
+                semester=self.semester, 
+                course=self.course
+            ).first()
+            return semester_course.teacher if semester_course else None
+        except Exception:
             return None
     
     class Meta:
@@ -341,6 +472,11 @@ class CAMark(models.Model):
     lab_assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Average Lab Assignment mark (auto-calculated)")
     lab_practical_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Lab practical mark")
     
+    # Project Work CA components
+    project_supervisor_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Project supervisor mark")
+    project_evaluation_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Project evaluation mark")
+    project_presentation_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Project presentation mark")
+    
     # Total CA mark (calculated)
     total_ca_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Total CA mark")
     
@@ -360,14 +496,19 @@ class CAMark(models.Model):
     def calculate_attendance_mark(self):
         """Calculate attendance mark based on simple percentage calculation"""
         # Get total classes from SemesterCourse (same as attendance table)
+        # Use filter().first() instead of get() since there may be multiple SemesterCourse
+        # objects for the same semester/course but different centres
         try:
-            semester_course = SemesterCourse.objects.get(
+            semester_course = SemesterCourse.objects.filter(
                 semester=self.semester,
                 course=self.course
-            )
-            total_classes = semester_course.number_of_classes
-        except SemesterCourse.DoesNotExist:
-            total_classes = 1  # Default to 1 if no SemesterCourse found
+            ).first()
+            if semester_course:
+                total_classes = semester_course.number_of_classes
+            else:
+                total_classes = 1  # Default to 1 if no SemesterCourse found
+        except Exception:
+            total_classes = 1  # Default to 1 if error occurs
         
         # Get simple count of attended days (without filtering by NewRoutine)
         attended_days = Attendance.objects.filter(
@@ -379,7 +520,7 @@ class CAMark(models.Model):
         
         if total_classes > 0:
             # Simple percentage calculation: attendance_weight * (attended_days / total_classes)
-            attendance_weight = self.course.ca_attendance_weight if not self.course.is_lab else self.course.lab_ca_attendance_weight
+            attendance_weight = self.course.effective_ca_attendance_weight if not self.course.is_lab else self.course.effective_lab_ca_attendance_weight
             return (attended_days / total_classes) * attendance_weight
         return 0
     
@@ -399,7 +540,14 @@ class CAMark(models.Model):
     
     def calculate_total_ca_mark(self):
         """Calculate total CA mark based on course type"""
-        if self.course.is_lab:
+        if self.course.course_type == 'PROJECT':
+            # Project Work: supervisor + evaluation + presentation
+            return (
+                self.project_supervisor_mark +
+                self.project_evaluation_mark +
+                self.project_presentation_mark
+            )
+        elif self.course.is_lab:
             # Lab course: attendance + lab assignment + lab practical
             return (
                 self.attendance_mark +

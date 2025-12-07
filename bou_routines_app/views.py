@@ -3799,6 +3799,9 @@ def attendance_calendar(request):
     # Get all curricula
     curricula = Curriculum.objects.filter(is_active=True).order_by('name')
     
+    # Get all centres
+    centres = Centre.objects.filter(is_active=True).order_by('name')
+    
     # Get selected curriculum from request
     selected_curriculum_id = request.GET.get('curriculum') or request.POST.get('curriculum')
     selected_curriculum = None
@@ -3821,7 +3824,29 @@ def attendance_calendar(request):
             selected_curriculum = curricula.first()
             selected_curriculum_id = selected_curriculum.id if selected_curriculum else None
     
+    # Get selected centre from request
+    selected_centre_id = request.GET.get('centre') or request.POST.get('centre')
+    selected_centre = None
+    
+    if selected_centre_id:
+        try:
+            selected_centre_id = int(selected_centre_id)
+            selected_centre = Centre.objects.get(id=selected_centre_id)
+        except (Centre.DoesNotExist, ValueError):
+            selected_centre = None
+            selected_centre_id = None
+    
+    # If no centre selected, default to DRC BEFORE filtering semesters
+    if not selected_centre:
+        try:
+            selected_centre = Centre.objects.get(code='DRC')
+            selected_centre_id = selected_centre.id
+        except Centre.DoesNotExist:
+            selected_centre = None
+            selected_centre_id = None
+    
     # Filter semesters by selected curriculum
+    # Note: Semesters are now shared across centres. Centre-specific filtering happens at SemesterCourse level.
     if selected_curriculum:
         semesters = Semester.objects.filter(curriculum=selected_curriculum).order_by('order', 'name')
     else:
@@ -3853,6 +3878,9 @@ def attendance_calendar(request):
         'curricula': curricula,
         'selected_curriculum_id': selected_curriculum_id,
         'selected_curriculum': selected_curriculum,
+        'centres': centres,
+        'selected_centre': selected_centre,
+        'selected_centre_id': selected_centre_id,
         'semesters': semesters,
         'courses': courses_queryset.order_by('code'),
         'selected_semester_id': semester_id,
@@ -4036,15 +4064,21 @@ def attendance_calendar(request):
             attendance_totals = {}
             try:
                 # Get number_of_classes from SemesterCourse
-                semester_course = SemesterCourse.objects.get(
+                # Use filter().first() instead of get() since there may be multiple SemesterCourse
+                # objects for the same semester/course but different centres
+                semester_course = SemesterCourse.objects.filter(
                     semester=semester,
                     course=course
-                )
-                number_of_classes = semester_course.number_of_classes
-                print(f"DEBUG: Found SemesterCourse with number_of_classes: {number_of_classes}")
-            except SemesterCourse.DoesNotExist:
+                ).first()
+                if semester_course:
+                    number_of_classes = semester_course.number_of_classes
+                    print(f"DEBUG: Found SemesterCourse with number_of_classes: {number_of_classes}")
+                else:
+                    number_of_classes = len(semester_dates)  # Fallback to number of dates
+                    print(f"DEBUG: No SemesterCourse found, using fallback: {number_of_classes}")
+            except Exception as e:
                 number_of_classes = len(semester_dates)  # Fallback to number of dates
-                print(f"DEBUG: No SemesterCourse found, using fallback: {number_of_classes}")
+                print(f"DEBUG: Error getting SemesterCourse: {e}, using fallback: {number_of_classes}")
             
             for student in students:
                 # Simple count of present days (for reference)
@@ -4159,22 +4193,31 @@ def get_courses_for_semester(request):
         return JsonResponse({'error': 'Permission denied'}, status=403)
     
     semester_id = request.GET.get('semester_id')
+    centre_id = request.GET.get('centre_id')
     if not semester_id:
         return JsonResponse({'error': 'Semester ID required'}, status=400)
     
     # Get teacher from logged-in user (optional for admin users)
     teacher = get_teacher_from_user(request.user)
     
-    # Filter courses by semester and teacher
+    # Filter courses by semester, teacher, and centre
+    semester_courses = SemesterCourse.objects.filter(semester_id=semester_id)
+    
+    # Filter by centre if provided
+    if centre_id:
+        try:
+            centre = Centre.objects.get(id=centre_id)
+            semester_courses = semester_courses.filter(centre=centre)
+        except Centre.DoesNotExist:
+            pass
+    
+    # Filter by teacher if provided
     if teacher:
-        courses = Course.objects.filter(
-            teacher=teacher,
-            semestercourse__semester_id=semester_id
-        ).distinct().order_by('code')
-    else:
-        courses = Course.objects.filter(
-            semestercourse__semester_id=semester_id
-        ).distinct().order_by('code')
+        semester_courses = semester_courses.filter(teacher=teacher)
+    
+    # Get unique courses from semester courses
+    course_ids = semester_courses.values_list('course_id', flat=True).distinct()
+    courses = Course.objects.filter(id__in=course_ids).order_by('code')
     
     courses_data = []
     for course in courses:
@@ -4415,17 +4458,989 @@ def attendance_report(request):
         messages.error(request, f"Error generating attendance report: {str(e)}")
         return redirect('attendance-calendar')
 
+@login_required
+def export_attendance_pdf(request):
+    """Export attendance report to PDF"""
+    try:
+        # Check permissions
+        if not (request.user.is_superuser or request.user.is_staff or check_teacher_permission(request.user, 'can_mark_attendance')):
+            messages.error(request, "You don't have permission to export attendance reports.")
+            return redirect('attendance-calendar')
+        
+        semester_id = request.GET.get('semester')
+        course_id = request.GET.get('course')
+        
+        if not semester_id or not course_id:
+            messages.error(request, "Please select a semester and course.")
+            return redirect('attendance-calendar')
+        
+        semester = Semester.objects.get(id=semester_id)
+        course = Course.objects.get(id=course_id)
+        
+        # Get all students and their attendance records with custom sorting
+        students = Student.objects.filter(semesters=semester).extra(
+            select={
+                'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
+                'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
+            }
+        ).order_by('-first_two_digits', 'last_three_digits')
+        
+        # Get all attendance dates for this course
+        attendance_dates = Attendance.objects.filter(
+            course=course,
+            semester=semester
+        ).values_list('attendance_date', flat=True).distinct().order_by('attendance_date')
+        
+        # Create attendance matrix
+        attendance_matrix = {}
+        for student in students:
+            attendance_matrix[student.id] = {
+                'student': student,
+                'attendance': {}
+            }
+            
+            # Get attendance records for this student
+            student_attendance = Attendance.objects.filter(
+                student=student,
+                course=course,
+                semester=semester
+            )
+            
+            for record in student_attendance:
+                attendance_matrix[student.id]['attendance'][record.attendance_date] = record.is_present
+        
+        # Calculate statistics
+        total_classes = len(attendance_dates)
+        for student_id in attendance_matrix:
+            present_count = sum(1 for is_present in attendance_matrix[student_id]['attendance'].values() if is_present)
+            attendance_matrix[student_id]['present_count'] = present_count
+            attendance_matrix[student_id]['absent_count'] = total_classes - present_count
+            attendance_matrix[student_id]['percentage'] = (present_count / total_classes * 100) if total_classes > 0 else 0
+        
+        # Create PDF in landscape mode for more horizontal space
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), leftMargin=15, rightMargin=15, topMargin=30, bottomMargin=30)
+        elements = []
+        
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=14,
+            textColor=colors.HexColor('#c41e3a'),
+            spaceAfter=10,
+            alignment=TA_CENTER
+        )
+        
+        # Title
+        title = Paragraph(f"Attendance Report - {semester.name}", title_style)
+        elements.append(title)
+        elements.append(Spacer(1, 8))
+        
+        # Course info
+        course_info = Paragraph(
+            f"<b>Course:</b> {course.code} - {course.name}<br/>"
+            f"<b>Total Classes:</b> {total_classes}",
+            styles['Normal']
+        )
+        elements.append(course_info)
+        elements.append(Spacer(1, 8))
+        
+        # Build table data
+        table_data = []
+        
+        # Header row - use shorter date format to save space
+        header = ['Student ID', 'Name'] + [date.strftime('%d/%m') for date in attendance_dates] + ['Present', 'Absent', '%']
+        table_data.append(header)
+        
+        # Data rows
+        for student in students:
+            row = [student.id, student.name]
+            for date in attendance_dates:
+                if date in attendance_matrix[student.id]['attendance']:
+                    status = 'P' if attendance_matrix[student.id]['attendance'][date] else 'A'
+                else:
+                    status = '-'
+                row.append(status)
+            row.append(str(attendance_matrix[student.id]['present_count']))
+            row.append(str(attendance_matrix[student.id]['absent_count']))
+            row.append(f"{attendance_matrix[student.id]['percentage']:.1f}%")
+            table_data.append(row)
+        
+        # Calculate column widths dynamically for landscape orientation
+        # Landscape A4: ~792pt width, minus margins (40pt total) = ~752pt available
+        # Student ID: 70, Name: 120, each date: 30, Present/Absent/%: 50 each
+        # Adjust date column width based on available space
+        available_width = 752  # Landscape A4 width minus margins
+        fixed_cols_width = 70 + 120 + 50 + 50 + 50  # Student ID + Name + Present + Absent + %
+        num_date_cols = len(attendance_dates)
+        date_col_width = max(25, (available_width - fixed_cols_width) / num_date_cols) if num_date_cols > 0 else 30
+        
+        col_widths = [70, 120] + [date_col_width] * len(attendance_dates) + [50, 50, 50]
+        
+        # Create table with adjusted column widths
+        table = Table(table_data, colWidths=col_widths, repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 8),  # Slightly larger header font for landscape
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            ('TOPPADDING', (0, 0), (-1, 0), 8),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            ('FONTSIZE', (0, 1), (-1, -1), 7),  # Slightly larger data font for landscape
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 1), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+        ]))
+        
+        elements.append(table)
+        
+        # Build PDF
+        doc.build(elements)
+        buffer.seek(0)
+        
+        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        filename = f"Attendance_{course.code}_{semester.name}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+        
+    except Exception as e:
+        return HttpResponse(f"Error generating PDF: {str(e)}", status=500)
+
+@login_required
+def export_attendance_excel(request):
+    """Export attendance report to Excel"""
+    try:
+        # Check permissions
+        if not (request.user.is_superuser or request.user.is_staff or check_teacher_permission(request.user, 'can_mark_attendance')):
+            messages.error(request, "You don't have permission to export attendance reports.")
+            return redirect('attendance-calendar')
+        
+        semester_id = request.GET.get('semester')
+        course_id = request.GET.get('course')
+        
+        if not semester_id or not course_id:
+            messages.error(request, "Please select a semester and course.")
+            return redirect('attendance-calendar')
+        
+        semester = Semester.objects.get(id=semester_id)
+        course = Course.objects.get(id=course_id)
+        
+        # Get all students and their attendance records with custom sorting
+        students = Student.objects.filter(semesters=semester).extra(
+            select={
+                'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
+                'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
+            }
+        ).order_by('-first_two_digits', 'last_three_digits')
+        
+        # Get all attendance dates for this course
+        attendance_dates = Attendance.objects.filter(
+            course=course,
+            semester=semester
+        ).values_list('attendance_date', flat=True).distinct().order_by('attendance_date')
+        
+        # Create attendance matrix
+        attendance_matrix = {}
+        for student in students:
+            attendance_matrix[student.id] = {
+                'student': student,
+                'attendance': {}
+            }
+            
+            # Get attendance records for this student
+            student_attendance = Attendance.objects.filter(
+                student=student,
+                course=course,
+                semester=semester
+            )
+            
+            for record in student_attendance:
+                attendance_matrix[student.id]['attendance'][record.attendance_date] = record.is_present
+        
+        # Calculate statistics
+        total_classes = len(attendance_dates)
+        for student_id in attendance_matrix:
+            present_count = sum(1 for is_present in attendance_matrix[student_id]['attendance'].values() if is_present)
+            attendance_matrix[student_id]['present_count'] = present_count
+            attendance_matrix[student_id]['absent_count'] = total_classes - present_count
+            attendance_matrix[student_id]['percentage'] = (present_count / total_classes * 100) if total_classes > 0 else 0
+        
+        # Create Excel file
+        output = io.BytesIO()
+        workbook = xlsxwriter.Workbook(output)
+        worksheet = workbook.add_worksheet("Attendance")
+        
+        # Formats
+        title_format = workbook.add_format({
+            'bold': True,
+            'font_size': 14,
+            'align': 'center',
+            'valign': 'vcenter'
+        })
+        header_format = workbook.add_format({
+            'bold': True,
+            'font_size': 11,
+            'align': 'center',
+            'valign': 'vcenter',
+            'bg_color': '#2c3e50',
+            'font_color': 'white',
+            'border': 1
+        })
+        cell_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1
+        })
+        percentage_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1,
+            'num_format': '0.0%'
+        })
+        
+        # Title
+        worksheet.merge_range(0, 0, 0, len(attendance_dates) + 4, f"Attendance Report - {semester.name}", title_format)
+        worksheet.write(1, 0, f"Course: {course.code} - {course.name}", cell_format)
+        worksheet.write(1, 1, f"Total Classes: {total_classes}", cell_format)
+        
+        # Header row
+        row = 3
+        col = 0
+        headers = ['Student ID', 'Name'] + [date.strftime('%d/%m/%Y') for date in attendance_dates] + ['Present', 'Absent', 'Percentage']
+        for header in headers:
+            worksheet.write(row, col, header, header_format)
+            col += 1
+        
+        # Data rows
+        row = 4
+        for student in students:
+            col = 0
+            worksheet.write(row, col, student.id, cell_format)
+            col += 1
+            worksheet.write(row, col, student.name, cell_format)
+            col += 1
+            
+            for date in attendance_dates:
+                if date in attendance_matrix[student.id]['attendance']:
+                    status = 'P' if attendance_matrix[student.id]['attendance'][date] else 'A'
+                else:
+                    status = '-'
+                worksheet.write(row, col, status, cell_format)
+                col += 1
+            
+            worksheet.write(row, col, attendance_matrix[student.id]['present_count'], cell_format)
+            col += 1
+            worksheet.write(row, col, attendance_matrix[student.id]['absent_count'], cell_format)
+            col += 1
+            percentage = attendance_matrix[student.id]['percentage'] / 100
+            worksheet.write(row, col, percentage, percentage_format)
+            row += 1
+        
+        # Set column widths
+        worksheet.set_column(0, 0, 15)  # Student ID
+        worksheet.set_column(1, 1, 30)  # Name
+        for i in range(len(attendance_dates)):
+            worksheet.set_column(2 + i, 2 + i, 12)  # Date columns
+        worksheet.set_column(len(attendance_dates) + 2, len(attendance_dates) + 4, 12)  # Stats columns
+        
+        workbook.close()
+        output.seek(0)
+        
+        response = HttpResponse(
+            output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        filename = f"Attendance_{course.code}_{semester.name}.xlsx"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+        
+    except Exception as e:
+        return HttpResponse(f"Error generating Excel: {str(e)}", status=500)
+
+@login_required
+def export_ca_marks_pdf(request):
+    """Export CA marks to PDF"""
+    try:
+        # Check permissions
+        if not (request.user.is_superuser or request.user.is_staff or check_teacher_permission(request.user, 'can_manage_ca')):
+            messages.error(request, "You don't have permission to export CA marks.")
+            return redirect('ca-management')
+        
+        semester_id = request.GET.get('semester')
+        course_id = request.GET.get('course')
+        centre_id = request.GET.get('centre')
+        
+        if not semester_id or not course_id:
+            messages.error(request, "Please select a semester and course.")
+            return redirect('ca-management')
+        
+        semester = Semester.objects.get(id=semester_id)
+        course = Course.objects.get(id=course_id)
+        
+        # Get students with custom sorting
+        students = Student.objects.filter(semesters=semester).extra(
+            select={
+                'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
+                'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
+            }
+        ).order_by('-first_two_digits', 'last_three_digits')
+        
+        # Get existing CA marks
+        existing_marks = CAMark.objects.filter(
+            student__in=students,
+            course=course,
+            semester=semester
+        )
+        
+        ca_marks = {}
+        for mark in existing_marks:
+            ca_marks[mark.student.id] = mark
+        
+        # Create temporary marks for students without existing marks
+        for student in students:
+            if student.id not in ca_marks:
+                temp_mark = CAMark(
+                    student=student,
+                    course=course,
+                    semester=semester
+                )
+                temp_mark.attendance_mark = temp_mark.calculate_attendance_mark()
+                ca_marks[student.id] = temp_mark
+        
+        # Create PDF
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, landscape=True)
+        elements = []
+        
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=16,
+            textColor=colors.HexColor('#c41e3a'),
+            spaceAfter=12,
+            alignment=TA_CENTER
+        )
+        
+        # Title
+        title = Paragraph(f"CA Marks Report - {semester.name}", title_style)
+        elements.append(title)
+        elements.append(Spacer(1, 12))
+        
+        # Course info
+        course_info = Paragraph(
+            f"<b>Course:</b> {course.code} - {course.name}<br/>"
+            f"<b>Course Type:</b> {'Lab Course' if course.is_lab else 'Theory Course'}",
+            styles['Normal']
+        )
+        elements.append(course_info)
+        elements.append(Spacer(1, 12))
+        
+        # Build table data
+        table_data = []
+        
+        # Header row based on course type
+        if course.is_lab:
+            header = ['Student ID', 'Name', 'Attendance', 'Lab Assignment', 'Lab Practical', 'Total CA Mark']
+        else:
+            header = ['Student ID', 'Name', 'Attendance', 'Assignment/Presentation', 'Mid-Term Exam', 'Total CA Mark']
+        table_data.append(header)
+        
+        # Data rows
+        for student in students:
+            mark = ca_marks.get(student.id)
+            if mark:
+                if course.is_lab:
+                    row = [
+                        student.id,
+                        student.name,
+                        f"{mark.attendance_mark:.2f}",
+                        f"{mark.lab_assignment_mark:.2f}",
+                        f"{mark.lab_practical_mark:.2f}",
+                        f"{mark.calculate_total_ca_mark():.2f}"
+                    ]
+                else:
+                    row = [
+                        student.id,
+                        student.name,
+                        f"{mark.attendance_mark:.2f}",
+                        f"{mark.assignment_mark:.2f}",
+                        f"{mark.midterm_mark:.2f}",
+                        f"{mark.calculate_total_ca_mark():.2f}"
+                    ]
+            else:
+                row = [student.id, student.name, '0.00', '0.00', '0.00', '0.00']
+            table_data.append(row)
+        
+        # Create table
+        table = Table(table_data)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
+        ]))
+        
+        elements.append(table)
+        
+        # Build PDF
+        doc.build(elements)
+        buffer.seek(0)
+        
+        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        filename = f"CA_Marks_{course.code}_{semester.name}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+        
+    except Exception as e:
+        return HttpResponse(f"Error generating PDF: {str(e)}", status=500)
+
+@login_required
+def export_ca_marks_excel(request):
+    """Export CA marks to Excel"""
+    try:
+        # Check permissions
+        if not (request.user.is_superuser or request.user.is_staff or check_teacher_permission(request.user, 'can_manage_ca')):
+            messages.error(request, "You don't have permission to export CA marks.")
+            return redirect('ca-management')
+        
+        semester_id = request.GET.get('semester')
+        course_id = request.GET.get('course')
+        centre_id = request.GET.get('centre')
+        
+        if not semester_id or not course_id:
+            messages.error(request, "Please select a semester and course.")
+            return redirect('ca-management')
+        
+        semester = Semester.objects.get(id=semester_id)
+        course = Course.objects.get(id=course_id)
+        
+        # Get students with custom sorting
+        students = Student.objects.filter(semesters=semester).extra(
+            select={
+                'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
+                'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
+            }
+        ).order_by('-first_two_digits', 'last_three_digits')
+        
+        # Get existing CA marks
+        existing_marks = CAMark.objects.filter(
+            student__in=students,
+            course=course,
+            semester=semester
+        )
+        
+        ca_marks = {}
+        for mark in existing_marks:
+            ca_marks[mark.student.id] = mark
+        
+        # Create temporary marks for students without existing marks
+        for student in students:
+            if student.id not in ca_marks:
+                temp_mark = CAMark(
+                    student=student,
+                    course=course,
+                    semester=semester
+                )
+                temp_mark.attendance_mark = temp_mark.calculate_attendance_mark()
+                ca_marks[student.id] = temp_mark
+        
+        # Create Excel file
+        output = io.BytesIO()
+        workbook = xlsxwriter.Workbook(output)
+        worksheet = workbook.add_worksheet("CA Marks")
+        
+        # Formats
+        title_format = workbook.add_format({
+            'bold': True,
+            'font_size': 14,
+            'align': 'center',
+            'valign': 'vcenter'
+        })
+        header_format = workbook.add_format({
+            'bold': True,
+            'font_size': 11,
+            'align': 'center',
+            'valign': 'vcenter',
+            'bg_color': '#2c3e50',
+            'font_color': 'white',
+            'border': 1
+        })
+        cell_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1
+        })
+        
+        # Title
+        if course.is_lab:
+            headers = ['Student ID', 'Name', 'Attendance', 'Lab Assignment', 'Lab Practical', 'Total CA Mark']
+        else:
+            headers = ['Student ID', 'Name', 'Attendance', 'Assignment/Presentation', 'Mid-Term Exam', 'Total CA Mark']
+        
+        worksheet.merge_range(0, 0, 0, len(headers) - 1, f"CA Marks Report - {semester.name}", title_format)
+        worksheet.write(1, 0, f"Course: {course.code} - {course.name}", cell_format)
+        worksheet.write(1, 1, f"Course Type: {'Lab Course' if course.is_lab else 'Theory Course'}", cell_format)
+        
+        # Header row
+        row = 3
+        col = 0
+        for header in headers:
+            worksheet.write(row, col, header, header_format)
+            col += 1
+        
+        # Data rows
+        row = 4
+        for student in students:
+            col = 0
+            mark = ca_marks.get(student.id)
+            worksheet.write(row, col, student.id, cell_format)
+            col += 1
+            worksheet.write(row, col, student.name, cell_format)
+            col += 1
+            
+            if mark:
+                if course.is_lab:
+                    worksheet.write(row, col, mark.attendance_mark, cell_format)
+                    col += 1
+                    worksheet.write(row, col, mark.lab_assignment_mark, cell_format)
+                    col += 1
+                    worksheet.write(row, col, mark.lab_practical_mark, cell_format)
+                    col += 1
+                    worksheet.write(row, col, mark.calculate_total_ca_mark(), cell_format)
+                else:
+                    worksheet.write(row, col, mark.attendance_mark, cell_format)
+                    col += 1
+                    worksheet.write(row, col, mark.assignment_mark, cell_format)
+                    col += 1
+                    worksheet.write(row, col, mark.midterm_mark, cell_format)
+                    col += 1
+                    worksheet.write(row, col, mark.calculate_total_ca_mark(), cell_format)
+            else:
+                for _ in range(4):
+                    worksheet.write(row, col, 0.00, cell_format)
+                    col += 1
+            
+            row += 1
+        
+        # Set column widths
+        worksheet.set_column(0, 0, 15)  # Student ID
+        worksheet.set_column(1, 1, 30)  # Name
+        worksheet.set_column(2, len(headers) - 1, 18)  # Mark columns
+        
+        workbook.close()
+        output.seek(0)
+        
+        response = HttpResponse(
+            output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        filename = f"CA_Marks_{course.code}_{semester.name}.xlsx"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+        
+    except Exception as e:
+        return HttpResponse(f"Error generating Excel: {str(e)}", status=500)
+
+@login_required
+def export_final_exam_pdf(request):
+    """Export Final Exam marks to PDF"""
+    try:
+        # Check permissions
+        if not (request.user.is_superuser or request.user.is_staff or check_teacher_permission(request.user, 'can_manage_final_marks')):
+            messages.error(request, "You don't have permission to export Final Exam marks.")
+            return redirect('ca-management')
+        
+        semester_id = request.GET.get('semester')
+        course_id = request.GET.get('course')
+        centre_id = request.GET.get('centre')
+        teacher_role = request.GET.get('teacher_role', 'teacher1')
+        
+        if not semester_id or not course_id:
+            messages.error(request, "Please select a semester and course.")
+            return redirect('ca-management')
+        
+        semester = Semester.objects.get(id=semester_id)
+        course = Course.objects.get(id=course_id)
+        
+        # Get students with custom sorting
+        students = Student.objects.filter(semesters=semester).extra(
+            select={
+                'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
+                'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
+            }
+        ).order_by('-first_two_digits', 'last_three_digits')
+        
+        # Get existing Final Exam marks
+        existing_marks = FinalExamMark.objects.filter(
+            student__in=students,
+            course=course,
+            semester=semester
+        )
+        
+        final_exam_marks = {}
+        for mark in existing_marks:
+            final_exam_marks[mark.student.id] = mark
+        
+        # Create PDF
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, landscape=True)
+        elements = []
+        
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=16,
+            textColor=colors.HexColor('#c41e3a'),
+            spaceAfter=12,
+            alignment=TA_CENTER
+        )
+        
+        # Title
+        title = Paragraph(f"Final Exam Marks Report - {semester.name}", title_style)
+        elements.append(title)
+        elements.append(Spacer(1, 12))
+        
+        # Course info
+        course_info = Paragraph(
+            f"<b>Course:</b> {course.code} - {course.name}<br/>"
+            f"<b>Course Type:</b> {'Lab Course' if course.is_lab else 'Theory Course'}<br/>"
+            f"<b>Evaluator:</b> {teacher_role.replace('teacher', 'Teacher ').title()}",
+            styles['Normal']
+        )
+        elements.append(course_info)
+        elements.append(Spacer(1, 12))
+        
+        # Build table data
+        table_data = []
+        
+        # Header row based on course type
+        if course.is_lab:
+            header = ['Student ID', 'Name', 'Lab Final Exam Mark', 'Total', 'Notes']
+        else:
+            header = ['Student ID', 'Name', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Total', 'Notes']
+        table_data.append(header)
+        
+        # Data rows
+        for student in students:
+            mark = final_exam_marks.get(student.id)
+            if mark:
+                if course.is_lab:
+                    row = [
+                        student.id,
+                        student.name,
+                        f"{mark.lab_final_exam_mark:.2f}" if mark.lab_final_exam_mark else '0.00',
+                        f"{mark.calculate_final_total():.2f}",
+                        mark.notes or ''
+                    ]
+                else:
+                    # For theory courses, show marks based on teacher role
+                    if teacher_role == 'teacher1':
+                        q1 = mark.teacher1_q1 or 0
+                        q2 = mark.teacher1_q2 or 0
+                        q3 = mark.teacher1_q3 or 0
+                        q4 = mark.teacher1_q4 or 0
+                        q5 = mark.teacher1_q5 or 0
+                        q6 = mark.teacher1_q6 or 0
+                        q7 = mark.teacher1_q7 or 0
+                    elif teacher_role == 'teacher2':
+                        q1 = mark.teacher2_q1 or 0
+                        q2 = mark.teacher2_q2 or 0
+                        q3 = mark.teacher2_q3 or 0
+                        q4 = mark.teacher2_q4 or 0
+                        q5 = mark.teacher2_q5 or 0
+                        q6 = mark.teacher2_q6 or 0
+                        q7 = mark.teacher2_q7 or 0
+                    elif teacher_role == 'teacher3':
+                        q1 = mark.teacher3_q1 or 0
+                        q2 = mark.teacher3_q2 or 0
+                        q3 = mark.teacher3_q3 or 0
+                        q4 = mark.teacher3_q4 or 0
+                        q5 = mark.teacher3_q5 or 0
+                        q6 = mark.teacher3_q6 or 0
+                        q7 = mark.teacher3_q7 or 0
+                    else:
+                        # Default to teacher1
+                        q1 = mark.teacher1_q1 or 0
+                        q2 = mark.teacher1_q2 or 0
+                        q3 = mark.teacher1_q3 or 0
+                        q4 = mark.teacher1_q4 or 0
+                        q5 = mark.teacher1_q5 or 0
+                        q6 = mark.teacher1_q6 or 0
+                        q7 = mark.teacher1_q7 or 0
+                    
+                    row = [
+                        student.id,
+                        student.name,
+                        f"{q1:.2f}",
+                        f"{q2:.2f}",
+                        f"{q3:.2f}",
+                        f"{q4:.2f}",
+                        f"{q5:.2f}",
+                        f"{q6:.2f}",
+                        f"{q7:.2f}",
+                        f"{mark.calculate_final_total():.2f}",
+                        mark.notes or ''
+                    ]
+            else:
+                if course.is_lab:
+                    row = [student.id, student.name, '0.00', '0.00', '']
+                else:
+                    row = [student.id, student.name, '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '']
+            table_data.append(row)
+        
+        # Create table
+        table = Table(table_data)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
+        ]))
+        
+        elements.append(table)
+        
+        # Build PDF
+        doc.build(elements)
+        buffer.seek(0)
+        
+        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        filename = f"Final_Exam_Marks_{course.code}_{semester.name}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+        
+    except Exception as e:
+        return HttpResponse(f"Error generating PDF: {str(e)}", status=500)
+
+@login_required
+def export_final_exam_excel(request):
+    """Export Final Exam marks to Excel"""
+    try:
+        # Check permissions
+        if not (request.user.is_superuser or request.user.is_staff or check_teacher_permission(request.user, 'can_manage_final_marks')):
+            messages.error(request, "You don't have permission to export Final Exam marks.")
+            return redirect('ca-management')
+        
+        semester_id = request.GET.get('semester')
+        course_id = request.GET.get('course')
+        centre_id = request.GET.get('centre')
+        teacher_role = request.GET.get('teacher_role', 'teacher1')
+        
+        if not semester_id or not course_id:
+            messages.error(request, "Please select a semester and course.")
+            return redirect('ca-management')
+        
+        semester = Semester.objects.get(id=semester_id)
+        course = Course.objects.get(id=course_id)
+        
+        # Get students with custom sorting
+        students = Student.objects.filter(semesters=semester).extra(
+            select={
+                'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
+                'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
+            }
+        ).order_by('-first_two_digits', 'last_three_digits')
+        
+        # Get existing Final Exam marks
+        existing_marks = FinalExamMark.objects.filter(
+            student__in=students,
+            course=course,
+            semester=semester
+        )
+        
+        final_exam_marks = {}
+        for mark in existing_marks:
+            final_exam_marks[mark.student.id] = mark
+        
+        # Create Excel file
+        output = io.BytesIO()
+        workbook = xlsxwriter.Workbook(output)
+        worksheet = workbook.add_worksheet("Final Exam Marks")
+        
+        # Formats
+        title_format = workbook.add_format({
+            'bold': True,
+            'font_size': 14,
+            'align': 'center',
+            'valign': 'vcenter'
+        })
+        header_format = workbook.add_format({
+            'bold': True,
+            'font_size': 11,
+            'align': 'center',
+            'valign': 'vcenter',
+            'bg_color': '#2c3e50',
+            'font_color': 'white',
+            'border': 1
+        })
+        cell_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1
+        })
+        
+        # Title
+        if course.is_lab:
+            headers = ['Student ID', 'Name', 'Lab Final Exam Mark', 'Total', 'Notes']
+        else:
+            headers = ['Student ID', 'Name', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Total', 'Notes']
+        
+        worksheet.merge_range(0, 0, 0, len(headers) - 1, f"Final Exam Marks Report - {semester.name}", title_format)
+        worksheet.write(1, 0, f"Course: {course.code} - {course.name}", cell_format)
+        worksheet.write(1, 1, f"Course Type: {'Lab Course' if course.is_lab else 'Theory Course'}", cell_format)
+        worksheet.write(1, 2, f"Evaluator: {teacher_role.replace('teacher', 'Teacher ').title()}", cell_format)
+        
+        # Header row
+        row = 3
+        col = 0
+        for header in headers:
+            worksheet.write(row, col, header, header_format)
+            col += 1
+        
+        # Data rows
+        row = 4
+        for student in students:
+            col = 0
+            mark = final_exam_marks.get(student.id)
+            worksheet.write(row, col, student.id, cell_format)
+            col += 1
+            worksheet.write(row, col, student.name, cell_format)
+            col += 1
+            
+            if mark:
+                if course.is_lab:
+                    worksheet.write(row, col, mark.lab_final_exam_mark or 0.00, cell_format)
+                    col += 1
+                    worksheet.write(row, col, mark.calculate_final_total(), cell_format)
+                    col += 1
+                    worksheet.write(row, col, mark.notes or '', cell_format)
+                else:
+                    # For theory courses, show marks based on teacher role
+                    if teacher_role == 'teacher1':
+                        q1 = mark.teacher1_q1 or 0
+                        q2 = mark.teacher1_q2 or 0
+                        q3 = mark.teacher1_q3 or 0
+                        q4 = mark.teacher1_q4 or 0
+                        q5 = mark.teacher1_q5 or 0
+                        q6 = mark.teacher1_q6 or 0
+                        q7 = mark.teacher1_q7 or 0
+                    elif teacher_role == 'teacher2':
+                        q1 = mark.teacher2_q1 or 0
+                        q2 = mark.teacher2_q2 or 0
+                        q3 = mark.teacher2_q3 or 0
+                        q4 = mark.teacher2_q4 or 0
+                        q5 = mark.teacher2_q5 or 0
+                        q6 = mark.teacher2_q6 or 0
+                        q7 = mark.teacher2_q7 or 0
+                    elif teacher_role == 'teacher3':
+                        q1 = mark.teacher3_q1 or 0
+                        q2 = mark.teacher3_q2 or 0
+                        q3 = mark.teacher3_q3 or 0
+                        q4 = mark.teacher3_q4 or 0
+                        q5 = mark.teacher3_q5 or 0
+                        q6 = mark.teacher3_q6 or 0
+                        q7 = mark.teacher3_q7 or 0
+                    else:
+                        # Default to teacher1
+                        q1 = mark.teacher1_q1 or 0
+                        q2 = mark.teacher1_q2 or 0
+                        q3 = mark.teacher1_q3 or 0
+                        q4 = mark.teacher1_q4 or 0
+                        q5 = mark.teacher1_q5 or 0
+                        q6 = mark.teacher1_q6 or 0
+                        q7 = mark.teacher1_q7 or 0
+                    
+                    worksheet.write(row, col, q1, cell_format)
+                    col += 1
+                    worksheet.write(row, col, q2, cell_format)
+                    col += 1
+                    worksheet.write(row, col, q3, cell_format)
+                    col += 1
+                    worksheet.write(row, col, q4, cell_format)
+                    col += 1
+                    worksheet.write(row, col, q5, cell_format)
+                    col += 1
+                    worksheet.write(row, col, q6, cell_format)
+                    col += 1
+                    worksheet.write(row, col, q7, cell_format)
+                    col += 1
+                    worksheet.write(row, col, mark.calculate_final_total(), cell_format)
+                    col += 1
+                    worksheet.write(row, col, mark.notes or '', cell_format)
+            else:
+                if course.is_lab:
+                    worksheet.write(row, col, 0.00, cell_format)
+                    col += 1
+                    worksheet.write(row, col, 0.00, cell_format)
+                    col += 1
+                    worksheet.write(row, col, '', cell_format)
+                else:
+                    for _ in range(7):
+                        worksheet.write(row, col, 0.00, cell_format)
+                        col += 1
+                    worksheet.write(row, col, 0.00, cell_format)
+                    col += 1
+                    worksheet.write(row, col, '', cell_format)
+            
+            row += 1
+        
+        # Set column widths
+        worksheet.set_column(0, 0, 15)  # Student ID
+        worksheet.set_column(1, 1, 30)  # Name
+        worksheet.set_column(2, len(headers) - 2, 12)  # Question columns
+        worksheet.set_column(len(headers) - 1, len(headers) - 1, 20)  # Notes
+        
+        workbook.close()
+        output.seek(0)
+        
+        response = HttpResponse(
+            output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        filename = f"Final_Exam_Marks_{course.code}_{semester.name}.xlsx"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+        
+    except Exception as e:
+        return HttpResponse(f"Error generating Excel: {str(e)}", status=500)
+
 # Teacher Registration Views
 
+@login_required
 def teacher_register(request):
-    """Teacher registration form"""
+    """Teacher registration form - Admin only"""
+    # Only allow administrators to access registration
+    if not (request.user.is_superuser or request.user.is_staff):
+        messages.error(request, 'Only administrators can register new teachers. Please contact an administrator.')
+        return redirect('admin:index')
+    
     if request.method == 'POST':
         form = TeacherRegistrationForm(request.POST)
         if form.is_valid():
             user = form.save()
             username = form.cleaned_data.get('username')
-            messages.success(request, f'Account created for {username}. You can now login!')
-            return redirect('login')
+            messages.success(request, f'Account created for {username}. The teacher can now login!')
+            return redirect('admin:bou_routines_app_teacher_changelist')
     else:
         form = TeacherRegistrationForm()
     
@@ -4535,6 +5550,23 @@ def ca_management(request):
     semester_id = request.GET.get('semester') or request.POST.get('semester')
     course_id = request.GET.get('course') or request.POST.get('course')
     
+    # Convert to integers if provided
+    if semester_id:
+        try:
+            semester_id = int(semester_id)
+        except (ValueError, TypeError):
+            semester_id = None
+    
+    if course_id:
+        try:
+            course_id = int(course_id)
+        except (ValueError, TypeError):
+            course_id = None
+    
+    # Initialize selected semester and course objects
+    selected_semester = None
+    selected_course = None
+    
     # Get courses for the selected semester
     courses_queryset = Course.objects.none()
     if semester_id:
@@ -4556,7 +5588,7 @@ def ca_management(request):
     final_exam_marks = {}
     if semester_id and course_id:
         try:
-            semester = Semester.objects.get(id=semester_id)
+            selected_semester = Semester.objects.get(id=semester_id)
             # Get the course from SemesterCourse to ensure we get the correct course
             # for this specific semester (which is already filtered by centre)
             # Get centre from request for filtering SemesterCourse
@@ -4566,7 +5598,7 @@ def ca_management(request):
                 try:
                     centre = Centre.objects.get(id=centre_id)
                     semester_course = SemesterCourse.objects.filter(
-                        semester=semester,
+                        semester=selected_semester,
                         course_id=course_id,
                         centre=centre
                     ).select_related('course', 'teacher', 'teacher__centre').first()
@@ -4576,27 +5608,33 @@ def ca_management(request):
             # Fallback: get any SemesterCourse for this semester and course if centre not provided
             if not semester_course:
                 semester_course = SemesterCourse.objects.filter(
-                    semester=semester,
+                    semester=selected_semester,
                     course_id=course_id
                 ).select_related('course', 'teacher', 'teacher__centre').first()
             
             if semester_course:
-                course = semester_course.course
+                selected_course = semester_course.course
                 # Use semester-specific teacher
                 course_teacher = semester_course.teacher
             else:
                 # Fallback to direct course lookup if SemesterCourse not found
-                course = Course.objects.get(id=course_id)
+                selected_course = Course.objects.get(id=course_id)
                 course_teacher = None  # No teacher if SemesterCourse doesn't exist
             
-            # Get students enrolled in this semester
-            students = Student.objects.filter(semesters=semester).order_by('id')
+            # Get students enrolled in this semester with custom sorting
+            # Sort by first two digits (descending), then last three digits (ascending)
+            students = Student.objects.filter(semesters=selected_semester).extra(
+                select={
+                    'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
+                    'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
+                }
+            ).order_by('-first_two_digits', 'last_three_digits')
             
             # Get existing CA marks for these students
             existing_marks = CAMark.objects.filter(
                 student__in=students,
-                course=course,
-                semester=semester
+                course=selected_course,
+                semester=selected_semester
             )
             
             # Create a dictionary for easy lookup
@@ -4609,8 +5647,8 @@ def ca_management(request):
                     # Create a temporary CA mark object with calculated attendance
                     temp_mark = CAMark(
                         student=student,
-                        course=course,
-                        semester=semester
+                        course=selected_course,
+                        semester=selected_semester
                     )
                     # Calculate attendance mark
                     temp_mark.attendance_mark = temp_mark.calculate_attendance_mark()
@@ -4619,8 +5657,8 @@ def ca_management(request):
             # Get existing Final Exam marks for these students
             existing_final_marks = FinalExamMark.objects.filter(
                 student__in=students,
-                course=course,
-                semester=semester
+                course=selected_course,
+                semester=selected_semester
             )
             
             # Create a dictionary for easy lookup
@@ -4698,6 +5736,8 @@ def ca_management(request):
         'courses': courses_queryset.order_by('code'),
         'selected_semester_id': semester_id,
         'selected_course_id': course_id,
+        'selected_semester': selected_semester,
+        'selected_course': selected_course,
         'students': students,
         'ca_marks': ca_marks,
         'final_exam_marks': final_exam_marks,
@@ -4903,7 +5943,12 @@ def save_ca_marks(request):
                     )
                     
                     # Update marks based on course type
-                    if course.is_lab:
+                    if course.course_type == 'PROJECT':
+                        # Project Work marks
+                        ca_mark.project_supervisor_mark = float(marks_data.get('project_supervisor_mark', 0))
+                        ca_mark.project_evaluation_mark = float(marks_data.get('project_evaluation_mark', 0))
+                        ca_mark.project_presentation_mark = float(marks_data.get('project_presentation_mark', 0))
+                    elif course.is_lab:
                         # Lab course marks
                         ca_mark.first_lab_assignment_mark = float(marks_data.get('first_lab_assignment_mark', 0))
                         ca_mark.second_lab_assignment_mark = float(marks_data.get('second_lab_assignment_mark', 0))

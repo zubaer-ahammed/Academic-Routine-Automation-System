@@ -22,6 +22,32 @@
         margin-bottom: 20px;
     }
 
+    /* Uniform height for all form controls in the filter section only */
+    /* Exclude header buttons by targeting only form elements */
+    .container-box-bou form select,
+    .container-box-bou form .btn-primary,
+    .container-box-bou form .btn-secondary.dropdown-toggle {
+        height: 38px;
+        box-sizing: border-box;
+    }
+    
+    /* Ensure header buttons are not affected */
+    .container-box-bou .header-buttons .btn {
+        height: auto;
+    }
+    
+    /* Align form groups vertically */
+    .container-box-bou .form-group {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+    
+    /* Ensure labels have consistent spacing */
+    .container-box-bou .form-group label {
+        margin-bottom: 5px;
+    }
+
     .attendance-table-section {
         margin-top: 20px;
     }
@@ -954,7 +980,7 @@
                             <i class="fas fa-calendar-check"></i> Attendance
                         </a>
                         <a href="{% url 'ca-management' %}{% if request.GET.curriculum %}?curriculum={{ request.GET.curriculum }}{% if request.GET.semester %}&semester={{ request.GET.semester }}{% endif %}{% if request.GET.course %}&course={{ request.GET.course }}{% endif %}{% endif %}" class="btn btn-outline-primary">
-                            <i class="fas fa-chart-line"></i> Marks
+                            <i class="fas fa-chart-line"></i> Marks Distribution
                         </a>
                     </div>
                 </div>
@@ -962,7 +988,7 @@
                 <!-- Selection Form -->
                 <form method="get" action="{% url 'attendance-calendar' %}">
                     <div class="row">
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <div class="form-group">
                         <label for="curriculum">Select Curriculum:</label>
                         <select name="curriculum" id="curriculum" onchange="loadSemestersForCurriculum(this.value)">
@@ -975,7 +1001,20 @@
                         </select>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label for="centre">Select Study Centre:</label>
+                        <select name="centre" id="centre" onchange="loadSemestersForCentre(this.value)">
+                            <option value="">-- Select Centre --</option>
+                            {% for centre in centres %}
+                                <option value="{{ centre.id }}" {% if selected_centre_id and selected_centre_id|stringformat:"s" == centre.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ centre.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2">
                     <div class="form-group">
                         <label for="semester">Select Semester:</label>
                         <select name="semester" id="semester" onchange="loadCoursesForSemester(this.value)">
@@ -1004,14 +1043,28 @@
                 <div class="col-md-3">
                     <div class="form-group">
                         <label>&nbsp;</label>
-                        <div>
+                        <div style="display: flex; gap: 10px; align-items: flex-end;">
                             <button type="submit" class="btn btn-primary">
                                 <i class="fas fa-search"></i> Load Students
                             </button>
                             {% if selected_semester_id and selected_course_id %}
-                                <a href="{% url 'attendance-report' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}" class="btn btn-info">
-                                    <i class="fas fa-chart-bar"></i> View Report
-                                </a>
+                                <div class="dropdown" style="display: inline-block;">
+                                    <button class="btn btn-secondary dropdown-toggle" type="button" id="exportDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <i class="fas fa-download"></i> Export
+                                    </button>
+                                    <ul class="dropdown-menu" aria-labelledby="exportDropdown">
+                                        <li>
+                                            <a class="dropdown-item" href="{% url 'export-attendance-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}">
+                                                <i class="fas fa-file-pdf text-danger"></i> PDF
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="{% url 'export-attendance-excel' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}">
+                                                <i class="fas fa-file-excel text-success"></i> Excel
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
                             {% endif %}
                         </div>
                     </div>
@@ -1180,8 +1233,10 @@
 // Function to load semesters for a selected curriculum
     function loadSemestersForCurriculum(curriculumId) {
         console.log('loadSemestersForCurriculum called with curriculumId:', curriculumId);
+        const centreSelect = document.getElementById('centre');
         const semesterSelect = document.getElementById('semester');
         const courseSelect = document.getElementById('course');
+        const centreId = centreSelect ? centreSelect.value : '';
         
         // Clear existing options
         semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
@@ -1194,27 +1249,33 @@
         // Show loading state
         semesterSelect.innerHTML = '<option value="">Loading semesters...</option>';
     
-           // Make AJAX request to get semesters for the curriculum
-           fetch(`{% url 'get-semesters-for-curriculum' %}?curriculum_id=${curriculumId}&t=${Date.now()}`)
-               .then(response => response.json())
-               .then(data => {
-                   if (data.error) {
-                       semesterSelect.innerHTML = '<option value="">Error loading semesters</option>';
-                       return;
-                   }
-                   
-                   // Debug: Log the response data
-                   console.log('Semesters data:', data.semesters);
-                   
-                   // Clear and populate semester options
-                   semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
-                   data.semesters.forEach(semester => {
-                       const option = document.createElement('option');
-                       option.value = semester.id;
-                       console.log(`Semester: id=${semester.id}, name=${semester.name}, full_name=${semester.semester_full_name}`);
-                       option.textContent = semester.name; // Use semester name (e.g., Y1S1) instead of full name
-                       semesterSelect.appendChild(option);
-                   });
+        // Make AJAX request to get semesters for the curriculum (with centre filter if available)
+        let url = `{% url 'get-semesters-for-curriculum' %}?curriculum_id=${curriculumId}`;
+        if (centreId) {
+            url += `&centre_id=${centreId}`;
+        }
+        url += `&t=${Date.now()}`;
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    semesterSelect.innerHTML = '<option value="">Error loading semesters</option>';
+                    return;
+                }
+                
+                // Debug: Log the response data
+                console.log('Semesters data:', data.semesters);
+                
+                // Clear and populate semester options
+                semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
+                data.semesters.forEach(semester => {
+                    const option = document.createElement('option');
+                    option.value = semester.id;
+                    console.log(`Semester: id=${semester.id}, name=${semester.name}, full_name=${semester.semester_full_name}`);
+                    option.textContent = semester.name; // Use semester name (e.g., Y1S1) instead of full name
+                    semesterSelect.appendChild(option);
+                });
         })
         .catch(error => {
             console.error('Error loading semesters:', error);
@@ -1222,9 +1283,27 @@
         });
 }
 
+// Function to load semesters when centre changes
+function loadSemestersForCentre(centreId) {
+    const curriculumSelect = document.getElementById('curriculum');
+    const curriculumId = curriculumSelect ? curriculumSelect.value : '';
+    
+    if (curriculumId) {
+        loadSemestersForCurriculum(curriculumId);
+    } else {
+        // Clear semesters and courses if no curriculum selected
+        const semesterSelect = document.getElementById('semester');
+        const courseSelect = document.getElementById('course');
+        semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
+        courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
+    }
+}
+
 // Function to load courses for a selected semester
 function loadCoursesForSemester(semesterId) {
+    const centreSelect = document.getElementById('centre');
     const courseSelect = document.getElementById('course');
+    const centreId = centreSelect ? centreSelect.value : '';
     
     // Clear existing options except the first one
     courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
@@ -1236,8 +1315,13 @@ function loadCoursesForSemester(semesterId) {
     // Show loading state
     courseSelect.innerHTML = '<option value="">Loading courses...</option>';
     
-    // Make AJAX request to get courses for the semester
-    fetch(`{% url 'get-courses-for-semester' %}?semester_id=${semesterId}`)
+    // Make AJAX request to get courses for the semester (with centre filter if available)
+    let url = `{% url 'get-courses-for-semester' %}?semester_id=${semesterId}`;
+    if (centreId) {
+        url += `&centre_id=${centreId}`;
+    }
+    
+    fetch(url)
         .then(response => response.json())
         .then(data => {
             if (data.error) {
@@ -1263,18 +1347,23 @@ function loadCoursesForSemester(semesterId) {
 // Function to load students when course is selected
 function loadStudentsForCourse() {
     const curriculumSelect = document.getElementById('curriculum');
+    const centreSelect = document.getElementById('centre');
     const semesterSelect = document.getElementById('semester');
     const courseSelect = document.getElementById('course');
     
-    const curriculumId = curriculumSelect.value;
+    const curriculumId = curriculumSelect ? curriculumSelect.value : '';
+    const centreId = centreSelect ? centreSelect.value : '';
     const semesterId = semesterSelect.value;
     const courseId = courseSelect.value;
     
     if (semesterId && courseId) {
-        // Build URL with curriculum parameter if available
+        // Build URL with curriculum and centre parameters if available
         let url = `{% url 'attendance-calendar' %}?semester=${semesterId}&course=${courseId}`;
         if (curriculumId) {
             url += `&curriculum=${curriculumId}`;
+        }
+        if (centreId) {
+            url += `&centre=${centreId}`;
         }
         // Redirect to attendance calendar with selected semester and course
         window.location.href = url;

@@ -34,45 +34,28 @@
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container container-bou bou-header">
-            <a class="navbar-brand d-flex align-items-center" href="{% url 'home' %}">
-                <img src="{% static 'bou_logo_icon.png' %}" alt="BOU Logo" class="bou-logo">
-                <span>BOUSST CSE</span>
+    <div class="bou-header-bar">
+        <div class="bou-header-content">
+            <a href="{% url 'home' %}" class="bou-logo-box">
+                <img src="{% static 'bou_logo.png' %}" alt="BOU Logo" class="bou-logo-header">
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link active" href="/">Routine Entry</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/generate/">Generate Routine</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'update-semester-courses' %}">Semester Courses</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'download-routines' %}">Download Routines</a>
-                    </li>
-                    {% if user.is_authenticated %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="/admin/">Admin</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'logout' %}?next={{ request.path }}">Logout</a>
-                        </li>
-                    {% else %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'login' %}?next={{ request.path }}">Login</a>
-                        </li>
-                    {% endif %}
-                </ul>
+            <div class="bou-header-menu">
+                <a href="/generate/" class="bou-header-link">Generate Routine</a>
+                <a href="{% url 'update-semester-courses' %}" class="bou-header-link">Semester Courses</a>
+                <a href="{% url 'download-routines' %}" class="bou-header-link">Download Routines</a>
+                <a href="{% url 'attendance-calendar' %}" class="bou-header-link">Attendance</a>
+                <a href="{% url 'ca-management' %}" class="bou-header-link">Marks</a>
+                {% if user.is_authenticated %}
+                    <a href="{% url 'teacher-dashboard' %}" class="bou-header-link">Dashboard</a>
+                    <a href="/admin/" class="bou-header-link">Admin</a>
+                    <a href="{% url 'logout' %}?next={{ request.path }}" class="bou-header-link">Logout</a>
+                {% else %}
+                    <a href="{% url 'login' %}?next={{ request.path }}" class="bou-header-link">Login</a>
+                    <a href="{% url 'teacher-register' %}" class="bou-header-link">Register</a>
+                {% endif %}
             </div>
         </div>
-    </nav>
+    </div>
 
     <div class="container">
         <h1 class="text-center">Routine Entry (Existing Semesters)</h1>
@@ -223,9 +206,8 @@
     <footer class="bg-dark text-white text-center py-3 mt-5">
         <div class="container bou-footer-container container-bou">
             <p class="mb-0">
-                © <span id="currentYear"></span> BOUSST CSE. Developed by
-                <a href="https://github.com/zubaer-ahammed/" target="_blank" class="text-info">Md. Zubaer Ahammed</a> and
-                <a href="https://github.com/Mojahidul21" target="_blank" class="text-info">Mojahidul Alam</a>
+                © <span id="currentYear"></span> Developed by
+                <a href="https://github.com/zubaer-ahammed/" target="_blank" class="text-info">Md. Zubaer Ahammed</a>
             </p>
         </div>
     </footer>

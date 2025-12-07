@@ -555,9 +555,9 @@ def generate_routine(request):
                 
                 if semester_course and semester_course.teacher:
                     teacher_id = semester_course.teacher.id
-                    
-                    # Only check for routines with the same teacher, same day, and overlapping time
-                    # But exclude the course we're currently checking
+                
+                # Only check for routines with the same teacher, same day, and overlapping time
+                # But exclude the course we're currently checking
                     # Note: We need to check routines by their teacher property, not course__teacher
                     for routine in CurrentRoutine.objects.filter(day=day).exclude(course_id=course_id):
                         if routine.teacher and routine.teacher.id == teacher_id:
@@ -2171,12 +2171,12 @@ def export_to_pdf(request, semester_id):
                 contact_info_lines.append(coordinator.designation)
             if coordinator.secondary_designation:
                 contact_info_lines.append(coordinator.secondary_designation)
-            contact_info_lines.append('School of Science and Technology')
-            contact_info_lines.append('Bangladesh Open University')
-            if coordinator.phone:
-                contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
-            if coordinator.email:
-                contact_info_lines.append(f'email:{coordinator.email}')
+        contact_info_lines.append('School of Science and Technology')
+        contact_info_lines.append('Bangladesh Open University')
+        if coordinator.phone:
+            contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
+        if coordinator.email:
+            contact_info_lines.append(f'email:{coordinator.email}')
         else:
             # Default contact info if no coordinator
             contact_info_lines.append('School of Science and Technology')

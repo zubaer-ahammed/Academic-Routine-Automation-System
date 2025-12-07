@@ -1,6 +1,8 @@
 /* Global styles for all pages */
 body {
     background-color: #f8f9fa;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 h1, h2, h3, h4, h5, h6 {
 
@@ -37,9 +39,89 @@ a:hover {
     margin-right: 12px;
     vertical-align: middle;
 }
+
+/* BOU Header Bar - matches admin design */
+.bou-header-bar {
+    background-color: #212529 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+}
+
+.bou-header-content {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 10px 40px !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.bou-header-menu {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0 !important;
+    flex-wrap: wrap !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.bou-header-link {
+    color: #fff !important;
+    text-decoration: none !important;
+    font-size: 14px !important;
+    padding: 0 !important;
+    margin: 0 8px !important;
+    border-radius: 0 !important;
+    transition: opacity 0.2s !important;
+    border: none !important;
+}
+
+.bou-header-link:hover {
+    opacity: 0.8 !important;
+    color: #fff !important;
+    text-decoration: none !important;
+}
+
+.bou-header-link:first-child {
+    margin-left: 0 !important;
+}
+
+.bou-header-link:last-child {
+    margin-right: 0 !important;
+}
+
+.bou-header-menu a {
+    text-transform: uppercase;
+}
+
+.bou-logo-box {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 0.25em 1em !important;
+    background-color: #fff !important;
+    border-radius: 3px !important;
+    text-decoration: none !important;
+    box-sizing: border-box !important;
+}
+
+.bou-logo-header {
+    height: 48px !important;
+    width: auto !important;
+    vertical-align: middle !important;
+    display: block !important;
+}
 .bou-footer-container {
-    padding-bottom: 1em;
-    padding-top: 1em;
+    padding: 1em 40px !important;
+    margin: 0 auto !important;
+    margin-top: 1em !important;
+}
+
+footer.bg-dark {
+    padding: 0 !important;
+    margin: 0 !important;
 }
 
 .container.container-bou.bou-header {

@@ -1,8 +1,462 @@
 {% extends "admin/base.html" %}
 {% load static %}
 
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  /* Change admin header to black to match frontend */
+  #header {
+    background: #212529 !important;
+  }
+  
+  /* Update user tools text color for visibility on black background */
+  #user-tools {
+    color: #fff !important;
+  }
+  
+  #user-tools a {
+    color: #fff !important;
+  }
+  
+  #user-tools a:hover {
+    color: #fff !important;
+    opacity: 0.8;
+  }
+  
+  /* Update section headers to black to match frontend */
+  .module h2,
+  .module h2 a,
+  .module h2:link,
+  .module h2:visited {
+    background: #212529 !important;
+    color: #fff !important;
+  }
+  
+  .module h3,
+  .module h3 a,
+  .module h3:link,
+  .module h3:visited {
+    background: #212529 !important;
+    color: #fff !important;
+  }
+  
+  /* Update caption headers */
+  .module caption,
+  .module caption a,
+  .module caption:link,
+  .module caption:visited {
+    background: #212529 !important;
+    color: #fff !important;
+  }
+  
+  /* Ensure all text in section headers is white */
+  #content-main .module h2,
+  #content-main .module h3,
+  .dashboard .module h2,
+  .dashboard .module h3 {
+    color: #fff !important;
+  }
+  
+  #content-main .module h2 a,
+  #content-main .module h3 a,
+  .dashboard .module h2 a,
+  .dashboard .module h3 a {
+    color: #fff !important;
+  }
+  
+  /* Update link colors to match frontend */
+  .module a {
+    color: #0056b3 !important;
+  }
+  
+  .module a:hover {
+    color: #0056b3 !important;
+    opacity: 0.8;
+  }
+  
+  /* Update add button colors - keep green for visibility */
+  .addlink {
+    color: #28a745 !important;
+  }
+  
+  .addlink:hover {
+    color: #218838 !important;
+  }
+  
+  /* Update changelink colors */
+  .changelink {
+    color: #0056b3 !important;
+  }
+  
+  .changelink:hover {
+    color: #004085 !important;
+  }
+  
+  /* Update recent actions section */
+  .module table {
+    background: #fff !important;
+  }
+  
+  /* Ensure text is readable */
+  .module {
+    background: #fff !important;
+  }
+  
+  /* Update breadcrumbs to match black theme and improve visibility */
+  /* Using slightly lighter dark grey to distinguish from header */
+  .breadcrumbs,
+  div.breadcrumbs {
+    background: #343a40 !important;
+    padding: 10px 15px !important;
+    color: #fff !important;
+  }
+  
+  .breadcrumbs a,
+  div.breadcrumbs a {
+    color: #fff !important;
+  }
+  
+  .breadcrumbs a:link,
+  .breadcrumbs a:visited,
+  div.breadcrumbs a:link,
+  div.breadcrumbs a:visited {
+    color: #fff !important;
+  }
+  
+  .breadcrumbs a:hover,
+  div.breadcrumbs a:hover {
+    color: #17a2b8 !important;
+    opacity: 0.9;
+  }
+  
+  /* Current breadcrumb item (not a link) */
+  .breadcrumbs .selected,
+  div.breadcrumbs .selected {
+    color: #fff !important;
+  }
+  
+  /* Breadcrumb separator and text */
+  .breadcrumbs .separator,
+  .breadcrumbs span,
+  div.breadcrumbs .separator,
+  div.breadcrumbs span {
+    color: #fff !important;
+    opacity: 0.9;
+  }
+  
+  /* Ensure breadcrumb links are visible */
+  .breadcrumbs a:not(:hover),
+  div.breadcrumbs a:not(:hover) {
+    color: #fff !important;
+  }
+  
+  /* Update filter panel styling for better visibility */
+  .module.filtered {
+    background: #fff !important;
+  }
+  
+  /* Filter panel header */
+  .module.filtered h3 {
+    background: #212529 !important;
+    color: #fff !important;
+  }
+  
+  /* Selected/highlighted filter items */
+  .module.filtered ul li.selected {
+    background: #212529 !important;
+  }
+  
+  .module.filtered ul li.selected a {
+    color: #fff !important;
+    font-weight: bold;
+  }
+  
+  /* Filter links */
+  .module.filtered ul li a {
+    color: #0056b3 !important;
+  }
+  
+  .module.filtered ul li a:hover {
+    color: #004085 !important;
+    background: #f8f9fa !important;
+  }
+  
+  /* Alternative selector for selected items */
+  .module.filtered li.selected,
+  #changelist-filter li.selected {
+    background: #212529 !important;
+  }
+  
+  #changelist-filter li.selected a {
+    color: #fff !important;
+    font-weight: bold;
+  }
+  
+  #changelist-filter li a {
+    color: #0056b3 !important;
+  }
+  
+  #changelist-filter li a:hover {
+    color: #004085 !important;
+    background: #f8f9fa !important;
+  }
+  
+  /* Filter panel header text */
+  #changelist-filter h3 {
+    background: #212529 !important;
+    color: #fff !important;
+  }
+  
+  /* Ensure footer is always at bottom and full width */
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    position: relative !important;
+  }
+  
+  /* Make body the positioning context for footer */
+  body {
+    min-height: 100vh !important;
+  }
+  
+  #container {
+    position: relative !important;
+    min-height: 100vh !important;
+    padding-bottom: 60px !important; /* Space for footer */
+  }
+  
+  /* Footer styling - break out using viewport width */
+  #footer,
+  footer {
+    position: absolute !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+    z-index: 100 !important;
+  }
+  
+  /* Ensure footer content is full width */
+  #footer > div,
+  footer > div,
+  #admin-footer {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    position: relative !important;
+  }
+  
+  /* Override any admin wrapper constraints that might clip the footer */
+  #container,
+  .main-content,
+  .content-wrapper,
+  #content {
+    overflow-x: visible !important;
+  }
+  
+  /* Ensure body allows overflow for full-width footer */
+  body {
+    overflow-x: hidden !important;
+  }
+  svg.theme-icon-when-auto use {
+    color: #212529;
+  }
+  
+  /* Style the search/filter input field */
+  #changelist-search input[type="text"],
+  input[name="q"],
+  input[type="text"][placeholder*="filter"],
+  input[type="text"][placeholder*="Filter"],
+  #searchbar,
+  .search-input,
+  input.search {
+    padding: 10px 16px !important;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+    border: 2px solid #dee2e6 !important;
+    border-radius: 8px !important;
+    font-size: 14px !important;
+    transition: all 0.3s ease !important;
+    background-color: #fff !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  
+  #changelist-search input[type="text"]:focus,
+  input[name="q"]:focus,
+  input[type="text"][placeholder*="filter"]:focus,
+  input[type="text"][placeholder*="Filter"]:focus,
+  #searchbar:focus,
+  .search-input:focus,
+  input.search:focus {
+    outline: none !important;
+    border-color: #212529 !important;
+    box-shadow: 0 0 0 3px rgba(33, 37, 41, 0.1) !important;
+    background-color: #fff !important;
+  }
+  
+  #changelist-search input[type="text"]:hover,
+  input[name="q"]:hover,
+  input[type="text"][placeholder*="filter"]:hover,
+  input[type="text"][placeholder*="Filter"]:hover,
+  #searchbar:hover,
+  .search-input:hover,
+  input.search:hover {
+    border-color: #adb5bd !important;
+  }
+  
+  /* Style the sidebar filter input */
+  #changelist-filter input[type="text"],
+  .module input[type="text"],
+  #nav-filter,
+  input[type="search"][id="nav-filter"],
+  input[type="text"][id="nav-filter"] {
+    padding: 10px 16px !important;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+    margin-left: 8px !important;
+    margin-right: 8px !important;
+    border: 2px solid #dee2e6 !important;
+    border-radius: 8px !important;
+    font-size: 14px !important;
+    transition: all 0.3s ease !important;
+    background-color: #fff !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+    width: calc(100% - 16px) !important;
+    box-sizing: border-box !important;
+    margin-bottom: 10px !important;
+  }
+  
+  #changelist-filter input[type="text"]:focus,
+  .module input[type="text"]:focus,
+  #nav-filter:focus {
+    outline: none !important;
+    border-color: #212529 !important;
+    box-shadow: 0 0 0 3px rgba(33, 37, 41, 0.1) !important;
+    background-color: #fff !important;
+  }
+  
+  #changelist-filter input[type="text"]:hover,
+  .module input[type="text"]:hover,
+  #nav-filter:hover {
+    border-color: #adb5bd !important;
+  }
+  
+  /* Style search button if present */
+  #changelist-search input[type="submit"],
+  button[type="submit"][name="search"] {
+    padding: 10px 20px !important;
+    background-color: #212529 !important;
+    color: #fff !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    transition: all 0.3s ease !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+  }
+  
+  #changelist-search input[type="submit"]:hover,
+  button[type="submit"][name="search"]:hover {
+    background-color: #343a40 !important;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15) !important;
+    transform: translateY(-1px) !important;
+  }
+  
+  #changelist-search input[type="submit"]:active,
+  button[type="submit"][name="search"]:active {
+    transform: translateY(0) !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+  }
+  ul.object-tools li a {
+    color: #fff !important;
+  }
+</style>
+{% endblock %}
+
 {% block branding %}
   <a href="{% url 'home' %}" style="display: flex; align-items: center; gap: 10px; padding: 0.25em 1em; background-color: #fff; border-radius: 3px;" >
     <img src="{% static 'bou_logo.png' %}" alt="BOU Logo" style="height: 48px; vertical-align: middle;">
   </a>
+{% endblock %}
+
+{% block footer %}
+<div id="admin-footer" style="background-color: #212529; color: #fff; text-align: center; padding: 10px 40px; margin: 0; box-sizing: border-box;">
+  <p style="margin: 0;">
+    © <span id="adminCurrentYear"></span> Developed by
+    <a href="https://github.com/zubaer-ahammed/" target="_blank" style="color: #17a2b8; text-decoration: none;">Md. Zubaer Ahammed</a>
+  </p>
+</div>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var yearSpan = document.getElementById('adminCurrentYear');
+    if (yearSpan) {
+      yearSpan.textContent = new Date().getFullYear();
+    }
+    
+    // Find footer and move it to body level to break out of constrained containers
+    var footerElement = document.querySelector('#footer, footer');
+    if (footerElement) {
+      var body = document.body;
+      var container = document.getElementById('container');
+      
+      // Get footer height before moving
+      var footerHeight = footerElement.offsetHeight || 60;
+      
+      // Move footer to body level if it's inside a constrained container
+      if (container && container.contains(footerElement)) {
+        // Remove footer from its current parent
+        var parent = footerElement.parentNode;
+        parent.removeChild(footerElement);
+        
+        // Append footer to body
+        body.appendChild(footerElement);
+        
+        // Ensure container has space for footer
+        container.style.paddingBottom = footerHeight + 'px';
+        container.style.position = 'relative';
+      }
+      
+      // Set footer to full viewport width
+      footerElement.style.position = 'absolute';
+      footerElement.style.bottom = '0';
+      footerElement.style.left = '0';
+      footerElement.style.right = '0';
+      footerElement.style.width = '100vw';
+      footerElement.style.maxWidth = '100vw';
+      footerElement.style.marginLeft = '0';
+      footerElement.style.marginRight = '0';
+      footerElement.style.zIndex = '100';
+      footerElement.style.boxSizing = 'border-box';
+    }
+    
+    // Also ensure the footer content div is full width
+    var footer = document.getElementById('admin-footer');
+    if (footer) {
+      footer.style.width = '100vw';
+      footer.style.maxWidth = '100vw';
+      footer.style.marginLeft = '0';
+      footer.style.marginRight = '0';
+      footer.style.left = '0';
+      footer.style.right = '0';
+    }
+    
+    // Update container padding when window resizes
+    window.addEventListener('resize', function() {
+      if (footerElement) {
+        var newHeight = footerElement.offsetHeight || 60;
+        if (container) {
+          container.style.paddingBottom = newHeight + 'px';
+        }
+      }
+    });
+  });
+</script>
 {% endblock %} 

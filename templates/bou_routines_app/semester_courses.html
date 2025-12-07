@@ -7,6 +7,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Semester Courses</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="{% static 'global.css' %}">
     <style>
         body {
@@ -53,6 +55,75 @@
         }
         select.form-select option:first-child {
             color: #6c757d;
+        }
+        /* Select2 styling to match Bootstrap form-select */
+        .select2-container--bootstrap-5 {
+            width: 100% !important;
+        }
+        .select2-container--bootstrap-5 .select2-selection {
+            border: 1px solid #ced4da;
+            min-height: 38px;
+            border-radius: 0.375rem;
+            display: flex;
+            align-items: center;
+        }
+        .select2-container--bootstrap-5 .select2-selection--single {
+            height: 38px;
+            display: flex;
+            align-items: center;
+        }
+        .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered {
+            line-height: 1;
+            height: auto;
+            padding: 0 20px 0 12px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            flex: 1;
+            min-height: 38px;
+        }
+        .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered .select2-selection__placeholder,
+        .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered .select2-selection__choice {
+            line-height: 1.5;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .select2-container--bootstrap-5 .select2-selection--single .select2-selection__arrow {
+            height: 38px;
+            right: 8px;
+            top: 0;
+            display: flex;
+            align-items: center;
+        }
+        .select2-container--bootstrap-5 .select2-selection--single .select2-selection__arrow b {
+            border-color: #6c757d transparent transparent transparent;
+            margin-top: -2px;
+        }
+        .select2-container--bootstrap-5.select2-container--open .select2-selection--single .select2-selection__arrow b {
+            border-color: transparent transparent #6c757d transparent;
+            margin-top: -4px;
+        }
+        /* Hide the clear button */
+        .select2-container--bootstrap-5 .select2-selection__clear {
+            display: none !important;
+        }
+        .select2-container.border-danger .select2-selection {
+            border: 1px solid #dc3545 !important;
+        }
+        /* Make number of classes input field same height as Select2 fields */
+        #courseRepeater input[name="classes"] {
+            height: 38px;
+            line-height: 1.5;
+            padding: 0.375rem 0.75rem;
+        }
+        /* Make Remove button same height as other fields */
+        #courseRepeater .remove-course {
+            height: 38px;
+            line-height: 1.5;
+            padding: 0.375rem 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         /* Update select color based on selected value for Program Coordinator */
         select.form-select#program_coordinator:not([value=""]) {
@@ -140,12 +211,13 @@
             
             <div class="mb-3">
                 <label for="semester" class="form-label">Semester</label>
-                <select name="semester" id="semester" class="form-control" required>
+                <select name="semester" id="semester" class="form-control" required disabled>
                     <option value="">Select Semester</option>
                     {% for semester in semesters %}
                     <option value="{{ semester.id }}" {% if selected_semester_id == semester.id|stringformat:"s" %}selected{% endif %}>{{ semester.name }}</option>
                     {% endfor %}
                 </select>
+                <small class="text-muted">Please select Curriculum and Study Centre first</small>
             </div>
 
             <!-- Semester Info Fields -->
@@ -191,10 +263,10 @@
 
             <div class="mb-3">
                 <label for="courseRepeater" class="form-label">Select Courses</label>
-                <div id="courseRepeater">
+                <div id="courseRepeater" style="opacity: 0.6; pointer-events: none;">
                     <div class="course-row row mb-3">
                         <div class="col-md-4">
-                            <select name="courses[]" class="form-select course-select" required>
+                            <select name="courses[]" class="form-select course-select" required data-placeholder="Search for a course...">
                                 <option value="">Select Course</option>
                                 {% for course in courses %}
                                 <option value="{{ course.id }}">{{ course.code }} - {{ course.name }}</option>
@@ -202,7 +274,7 @@
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <select name="teachers[]" class="form-select teacher-select" required>
+                            <select name="teachers[]" class="form-select teacher-select" required data-placeholder="Search for a teacher...">
                                 <option value="">Select Teacher</option>
                                 {% for teacher in teachers %}
                                 <option value="{{ teacher.id }}">{{ teacher.name }}</option>
@@ -217,7 +289,8 @@
                         </div>
                     </div>
                 </div>
-                <button type="button" class="btn btn-secondary mb-3" id="addCourse">+ Add Another Course</button>
+                <button type="button" class="btn btn-secondary mb-3" id="addCourse" disabled>+ Add Another Course</button>
+                <small class="text-muted d-block">Please select Curriculum, Study Centre, and Semester first</small>
             </div>
 
             <div class="d-grid">
@@ -243,12 +316,112 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script>
         $(function() {
+            // Initialize Select2 on all course select dropdowns
+            function initializeCourseSelect2($select) {
+                $select.select2({
+                    theme: 'bootstrap-5',
+                    placeholder: 'Search for a course...',
+                    allowClear: false,
+                    minimumResultsForSearch: 0,
+                    width: '100%',
+                    language: {
+                        noResults: function() {
+                            return "No courses found";
+                        },
+                        searching: function() {
+                            return "Searching...";
+                        }
+                    }
+                });
+            }
+            
+            // Initialize Select2 on all teacher select dropdowns
+            function initializeTeacherSelect2($select) {
+                $select.select2({
+                    theme: 'bootstrap-5',
+                    placeholder: 'Search for a teacher...',
+                    allowClear: false,
+                    minimumResultsForSearch: 0,
+                    width: '100%',
+                    language: {
+                        noResults: function() {
+                            return "No teachers found";
+                        },
+                        searching: function() {
+                            return "Searching...";
+                        }
+                    }
+                });
+            }
+            
+            // Initialize Select2 on all course and teacher selects
+            function initializeAllSelects() {
+                $('.course-select').each(function() {
+                    var $select = $(this);
+                    // Destroy existing Select2 if it exists
+                    if ($select.hasClass('select2-hidden-accessible')) {
+                        $select.select2('destroy');
+                    }
+                    // Initialize Select2
+                    initializeCourseSelect2($select);
+                });
+                
+                $('.teacher-select').each(function() {
+                    var $select = $(this);
+                    // Destroy existing Select2 if it exists
+                    if ($select.hasClass('select2-hidden-accessible')) {
+                        $select.select2('destroy');
+                    }
+                    // Initialize Select2
+                    initializeTeacherSelect2($select);
+                });
+            }
+            
+            // Initialize on page load - ensure it happens after everything else
+            setTimeout(function() {
+                initializeAllSelects();
+            }, 200);
+            
+            // Function to update field states based on selections
+            function updateFieldStates() {
+                var curriculumId = $('#curriculum').val();
+                var centreId = $('#centre').val();
+                var semesterId = $('#semester').val();
+                
+                // Enable/disable semester dropdown
+                if (curriculumId && centreId) {
+                    $('#semester').prop('disabled', false);
+                    $('#semester').next('small').text('Select a semester');
+                } else {
+                    $('#semester').prop('disabled', true);
+                    $('#semester').val('');
+                    $('#semester').trigger('change');
+                    $('#semester').next('small').text('Please select Curriculum and Study Centre first');
+                }
+                
+                // Enable/disable course selection area
+                if (curriculumId && centreId && semesterId) {
+                    $('#courseRepeater').css({'opacity': '1', 'pointer-events': 'auto'});
+                    $('#addCourse').prop('disabled', false);
+                    $('#addCourse').next('small').hide();
+                } else {
+                    $('#courseRepeater').css({'opacity': '0.6', 'pointer-events': 'none'});
+                    $('#addCourse').prop('disabled', true);
+                    $('#addCourse').next('small').show();
+                }
+            }
+            
             // Handle curriculum selection
             $('#curriculum').change(function() {
                 var curriculumId = $(this).val();
                 var centreId = $('#centre').val();
+                
+                // Update field states
+                updateFieldStates();
+                
                 // Reload page with curriculum and centre parameters
                 var url = new URL(window.location);
                 if (curriculumId) {
@@ -268,11 +441,10 @@
             $('#centre').change(function() {
                 var centreId = $(this).val();
                 var curriculumId = $('#curriculum').val();
-                // Reload courses for the selected semester when centre changes
-                const semesterId = $('#semester').val();
-                if (semesterId) {
-                    loadSemesterCourses(semesterId);
-                }
+                
+                // Update field states
+                updateFieldStates();
+                
                 // Reload page with curriculum and centre parameters
                 var url = new URL(window.location);
                 if (curriculumId) {
@@ -290,40 +462,36 @@
             
             // Handle adding new course rows
             $('#addCourse').click(function () {
-                // Clone only the HTML, not data/events
+                // Get the first row's select element (before cloning)
                 const $firstRow = $('.course-row:first');
-                const $newRow = $firstRow.clone(false, false);
+                const $firstSelect = $firstRow.find('select.course-select');
+                
+                // Clone the row HTML only (not Select2 data)
+                const $newRow = $firstRow.clone();
 
+                // Remove Select2 container if it exists in the clone
+                $newRow.find('.select2-container').remove();
+                $newRow.find('.select2-hidden-accessible').removeClass('select2-hidden-accessible');
+                
+                // Get the cloned select elements
+                const $newCourseSelect = $newRow.find('select.course-select');
+                const $newTeacherSelect = $newRow.find('select.teacher-select');
+                
                 // Clear all input/select values in the new row
                 $newRow.find('input').val('');
-                $newRow.find('select').val('');
-
-                // Remove any plugin artifacts (e.g., Select2, time pickers) if used in the future
-                // $newRow.find('.course-select').each(function() {
-                //     if ($(this).hasClass('select2-hidden-accessible')) {
-                //         $(this).select2('destroy');
-                //     }
-                // });
-                // $newRow.find('.mdtimepicker').mdtimepicker('destroy');
+                $newCourseSelect.val('');
+                $newTeacherSelect.val('');
 
                 // Remove any error or feedback messages
-                $newRow.find('.overlap-feedback, .checking-feedback').hide();
+                $newRow.find('.overlap-feedback, .checking-feedback, .duplicate-error').remove();
+                $newRow.removeClass('has-duplicate');
 
                 // Append the new row
                 $('#courseRepeater').append($newRow);
 
-                // Re-initialize plugins on the new row if needed (uncomment if you use them)
-                // $newRow.find('.course-select').select2({
-                //     theme: 'bootstrap-5',
-                //     placeholder: 'Search for a course...',
-                //     allowClear: true,
-                //     width: '100%'
-                // });
-                // $newRow.find('.mdtimepicker').mdtimepicker({
-                //     format: 'hh:mm',
-                //     theme: 'blue',
-                //     hourPadding: true
-                // });
+                // Initialize Select2 on the new select elements
+                initializeCourseSelect2($newCourseSelect);
+                initializeTeacherSelect2($newTeacherSelect);
             });
 
             // Handle removing course rows
@@ -338,8 +506,26 @@
                 if (semesterId) {
                     // Clear existing course rows except the first one
                     $('.course-row:not(:first)').remove();
-                    $('.course-row:first select').val('');
+                    
+                    // Get first row selects
+                    var $firstCourseSelect = $('.course-row:first select.course-select');
+                    var $firstTeacherSelect = $('.course-row:first select.teacher-select');
+                    
+                    // Destroy Select2 if initialized before clearing values
+                    if ($firstCourseSelect.hasClass('select2-hidden-accessible')) {
+                        $firstCourseSelect.select2('destroy');
+                    }
+                    if ($firstTeacherSelect.hasClass('select2-hidden-accessible')) {
+                        $firstTeacherSelect.select2('destroy');
+                    }
+                    
+                    // Clear first row values
+                    $firstCourseSelect.val('');
+                    $firstTeacherSelect.val('');
                     $('.course-row:first input[name="classes"]').val('1');
+                    
+                    // Re-initialize all selects (including first row)
+                    initializeAllSelects();
 
                     // Get the selected centre ID and curriculum ID
                     var centreId = $('#centre').val();
@@ -361,12 +547,39 @@
                                     if (index === 0) {
                                         row = $('.course-row:first');
                                     } else {
+                                        // Clone the first row
                                         row = $('.course-row:first').clone();
+                                        
+                                        // Remove Select2 container if it exists in the clone
+                                        row.find('.select2-container').remove();
+                                        row.find('.select2-hidden-accessible').removeClass('select2-hidden-accessible');
+                                        
                                         $('#courseRepeater').append(row);
+                                        
+                                        // Initialize Select2 on the cloned selects
+                                        var $clonedCourseSelect = row.find('select.course-select');
+                                        var $clonedTeacherSelect = row.find('select.teacher-select');
+                                        initializeCourseSelect2($clonedCourseSelect);
+                                        initializeTeacherSelect2($clonedTeacherSelect);
                                     }
                                     
                                     // Get the course select dropdown
                                     var courseSelect = row.find('select.course-select');
+                                    var teacherSelect = row.find('select.teacher-select');
+                                    
+                                    // Ensure Select2 is initialized on first row (always re-initialize to be sure)
+                                    if (index === 0) {
+                                        // Destroy if exists
+                                        if (courseSelect.hasClass('select2-hidden-accessible')) {
+                                            courseSelect.select2('destroy');
+                                        }
+                                        if (teacherSelect.hasClass('select2-hidden-accessible')) {
+                                            teacherSelect.select2('destroy');
+                                        }
+                                        // Re-initialize
+                                        initializeCourseSelect2(courseSelect);
+                                        initializeTeacherSelect2(teacherSelect);
+                                    }
                                     
                                     // Check if the course option exists in the dropdown
                                     if (courseSelect.find('option[value="' + course.id + '"]').length === 0) {
@@ -374,13 +587,28 @@
                                         // (courses are already filtered by curriculum in the backend, but double-check)
                                         var selectedCurriculumId = $('#curriculum').val();
                                         // Add the course option if it doesn't exist
-                                        courseSelect.append('<option value="' + course.id + '">' + course.code + ' - ' + course.name + '</option>');
+                                        var $newOption = $('<option value="' + course.id + '">' + course.code + ' - ' + course.name + '</option>');
+                                        courseSelect.append($newOption);
+                                        
+                                        // If Select2 is initialized, trigger update
+                                        if (courseSelect.hasClass('select2-hidden-accessible')) {
+                                            courseSelect.trigger('change');
+                                        }
                                     }
                                     
-                                    // Set the course value
+                                    // Set the course value and trigger change for Select2
                                     courseSelect.val(course.id);
+                                    if (courseSelect.hasClass('select2-hidden-accessible')) {
+                                        courseSelect.trigger('change');
+                                    }
                                     row.find('input[name="classes"]').val(course.number_of_classes || 0);
-                                    row.find('select.teacher-select').val(course.teacher_id);
+                                    
+                                    // Set teacher value and trigger change for Select2
+                                    var teacherSelect = row.find('select.teacher-select');
+                                    teacherSelect.val(course.teacher_id);
+                                    if (teacherSelect.hasClass('select2-hidden-accessible')) {
+                                        teacherSelect.trigger('change');
+                                    }
                                 });
                             }
                             // Fill semester info fields if present
@@ -404,6 +632,18 @@
                                 $('#theory_class_duration_minutes').val(data.semester_data.theory_class_duration_minutes || 60);
                                 $('#lab_class_duration_minutes').val(data.semester_data.lab_class_duration_minutes || 90);
                             }
+                            
+                            // Final check: ensure first row Select2 is initialized after all data is loaded
+                            setTimeout(function() {
+                                var $firstCourseSelect = $('.course-row:first select.course-select');
+                                var $firstTeacherSelect = $('.course-row:first select.teacher-select');
+                                if (!$firstCourseSelect.hasClass('select2-hidden-accessible')) {
+                                    initializeCourseSelect2($firstCourseSelect);
+                                }
+                                if (!$firstTeacherSelect.hasClass('select2-hidden-accessible')) {
+                                    initializeTeacherSelect2($firstTeacherSelect);
+                                }
+                            }, 100);
                         }
                     });
                 }
@@ -411,16 +651,38 @@
 
             // Handle semester change
             $('#semester').change(function() {
+                updateFieldStates();
                 toggleSemesterInfoFields();
                 const semesterId = $(this).val();
-                loadSemesterCourses(semesterId);
+                if (semesterId) {
+                    loadSemesterCourses(semesterId);
+                }
             });
 
             // Auto-load courses for the initially selected semester (if any)
-            const initialSemesterId = $('#semester').val();
-            if (initialSemesterId) {
-                loadSemesterCourses(initialSemesterId);
-            }
+            // But first ensure Select2 is initialized on the first row
+            setTimeout(function() {
+                // Force initialization of first row before loading courses
+                var $firstCourseSelect = $('.course-row:first select.course-select');
+                var $firstTeacherSelect = $('.course-row:first select.teacher-select');
+                
+                // Always destroy and re-initialize to ensure it works
+                if ($firstCourseSelect.hasClass('select2-hidden-accessible')) {
+                    $firstCourseSelect.select2('destroy');
+                }
+                if ($firstTeacherSelect.hasClass('select2-hidden-accessible')) {
+                    $firstTeacherSelect.select2('destroy');
+                }
+                
+                initializeCourseSelect2($firstCourseSelect);
+                initializeTeacherSelect2($firstTeacherSelect);
+                
+                // Now load courses if semester is selected
+                const initialSemesterId = $('#semester').val();
+                if (initialSemesterId) {
+                    loadSemesterCourses(initialSemesterId);
+                }
+            }, 300);
 
             // When a course is changed, update the teacher dropdown to the default teacher for that course
             $(document).on('change', 'select.course-select', function() {
@@ -446,6 +708,10 @@
             }
             // On page load
             toggleSemesterInfoFields();
+            // Update field states after a short delay to ensure DOM is ready
+            setTimeout(function() {
+                updateFieldStates();
+            }, 50);
 
             // Show success modal if ?success=1 is in the URL
             if (new URLSearchParams(window.location.search).get('success') === '1') {
@@ -463,23 +729,37 @@
                 $('button[type="submit"]').prop('disabled', false);
                 
                 $('.course-row').each(function() {
-                    const courseId = $(this).find('select.course-select').val();
-                    if (courseId) {
+                    const $courseSelect = $(this).find('select.course-select');
+                    // Get value from Select2 if initialized, otherwise from native select
+                    let courseId = $courseSelect.hasClass('select2-hidden-accessible') 
+                        ? $courseSelect.val() 
+                        : $courseSelect.val();
+                    
+                    // Only check if courseId is not empty and is a valid value
+                    if (courseId && courseId !== '' && courseId !== null) {
                         if (seen[courseId]) {
                             // Highlight both rows
                             $(this).addClass('has-duplicate');
                             seen[courseId].addClass('has-duplicate');
                             // Add error message if not already present
                             if ($(this).find('.duplicate-error').length === 0) {
-                                $(this).find('.col-md-4').append('<div class="text-danger duplicate-error">Duplicate course selected</div>');
+                                $(this).find('.col-md-4').append('<div class="text-danger duplicate-error mt-1">Duplicate course selected</div>');
                             }
                             if (seen[courseId].find('.duplicate-error').length === 0) {
-                                seen[courseId].find('.col-md-4').append('<div class="text-danger duplicate-error">Duplicate course selected</div>');
+                                seen[courseId].find('.col-md-4').append('<div class="text-danger duplicate-error mt-1">Duplicate course selected</div>');
                             }
+                            // Also highlight Select2 container
+                            $(this).find('.select2-container').addClass('border-danger');
+                            seen[courseId].find('.select2-container').addClass('border-danger');
                             hasDuplicate = true;
                         } else {
                             seen[courseId] = $(this);
+                            // Remove error styling from Select2 container
+                            $(this).find('.select2-container').removeClass('border-danger');
                         }
+                    } else {
+                        // Remove error styling if no course selected
+                        $(this).find('.select2-container').removeClass('border-danger');
                     }
                 });
                 if (hasDuplicate) {
@@ -488,12 +768,18 @@
             }
 
             // Check for duplicates on course change and when adding/removing rows
-            $(document).on('change', 'select.course-select', checkDuplicateCourses);
-            $(document).on('click', '#addCourse, .remove-course', function() {
-                setTimeout(checkDuplicateCourses, 50);
+            $(document).on('change', 'select.course-select', function() {
+                // Wait a bit for Select2 to update
+                setTimeout(checkDuplicateCourses, 100);
             });
-            // Also check on page load
-            checkDuplicateCourses();
+            $(document).on('click', '#addCourse, .remove-course', function() {
+                setTimeout(function() {
+                    initializeAllSelects();
+                    checkDuplicateCourses();
+                }, 100);
+            });
+            // Check on page load after Select2 is initialized
+            setTimeout(checkDuplicateCourses, 200);
             
             // Function to update Program Coordinator select color
             function updateProgramCoordinatorColor() {

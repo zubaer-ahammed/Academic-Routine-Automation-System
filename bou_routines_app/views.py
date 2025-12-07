@@ -110,6 +110,15 @@ def generate_routine(request):
             selected_centre = None
             selected_centre_id = None
     
+    # If no centre selected, default to DRC (Dhaka Regional Center)
+    if not selected_centre:
+        try:
+            selected_centre = Centre.objects.get(code='DRC')
+            selected_centre_id = selected_centre.id
+        except Centre.DoesNotExist:
+            selected_centre = None
+            selected_centre_id = None
+    
     # Filter semesters and courses by selected curriculum and centre
     if selected_curriculum:
         semesters = Semester.objects.filter(curriculum=selected_curriculum)
@@ -1122,6 +1131,15 @@ def update_semester_courses(request):
             selected_centre_id = int(selected_centre_id)
             selected_centre = Centre.objects.get(id=selected_centre_id)
         except (Centre.DoesNotExist, ValueError):
+            selected_centre = None
+            selected_centre_id = None
+    
+    # If no centre selected, default to DRC (Dhaka Regional Center)
+    if not selected_centre:
+        try:
+            selected_centre = Centre.objects.get(code='DRC')
+            selected_centre_id = selected_centre.id
+        except Centre.DoesNotExist:
             selected_centre = None
             selected_centre_id = None
     

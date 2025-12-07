@@ -437,6 +437,384 @@
         border-radius: 8px;
         user-select: none;
     }
+    
+    /* Mobile optimizations */
+    @media screen and (max-width: 768px) {
+        .container-box-bou {
+            padding: 15px !important;
+            margin-top: 1rem !important;
+            margin-bottom: 1rem !important;
+        }
+        
+        /* Make form fields stack on mobile with compact spacing */
+        .container-box-bou form .row {
+            margin: 0 -8px !important;
+        }
+        
+        .container-box-bou form .row > div {
+            margin-bottom: 10px !important;
+            padding: 0 8px !important;
+        }
+        
+        /* Reduce margin for last column (button container) */
+        .container-box-bou form .row > div:last-child {
+            margin-bottom: 3px !important;
+        }
+        
+        /* Compact form groups on mobile */
+        .container-box-bou .form-group {
+            margin-bottom: 8px !important;
+        }
+        
+        /* Reduce margin for form groups with buttons */
+        .container-box-bou form .form-group:has(> div[style*="display: flex"]),
+        .container-box-bou form .form-group:has(> div[style*="flex"]) {
+            margin-bottom: 5px !important;
+            min-height: auto !important;
+            padding-bottom: 0 !important;
+        }
+        
+        /* Smaller labels on mobile */
+        .container-box-bou .form-group label {
+            font-size: 13px !important;
+            margin-bottom: 4px !important;
+            font-weight: 600 !important;
+        }
+        
+        /* Hide empty labels completely on mobile */
+        .container-box-bou .form-group label:empty {
+            display: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            height: 0 !important;
+            min-height: 0 !important;
+        }
+        
+        /* Smaller select fields on mobile */
+        .container-box-bou form select {
+            font-size: 13px !important;
+            padding: 6px 10px !important;
+            height: 36px !important;
+        }
+        
+        /* Larger buttons for mobile */
+        .container-box-bou form .btn {
+            min-height: 44px;
+            font-size: 14px;
+            padding: 8px 16px;
+        }
+        
+        /* Reduce gaps around button container on mobile */
+        /* Target the column that contains buttons (last col-md-3 in form) */
+        .container-box-bou form .row > div:last-child {
+            margin-bottom: 5px !important;
+        }
+        
+        .container-box-bou form .row > div:last-child .form-group {
+            margin-bottom: 3px !important;
+            margin-top: 0 !important;
+            min-height: auto !important;
+            padding-bottom: 0 !important;
+        }
+        
+        .container-box-bou form .form-group > div[style*="display: flex"],
+        .container-box-bou form .form-group > div[style*="flex"] {
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+        }
+        
+        /* Reduce gap above button container row */
+        .container-box-bou form .row:has(> div:last-child .form-group > div[style*="flex"]) {
+            margin-bottom: 5px !important;
+        }
+        
+        /* Compact header section on mobile */
+        .container-box-bou h2 {
+            font-size: 20px !important;
+            margin-bottom: 12px !important;
+        }
+        
+        .container-box-bou .d-flex.justify-content-between {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 10px !important;
+        }
+        
+        /* Larger touch targets for checkboxes */
+        .attendance-checkbox-container {
+            min-height: 80px !important;
+            padding: 12px !important;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: rgba(0, 123, 255, 0.3);
+        }
+        
+        /* Larger checkbox input */
+        .attendance-checkbox-container input[type="checkbox"] {
+            width: 28px !important;
+            height: 28px !important;
+            cursor: pointer;
+            margin: 0;
+        }
+        
+        /* Better table scrolling on mobile */
+        .table-responsive {
+            -webkit-overflow-scrolling: touch;
+            border-radius: 8px;
+        }
+        
+        /* Adjust table cell padding for mobile */
+        .attendance-table th,
+        .attendance-table td {
+            padding: 8px 4px;
+        }
+        
+        /* On mobile: Only Student ID is sticky, everything else scrolls */
+        /* Student ID remains sticky */
+        .student-id-column {
+            min-width: 120px !important;
+            max-width: 120px !important;
+            width: 120px !important;
+            position: -webkit-sticky !important;
+            position: sticky !important;
+            left: 0 !important;
+            z-index: 25 !important;
+        }
+        
+        .student-id-cell {
+            min-width: 120px !important;
+            max-width: 120px !important;
+            width: 120px !important;
+            position: -webkit-sticky !important;
+            position: sticky !important;
+            left: 0 !important;
+            z-index: 15 !important;
+        }
+        
+        /* Name column is NOT sticky on mobile - it scrolls */
+        .student-name-column {
+            min-width: 140px !important;
+            max-width: 140px !important;
+            width: 140px !important;
+            position: static !important;
+            left: auto !important;
+            z-index: 1 !important;
+            transform: none !important;
+        }
+        
+        .student-name-cell {
+            min-width: 140px !important;
+            max-width: 140px !important;
+            width: 140px !important;
+            position: static !important;
+            left: auto !important;
+            z-index: 1 !important;
+            transform: none !important;
+        }
+        
+        /* Override the base styles that make second column sticky */
+        .attendance-table thead th:nth-child(2),
+        .attendance-table tbody td:nth-child(2) {
+            position: static !important;
+            left: auto !important;
+            z-index: 1 !important;
+            transform: none !important;
+        }
+        
+        /* Date columns wider on mobile for easier tapping */
+        .date-column {
+            min-width: 80px;
+            max-width: 80px;
+            position: relative !important;
+        }
+        
+        /* Highlight current date column on mobile */
+        .current-date-column {
+            background: #28a745 !important;
+            border: 2px solid #155724 !important;
+        }
+        
+        .current-date-column .date-header {
+            background: rgba(40, 167, 69, 0.3) !important;
+            font-weight: bold !important;
+        }
+        
+        .current-date-cell {
+            background: rgba(40, 167, 69, 0.1) !important;
+            border-left: 2px solid #28a745 !important;
+            border-right: 2px solid #28a745 !important;
+        }
+        
+        /* Total column is NOT sticky on mobile - it scrolls */
+        .summary-column {
+            position: relative !important;
+            right: auto !important;
+            z-index: 1 !important;
+        }
+        
+        .summary-cell {
+            position: relative !important;
+            right: auto !important;
+            z-index: 1 !important;
+        }
+        
+        /* Header adjustments */
+        .table-header h4 {
+            font-size: 18px;
+        }
+        
+        .table-header p {
+            font-size: 14px;
+        }
+        
+        /* Smaller alert boxes on mobile */
+        .container-box-bou .alert {
+            font-size: 13px !important;
+            padding: 10px 12px !important;
+            margin-bottom: 12px !important;
+        }
+        
+        .container-box-bou .alert strong {
+            font-size: 13px !important;
+        }
+        
+        .container-box-bou .alert small {
+            font-size: 11px !important;
+        }
+        
+        /* Add a hint about scrolling */
+        .table-header::after {
+            content: "💡 Scroll horizontally to view all dates and totals";
+            display: block;
+            margin-top: 10px;
+            font-size: 11px;
+            color: #6c757d;
+            font-style: italic;
+        }
+    }
+    
+    @media screen and (max-width: 480px) {
+        .container-box-bou {
+            padding: 10px !important;
+        }
+        
+        /* Even more compact form on small phones */
+        .container-box-bou form .row > div {
+            margin-bottom: 8px !important;
+        }
+        
+        .container-box-bou .form-group {
+            margin-bottom: 6px !important;
+        }
+        
+        .container-box-bou .form-group label {
+            font-size: 12px !important;
+            margin-bottom: 3px !important;
+        }
+        
+        .container-box-bou form select {
+            font-size: 12px !important;
+            padding: 5px 8px !important;
+            height: 34px !important;
+        }
+        
+        .container-box-bou h2 {
+            font-size: 18px !important;
+            margin-bottom: 10px !important;
+        }
+        
+        /* Even smaller alert boxes on small phones */
+        .container-box-bou .alert {
+            font-size: 12px !important;
+            padding: 8px 10px !important;
+            margin-bottom: 10px !important;
+        }
+        
+        .container-box-bou .alert strong {
+            font-size: 12px !important;
+        }
+        
+        .container-box-bou .alert small {
+            font-size: 10px !important;
+        }
+        
+        .table-header::after {
+            font-size: 10px !important;
+            margin-top: 8px !important;
+        }
+        
+        /* Even larger touch targets on small phones */
+        .attendance-checkbox-container {
+            min-height: 90px !important;
+            padding: 15px !important;
+        }
+        
+        .attendance-checkbox-container input[type="checkbox"] {
+            width: 32px !important;
+            height: 32px !important;
+        }
+        
+        /* Date columns even wider on small phones for easier tapping */
+        .date-column {
+            min-width: 90px !important;
+            max-width: 90px !important;
+        }
+        
+        /* Current date column even more prominent on small phones */
+        .current-date-column {
+            min-width: 100px !important;
+            max-width: 100px !important;
+        }
+        
+        .current-date-cell {
+            min-width: 100px !important;
+            max-width: 100px !important;
+        }
+        
+        .current-date-cell .attendance-checkbox-container {
+            min-height: 110px !important;
+            padding: 18px !important;
+        }
+        
+        .current-date-cell .attendance-checkbox-container input[type="checkbox"] {
+            width: 40px !important;
+            height: 40px !important;
+        }
+        
+        /* Narrower student columns on very small screens */
+        .student-id-column {
+            min-width: 100px !important;
+            max-width: 100px !important;
+            width: 100px !important;
+        }
+        
+        .student-name-column {
+            min-width: 120px !important;
+            max-width: 120px !important;
+            width: 120px !important;
+            left: 100px !important;
+        }
+        
+        .student-id-cell {
+            min-width: 100px !important;
+            max-width: 100px !important;
+            width: 100px !important;
+        }
+        
+        .student-name-cell {
+            min-width: 120px !important;
+            max-width: 120px !important;
+            width: 120px !important;
+            left: 100px !important;
+        }
+        
+        /* Smaller font sizes */
+        .student-id,
+        .student-name {
+            font-size: 13px;
+        }
+    }
 
     .attendance-checkbox-container:hover {
         background-color: rgba(0, 123, 255, 0.1);
@@ -573,6 +951,28 @@
         border-color: #dee2e6 !important;
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
         transform: none !important;
+    }
+    
+    /* Disabled date styling */
+    .date-disabled {
+        background-color: #f5f5f5 !important;
+        opacity: 0.6 !important;
+        pointer-events: none !important;
+    }
+    
+    .date-disabled .attendance-checkbox-container {
+        pointer-events: none !important;
+    }
+    
+    .date-disabled .checkbox-label {
+        background-color: #e9ecef !important;
+        border-color: #ced4da !important;
+        cursor: not-allowed !important;
+    }
+    
+    .disabled-label {
+        cursor: not-allowed !important;
+        opacity: 0.5 !important;
     }
 
     /* Custom checkmark */
@@ -863,6 +1263,53 @@
 
     .header-buttons .btn {
         min-width: 140px;
+        font-size: 1em;
+        padding: 10px 20px;
+        border-radius: 6px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        line-height: 1.5;
+    }
+    
+    .header-buttons .btn-primary {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+        border: none;
+        padding: 10px 20px;
+    }
+    
+    .header-buttons .btn-primary:hover {
+        background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+    }
+    
+    .header-buttons .btn-outline-primary {
+        border: 2px solid #007bff;
+        color: #007bff;
+        background: transparent;
+        padding: 10px 20px;
+    }
+    
+    .header-buttons .btn-outline-primary:hover {
+        background: #007bff;
+        color: white;
+        transform: translateY(-1px);
+    }
+    
+    /* Mobile optimizations for header buttons - desktop styles remain unchanged */
+    @media screen and (max-width: 768px) {
+        .header-buttons {
+            flex-direction: column;
+            width: 100%;
+            gap: 10px;
+        }
+        
+        .header-buttons .btn {
+            min-width: 100%;
+            width: 100%;
+            font-size: 14px;
+            padding: 10px 15px;
+        }
     }
 
     td.student-id-cell, td.student-name-cell {
@@ -871,12 +1318,6 @@
 
     .attendance-table td {
         padding: 4px;
-    }
-
-
-    .header-buttons .btn {
-        min-width: 140px;
-        font-size: 1em;
     }
 
     .btn-primary {
@@ -1166,22 +1607,25 @@
                                 <div class="student-name">{{ student.name }}</div>
                             </td>
                             {% for date in semester_dates %}
-                                <td class="attendance-cell{% if date|date:'Y-m-d' == today|date:'Y-m-d' %} current-date-cell{% endif %}{% if date|date:'Y-m-d' == current_week_date|date:'Y-m-d' %} current-week-cell{% endif %}{% if date in makeup_dates %} makeup-date-cell{% endif %}" data-date="{{ date|date:'Y-m-d' }}" data-student="{{ student.id }}">
+                                {% with date_allowed=date|is_date_allowed:allowed_date_range %}
+                                <td class="attendance-cell{% if date|date:'Y-m-d' == today|date:'Y-m-d' %} current-date-cell{% endif %}{% if date|date:'Y-m-d' == current_week_date|date:'Y-m-d' %} current-week-cell{% endif %}{% if date in makeup_dates %} makeup-date-cell{% endif %}{% if not date_allowed %} date-disabled{% endif %}" data-date="{{ date|date:'Y-m-d' }}" data-student="{{ student.id }}">
                                 {% with attendance_status|default_if_none:""|dict_key:student.id|default_if_none:""|dict_key:date as status %}
                                 <div class="attendance-checkbox-container">
                                     <input type="checkbox" 
-                                           class="attendance-checkbox" 
+                                           class="attendance-checkbox{% if not date_allowed %} disabled-label{% endif %}" 
                                            id="attendance_{{ student.id }}_{{ date|date:'Y-m-d' }}"
                                            data-student="{{ student.id }}" 
                                            data-date="{{ date|date:'Y-m-d' }}"
                                            data-semester="{{ semester.id }}"
                                            data-course="{{ course.id }}"
                                            {% if status == True %}checked{% endif %}
-                                           title="Click to mark present/absent">
-                                    <label for="attendance_{{ student.id }}_{{ date|date:'Y-m-d' }}" class="checkbox-label"></label>
+                                           {% if not date_allowed %}disabled{% endif %}
+                                           title="{% if not date_allowed %}Date outside allowed range (current week ± 1 week){% else %}Click to mark present/absent{% endif %}">
+                                    <label for="attendance_{{ student.id }}_{{ date|date:'Y-m-d' }}" class="checkbox-label{% if not date_allowed %} disabled-label{% endif %}"></label>
                                 </div>
                                 {% endwith %}
                             </td>
+                            {% endwith %}
                             {% endfor %}
                 <td class="summary-cell">
                     <div class="attendance-summary">
@@ -1596,6 +2040,14 @@ function setupContainerClicks() {
     const containers = document.querySelectorAll('.attendance-checkbox-container');
     
     containers.forEach(container => {
+        const checkbox = container.querySelector('.attendance-checkbox');
+        
+        // Skip disabled checkboxes
+        if (checkbox && checkbox.disabled) {
+            container.style.pointerEvents = 'none';
+            return;
+        }
+        
         container.addEventListener('click', function(e) {
             // Prevent event if clicking directly on the checkbox or label
             if (e.target.classList.contains('attendance-checkbox') || 
@@ -1603,11 +2055,13 @@ function setupContainerClicks() {
                 return;
             }
             
+            // Prevent action on disabled checkboxes
+            if (checkbox && checkbox.disabled) {
+                return;
+            }
+            
             e.preventDefault();
             e.stopPropagation();
-            
-            // Find the checkbox within this container
-            const checkbox = container.querySelector('.attendance-checkbox');
             
             if (checkbox) {
                 // Toggle the checkbox
@@ -1769,6 +2223,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function markIndividualAttendance(checkbox) {
+        // Prevent action on disabled checkboxes
+        if (checkbox.disabled) {
+            return;
+        }
+        
         const studentId = checkbox.dataset.student;
         const date = checkbox.dataset.date;
         const semesterId = checkbox.dataset.semester;

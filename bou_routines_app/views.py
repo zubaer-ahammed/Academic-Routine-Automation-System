@@ -70,6 +70,21 @@ def time_overlap(start1, end1, start2, end2):
 
 @login_required
 def generate_routine(request):
+    # Restrict access to teachers (unless superuser)
+    # Check if user has a teacher profile
+    try:
+        teacher = request.user.teacher
+        # If they have a teacher profile but are not superuser, restrict access
+        if teacher is not None and not request.user.is_superuser:
+            messages.error(request, "You don't have permission to access this page. Teachers can only access Download Routines, Attendance, and Marks pages.")
+            return redirect('download-routines')
+    except Teacher.DoesNotExist:
+        # User doesn't have a teacher profile, allow access
+        pass
+    except AttributeError:
+        # User object doesn't have teacher attribute, allow access
+        pass
+    
     # Get all curricula
     curricula = Curriculum.objects.filter(is_active=True).order_by('name')
     
@@ -1094,6 +1109,18 @@ def generate_routine(request):
 
 @login_required
 def update_semester_courses(request):
+    # Restrict access to teachers (unless superuser)
+    # Check if user has a teacher profile
+    try:
+        teacher = request.user.teacher
+        # If they have a teacher profile but are not superuser, restrict access
+        if teacher is not None and not request.user.is_superuser:
+            messages.error(request, "You don't have permission to access this page. Teachers can only access Download Routines, Attendance, and Marks pages.")
+            return redirect('download-routines')
+    except (Teacher.DoesNotExist, AttributeError):
+        # User doesn't have a teacher profile, allow access
+        pass
+    
     # Get all curricula
     curricula = Curriculum.objects.filter(is_active=True).order_by('name')
     
@@ -1157,7 +1184,6 @@ def update_semester_courses(request):
     courses = courses.order_by('code')
     
     # Filter teachers by centre if selected
-    from .models import Teacher
     if selected_centre:
         teachers = Teacher.objects.filter(centre=selected_centre).order_by('name')
     else:
@@ -3880,15 +3906,24 @@ def attendance_calendar(request):
     if semester_id:
         if teacher:
             # For teachers, show only their courses in the selected semester
-            courses_queryset = Course.objects.filter(
-                teacher=teacher,
-                semestercourse__semester_id=semester_id
-            ).distinct()
+            # Filter through SemesterCourse since Course doesn't have a direct teacher field
+            semester_courses = SemesterCourse.objects.filter(
+                semester_id=semester_id,
+                teacher=teacher
+            )
+            if selected_centre_id:
+                semester_courses = semester_courses.filter(centre_id=selected_centre_id)
+            course_ids = semester_courses.values_list('course_id', flat=True).distinct()
+            courses_queryset = Course.objects.filter(id__in=course_ids)
         else:
             # For admin users, show all courses in the selected semester
             courses_queryset = Course.objects.filter(
                 semestercourse__semester_id=semester_id
             ).distinct()
+            if selected_centre_id:
+                courses_queryset = courses_queryset.filter(
+                    semestercourse__centre_id=selected_centre_id
+                ).distinct()
     
     context = {
         'teacher': teacher,
@@ -3909,8 +3944,18 @@ def attendance_calendar(request):
     if semester_id and course_id:
         try:
             semester = Semester.objects.get(id=semester_id)
+            # Verify course exists and is accessible to the teacher
             if teacher:
-                course = Course.objects.get(id=course_id, teacher=teacher)
+                # Verify through SemesterCourse that this teacher teaches this course in this semester
+                semester_course = SemesterCourse.objects.filter(
+                    semester_id=semester_id,
+                    course_id=course_id,
+                    teacher=teacher
+                ).first()
+                if not semester_course:
+                    messages.error(request, "You don't have access to this course.")
+                    return render(request, 'bou_routines_app/attendance_calendar.html', context)
+                course = semester_course.course
             else:
                 course = Course.objects.get(id=course_id)
             
@@ -4142,6 +4187,26 @@ def attendance_calendar(request):
             
             print(f"DEBUG: Current week date selected: {current_week_date}")
 
+            # Calculate allowed date range for teachers (current week ± 1 week)
+            allowed_start_date = None
+            allowed_end_date = None
+            if teacher and not (request.user.is_superuser or request.user.is_staff):
+                # For teachers, restrict to current week ± 1 week
+                from datetime import timedelta
+                # Get Monday of current week
+                days_since_monday = today.weekday()
+                monday_of_current_week = today - timedelta(days=days_since_monday)
+                # Start date: Monday of previous week (1 week before current week)
+                allowed_start_date = monday_of_current_week - timedelta(days=7)
+                # End date: Sunday of next week (1 week after current week)
+                allowed_end_date = monday_of_current_week + timedelta(days=13)  # Monday + 13 days = Sunday of next week
+                print(f"DEBUG: Teacher date restriction - Allowed range: {allowed_start_date} to {allowed_end_date}")
+
+            # Prepare date range tuple for template filter
+            allowed_date_range = None
+            if allowed_start_date and allowed_end_date:
+                allowed_date_range = (allowed_start_date, allowed_end_date)
+            
             context.update({
                 'semester': semester,
                 'course': course,
@@ -4157,6 +4222,9 @@ def attendance_calendar(request):
                 'makeup_dates': makeup_dates,
                 'actual_class_duration': actual_class_duration,
                 'class_ratio': class_ratio,
+                'allowed_start_date': allowed_start_date,
+                'allowed_end_date': allowed_end_date,
+                'allowed_date_range': allowed_date_range,
             })
             
             print("=" * 80)
@@ -4279,12 +4347,46 @@ def mark_individual_attendance(request):
         student = Student.objects.get(id=student_id)
         semester = Semester.objects.get(id=semester_id)
         
-        if get_teacher_from_user(request.user):
-            course = Course.objects.get(id=course_id, teacher=teacher)
+        # Verify course access through SemesterCourse
+        teacher_user = get_teacher_from_user(request.user)
+        if teacher_user:
+            # Verify through SemesterCourse that this teacher teaches this course
+            semester_course = SemesterCourse.objects.filter(
+                semester_id=semester_id,
+                course_id=course_id,
+                teacher=teacher_user
+            ).first()
+            if not semester_course:
+                return JsonResponse({'error': 'You don\'t have access to this course.'}, status=403)
+            course = semester_course.course
         else:
             course = Course.objects.get(id=course_id)
         
+        # Server-side date validation for teachers (current week ± 1 week)
+        if teacher_user and not (request.user.is_superuser or request.user.is_staff):
+            from datetime import date, timedelta, datetime
+            today = date.today()
+            # Get Monday of current week
+            days_since_monday = today.weekday()
+            monday_of_current_week = today - timedelta(days=days_since_monday)
+            # Start date: Monday of previous week (1 week before current week)
+            allowed_start_date = monday_of_current_week - timedelta(days=7)
+            # End date: Sunday of next week (1 week after current week)
+            allowed_end_date = monday_of_current_week + timedelta(days=13)
+            
+            # Parse attendance_date
+            try:
+                attendance_date_obj = datetime.strptime(attendance_date, "%Y-%m-%d").date()
+                if attendance_date_obj < allowed_start_date or attendance_date_obj > allowed_end_date:
+                    return JsonResponse({
+                        'error': f'You can only mark attendance for dates between {allowed_start_date} and {allowed_end_date}.'
+                    }, status=403)
+            except ValueError:
+                return JsonResponse({'error': 'Invalid date format'}, status=400)
+        
         # Create or update attendance record
+        # Use teacher_user if available, otherwise use teacher (for admin fallback)
+        marking_teacher = teacher_user if teacher_user else teacher
         attendance, created = Attendance.objects.update_or_create(
             student=student,
             course=course,
@@ -4292,7 +4394,7 @@ def mark_individual_attendance(request):
             attendance_date=attendance_date,
             defaults={
                 'is_present': is_present,
-                'marked_by': teacher,
+                'marked_by': marking_teacher,
                 'marked_at': timezone.now()
             }
         )
@@ -4330,10 +4432,42 @@ def mark_attendance(request):
         attendance_date = request.POST.get('attendance_date')
         
         semester = Semester.objects.get(id=semester_id)
-        if get_teacher_from_user(request.user):
-            course = Course.objects.get(id=course_id, teacher=teacher)
+        # Verify course access through SemesterCourse
+        teacher_user = get_teacher_from_user(request.user)
+        if teacher_user:
+            semester_course = SemesterCourse.objects.filter(
+                semester_id=semester_id,
+                course_id=course_id,
+                teacher=teacher_user
+            ).first()
+            if not semester_course:
+                return JsonResponse({'success': False, 'message': 'You don\'t have access to this course.'})
+            course = semester_course.course
         else:
             course = Course.objects.get(id=course_id)
+        
+        # Server-side date validation for teachers (current week ± 1 week)
+        if teacher_user and not (request.user.is_superuser or request.user.is_staff):
+            from datetime import date, timedelta, datetime
+            today = date.today()
+            # Get Monday of current week
+            days_since_monday = today.weekday()
+            monday_of_current_week = today - timedelta(days=days_since_monday)
+            # Start date: Monday of previous week (1 week before current week)
+            allowed_start_date = monday_of_current_week - timedelta(days=7)
+            # End date: Sunday of next week (1 week after current week)
+            allowed_end_date = monday_of_current_week + timedelta(days=13)
+            
+            # Parse attendance_date
+            try:
+                attendance_date_obj = datetime.strptime(attendance_date, "%Y-%m-%d").date()
+                if attendance_date_obj < allowed_start_date or attendance_date_obj > allowed_end_date:
+                    return JsonResponse({
+                        'success': False,
+                        'message': f'You can only mark attendance for dates between {allowed_start_date} and {allowed_end_date}.'
+                    })
+            except ValueError:
+                return JsonResponse({'success': False, 'message': 'Invalid date format'})
         
         # Get all students for this semester with custom sorting
         # Sort by first two digits (descending), then last three digits (ascending)
@@ -4349,6 +4483,8 @@ def mark_attendance(request):
             is_present = request.POST.get(f'student_{student.id}') == 'on'
             
             # Create or update attendance record
+            # Use teacher_user if available, otherwise use teacher (for admin fallback)
+            marking_teacher = teacher_user if teacher_user else teacher
             attendance, created = Attendance.objects.update_or_create(
                 student=student,
                 course=course,
@@ -4356,7 +4492,7 @@ def mark_attendance(request):
                 attendance_date=attendance_date,
                 defaults={
                     'is_present': is_present,
-                    'marked_by': teacher,
+                    'marked_by': marking_teacher,
                 }
             )
             attendance_count += 1
@@ -4415,8 +4551,17 @@ def attendance_report(request):
             return redirect('attendance-calendar')
         
         semester = Semester.objects.get(id=semester_id)
+        # Verify course access through SemesterCourse
         if teacher:
-            course = Course.objects.get(id=course_id, teacher=teacher)
+            semester_course = SemesterCourse.objects.filter(
+                semester_id=semester_id,
+                course_id=course_id,
+                teacher=teacher
+            ).first()
+            if not semester_course:
+                messages.error(request, "You don't have access to this course.")
+                return redirect('attendance-calendar')
+            course = semester_course.course
         else:
             course = Course.objects.get(id=course_id)
         

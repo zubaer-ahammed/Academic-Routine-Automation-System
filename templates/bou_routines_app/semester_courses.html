@@ -9,6 +9,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="{% static 'global.css' %}">
     <style>
         body {
@@ -153,20 +154,52 @@
             <a href="{% url 'home' %}" class="bou-logo-box">
                 <img src="{% static 'bou_logo.png' %}" alt="BOU Logo" class="bou-logo-header">
             </a>
-            <div class="bou-header-menu">
-                <a href="/generate/" class="bou-header-link">Generate Routine</a>
-                <a href="{% url 'update-semester-courses' %}" class="bou-header-link">Semester Courses</a>
+            <!-- Mobile menu toggle button -->
+            <button class="bou-menu-toggle d-md-none" type="button" data-bs-toggle="collapse" data-bs-target="#bouMobileMenu" aria-controls="bouMobileMenu" aria-expanded="false" aria-label="Toggle navigation">
+                <i class="fas fa-bars"></i>
+            </button>
+            <!-- Desktop menu -->
+            <div class="bou-header-menu d-none d-md-flex">
+                {% if not user|is_teacher_only %}
+                    <a href="/generate/" class="bou-header-link">Generate Routine</a>
+                    <a href="{% url 'update-semester-courses' %}" class="bou-header-link">Semester Courses</a>
+                {% endif %}
                 <a href="{% url 'download-routines' %}" class="bou-header-link">Download Routines</a>
                 <a href="{% url 'attendance-calendar' %}" class="bou-header-link">Attendance</a>
                 <a href="{% url 'ca-management' %}" class="bou-header-link">Marks</a>
-                {% if user.is_authenticated %}
+                    {% if user.is_authenticated %}
                     {% if user|has_teacher_profile %}
                         <a href="{% url 'teacher-dashboard' %}" class="bou-header-link">Dashboard</a>
                     {% endif %}
-                    <a href="/admin/" class="bou-header-link">Admin</a>
+                    {% if not user|is_teacher_only %}
+                        <a href="/admin/" class="bou-header-link">Admin</a>
+                    {% endif %}
                     <a href="{% url 'logout' %}?next={{ request.path }}" class="bou-header-link">Logout</a>
-                {% else %}
+                    {% else %}
                     <a href="{% url 'login' %}?next={{ request.path }}" class="bou-header-link">Login</a>
+                {% endif %}
+            </div>
+        </div>
+        <!-- Mobile collapsible menu -->
+        <div class="collapse" id="bouMobileMenu">
+            <div class="bou-mobile-menu">
+                {% if not user|is_teacher_only %}
+                    <a href="/generate/" class="bou-mobile-link">Generate Routine</a>
+                    <a href="{% url 'update-semester-courses' %}" class="bou-mobile-link">Semester Courses</a>
+                {% endif %}
+                <a href="{% url 'download-routines' %}" class="bou-mobile-link">Download Routines</a>
+                <a href="{% url 'attendance-calendar' %}" class="bou-mobile-link">Attendance</a>
+                <a href="{% url 'ca-management' %}" class="bou-mobile-link">Marks</a>
+                {% if user.is_authenticated %}
+                    {% if user|has_teacher_profile %}
+                        <a href="{% url 'teacher-dashboard' %}" class="bou-mobile-link">Dashboard</a>
+                    {% endif %}
+                    {% if not user|is_teacher_only %}
+                        <a href="/admin/" class="bou-mobile-link">Admin</a>
+                    {% endif %}
+                    <a href="{% url 'logout' %}?next={{ request.path }}" class="bou-mobile-link">Logout</a>
+                {% else %}
+                    <a href="{% url 'login' %}?next={{ request.path }}" class="bou-mobile-link">Login</a>
                 {% endif %}
             </div>
         </div>
@@ -180,17 +213,17 @@
             <!-- Curriculum and Centre Selection -->
             <div class="row">
                 <div class="col-md-6">
-                    <div class="mb-3">
-                        <label for="curriculum" class="form-label">Curriculum</label>
-                        <select name="curriculum" id="curriculum" class="form-control">
-                            <option value="">Select Curriculum</option>
-                            {% for curriculum in curricula %}
-                            <option value="{{ curriculum.id }}" {% if selected_curriculum_id == curriculum.id %}selected{% endif %}>
-                                {{ curriculum.name }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                        <small class="text-muted">Select the curriculum to filter courses and semesters</small>
+            <div class="mb-3">
+                <label for="curriculum" class="form-label">Curriculum</label>
+                <select name="curriculum" id="curriculum" class="form-control">
+                    <option value="">Select Curriculum</option>
+                    {% for curriculum in curricula %}
+                    <option value="{{ curriculum.id }}" {% if selected_curriculum_id == curriculum.id %}selected{% endif %}>
+                        {{ curriculum.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <small class="text-muted">Select the curriculum to filter courses and semesters</small>
                     </div>
                 </div>
                 <div class="col-md-6">
@@ -446,7 +479,7 @@
                 updateFieldStates();
                 
                 // Reload page with curriculum and centre parameters
-                var url = new URL(window.location);
+                    var url = new URL(window.location);
                 if (curriculumId) {
                     url.searchParams.set('curriculum', curriculumId);
                 } else {
@@ -457,7 +490,7 @@
                 } else {
                     url.searchParams.delete('centre');
                 }
-                window.location.href = url.toString();
+                    window.location.href = url.toString();
             });
             
             // Handle adding new course rows
@@ -476,7 +509,7 @@
                 // Get the cloned select elements
                 const $newCourseSelect = $newRow.find('select.course-select');
                 const $newTeacherSelect = $newRow.find('select.teacher-select');
-                
+
                 // Clear all input/select values in the new row
                 $newRow.find('input').val('');
                 $newCourseSelect.val('');
@@ -655,7 +688,7 @@
                 toggleSemesterInfoFields();
                 const semesterId = $(this).val();
                 if (semesterId) {
-                    loadSemesterCourses(semesterId);
+                loadSemesterCourses(semesterId);
                 }
             });
 
@@ -678,10 +711,10 @@
                 initializeTeacherSelect2($firstTeacherSelect);
                 
                 // Now load courses if semester is selected
-                const initialSemesterId = $('#semester').val();
-                if (initialSemesterId) {
-                    loadSemesterCourses(initialSemesterId);
-                }
+            const initialSemesterId = $('#semester').val();
+            if (initialSemesterId) {
+                loadSemesterCourses(initialSemesterId);
+            }
             }, 300);
 
             // When a course is changed, update the teacher dropdown to the default teacher for that course

@@ -431,11 +431,11 @@
             <h4><i class="fas fa-clipboard-list"></i> Continuous Assessment</h4>
             {% if can_manage_ca %}
                 <div class="quick-actions">
-                    <a href="#" class="action-btn">
+                    <a href="{% url 'ca-management' %}" class="action-btn">
                         <i class="fas fa-plus"></i>
                         Add CA Marks
                     </a>
-                    <a href="#" class="action-btn">
+                    <a href="{% url 'ca-management' %}" class="action-btn">
                         <i class="fas fa-list"></i>
                         View CA Records
                     </a>
@@ -453,11 +453,11 @@
             <h4><i class="fas fa-graduation-cap"></i> Final Marks</h4>
             {% if can_manage_final_marks %}
                 <div class="quick-actions">
-                    <a href="#" class="action-btn">
+                    <a href="{% url 'ca-management' %}" class="action-btn">
                         <i class="fas fa-plus"></i>
                         Add Final Marks
                     </a>
-                    <a href="#" class="action-btn">
+                    <a href="{% url 'ca-management' %}" class="action-btn">
                         <i class="fas fa-file-alt"></i>
                         Generate Reports
                     </a>
@@ -477,10 +477,6 @@
         <div class="dashboard-card">
             <h4><i class="fas fa-calendar-alt"></i> Routine Management</h4>
             <div class="quick-actions">
-                <a href="{% url 'generate-routine' %}" class="action-btn">
-                    <i class="fas fa-calendar-plus"></i>
-                    Generate Routine
-                </a>
                 <a href="{% url 'download-routines' %}" class="action-btn">
                     <i class="fas fa-download"></i>
                     Download Routines

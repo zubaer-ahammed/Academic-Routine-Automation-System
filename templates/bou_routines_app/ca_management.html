@@ -444,6 +444,215 @@
     .header-buttons .btn {
         min-width: 140px;
         font-size: 1em;
+        padding: 10px 20px;
+        border-radius: 6px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        line-height: 1.5;
+    }
+    
+    .header-buttons .btn-primary {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+        border: none;
+        padding: 10px 20px;
+    }
+    
+    .header-buttons .btn-primary:hover {
+        background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+    }
+    
+    .header-buttons .btn-outline-primary {
+        border: 2px solid #007bff;
+        color: #007bff;
+        background: transparent;
+        padding: 10px 20px;
+    }
+    
+    .header-buttons .btn-outline-primary:hover {
+        background: #007bff;
+        color: white;
+        transform: translateY(-1px);
+    }
+    
+    /* Mobile optimizations for header buttons - desktop styles remain unchanged */
+    @media screen and (max-width: 768px) {
+        .container-box-bou {
+            padding: 15px !important;
+            margin-top: 1rem !important;
+            margin-bottom: 1rem !important;
+        }
+        
+        /* Compact form fields on mobile */
+        .container-box-bou form .row {
+            margin: 0 -8px !important;
+        }
+        
+        .container-box-bou form .row > div {
+            margin-bottom: 10px !important;
+            padding: 0 8px !important;
+        }
+        
+        /* Compact form groups on mobile */
+        .container-box-bou .form-group {
+            margin-bottom: 8px !important;
+        }
+        
+        /* Smaller labels on mobile */
+        .container-box-bou .form-group label {
+            font-size: 13px !important;
+            margin-bottom: 4px !important;
+            font-weight: 600 !important;
+        }
+        
+        /* Smaller select fields on mobile */
+        .container-box-bou form select {
+            font-size: 13px !important;
+            padding: 6px 10px !important;
+            height: 36px !important;
+        }
+        
+        /* Compact header section on mobile */
+        .container-box-bou h2 {
+            font-size: 20px !important;
+            margin-bottom: 12px !important;
+        }
+        
+        .container-box-bou .d-flex.justify-content-between {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 10px !important;
+        }
+        
+        .header-buttons {
+            flex-direction: column;
+            width: 100%;
+            gap: 10px;
+        }
+        
+        .header-buttons .btn {
+            min-width: 100%;
+            width: 100%;
+            font-size: 14px;
+            padding: 10px 15px;
+        }
+        
+        /* Smaller alert/info boxes on mobile */
+        .container-box-bou .alert,
+        .container-box-bou .info-message {
+            font-size: 13px !important;
+            padding: 10px 12px !important;
+            margin-bottom: 12px !important;
+        }
+        
+        .container-box-bou .alert strong,
+        .container-box-bou .info-message strong {
+            font-size: 13px !important;
+        }
+        
+        .container-box-bou .alert small,
+        .container-box-bou .info-message small {
+            font-size: 11px !important;
+        }
+        
+        /* Smaller table header text on mobile */
+        .table-header h4 {
+            font-size: 16px !important;
+        }
+        
+        .table-header p {
+            font-size: 13px !important;
+        }
+    }
+    
+    @media screen and (max-width: 480px) {
+        .container-box-bou {
+            padding: 10px !important;
+        }
+        
+        /* Even smaller alert/info boxes on small phones */
+        .container-box-bou .alert,
+        .container-box-bou .info-message {
+            font-size: 12px !important;
+            padding: 8px 10px !important;
+            margin-bottom: 10px !important;
+        }
+        
+        .container-box-bou .alert strong,
+        .container-box-bou .info-message strong {
+            font-size: 12px !important;
+        }
+        
+        .container-box-bou .alert small,
+        .container-box-bou .info-message small {
+            font-size: 10px !important;
+        }
+        
+        .table-header h4 {
+            font-size: 15px !important;
+        }
+        
+        .table-header p {
+            font-size: 12px !important;
+        }
+    }
+    
+    @media screen and (max-width: 480px) {
+        .container-box-bou {
+            padding: 10px !important;
+        }
+        
+        /* Even more compact form on small phones */
+        .container-box-bou form .row > div {
+            margin-bottom: 8px !important;
+        }
+        
+        .container-box-bou .form-group {
+            margin-bottom: 6px !important;
+        }
+        
+        .container-box-bou .form-group label {
+            font-size: 12px !important;
+            margin-bottom: 3px !important;
+        }
+        
+        .container-box-bou form select {
+            font-size: 12px !important;
+            padding: 5px 8px !important;
+            height: 34px !important;
+        }
+        
+        .container-box-bou h2 {
+            font-size: 18px !important;
+            margin-bottom: 10px !important;
+        }
+        
+        /* Even smaller alert/info boxes on small phones */
+        .container-box-bou .alert,
+        .container-box-bou .info-message {
+            font-size: 12px !important;
+            padding: 8px 10px !important;
+            margin-bottom: 10px !important;
+        }
+        
+        .container-box-bou .alert strong,
+        .container-box-bou .info-message strong {
+            font-size: 12px !important;
+        }
+        
+        .container-box-bou .alert small,
+        .container-box-bou .info-message small {
+            font-size: 10px !important;
+        }
+        
+        .table-header h4 {
+            font-size: 15px !important;
+        }
+        
+        .table-header p {
+            font-size: 12px !important;
+        }
     }
 
     .discrepancy-row {
@@ -1376,45 +1585,45 @@ function calculateStudentTotal(inputElement) {
         const presentationMark = parseFloat(row.querySelector('input[name$="[project_presentation_mark]"]').value) || 0;
         total = supervisorMark + evaluationMark + presentationMark;
     } else {
-        const attendanceMark = parseFloat(row.querySelector('input[name$="[attendance_mark]"]').value) || 0;
+    const attendanceMark = parseFloat(row.querySelector('input[name$="[attendance_mark]"]').value) || 0;
         total = attendanceMark; // Attendance is auto-calculated, so we include it in total
 
-        if (isLabCourse) {
-            const firstLabAssignmentMark = parseFloat(row.querySelector('input[name$="[first_lab_assignment_mark]"]').value) || 0;
-            const secondLabAssignmentMark = parseFloat(row.querySelector('input[name$="[second_lab_assignment_mark]"]').value) || 0;
-            const thirdLabAssignmentMark = parseFloat(row.querySelector('input[name$="[third_lab_assignment_mark]"]').value) || 0;
-            
-            // Calculate average of ONLY the three lab assignment marks (NOT including attendance)
-            const labAssignmentMark = (firstLabAssignmentMark + secondLabAssignmentMark + thirdLabAssignmentMark) / 3;
-            const labPracticalMark = parseFloat(row.querySelector('input[name$="[lab_practical_mark]"]').value) || 0;
-            total += labAssignmentMark + labPracticalMark;
-            
-            // Update the average lab assignment mark display
-            const averageLabAssignmentCell = row.querySelector('.assignment-average-value');
-            if (averageLabAssignmentCell) {
-                averageLabAssignmentCell.textContent = labAssignmentMark.toFixed(2);
-            }
+    if (isLabCourse) {
+        const firstLabAssignmentMark = parseFloat(row.querySelector('input[name$="[first_lab_assignment_mark]"]').value) || 0;
+        const secondLabAssignmentMark = parseFloat(row.querySelector('input[name$="[second_lab_assignment_mark]"]').value) || 0;
+        const thirdLabAssignmentMark = parseFloat(row.querySelector('input[name$="[third_lab_assignment_mark]"]').value) || 0;
+        
+        // Calculate average of ONLY the three lab assignment marks (NOT including attendance)
+        const labAssignmentMark = (firstLabAssignmentMark + secondLabAssignmentMark + thirdLabAssignmentMark) / 3;
+        const labPracticalMark = parseFloat(row.querySelector('input[name$="[lab_practical_mark]"]').value) || 0;
+        total += labAssignmentMark + labPracticalMark;
+        
+        // Update the average lab assignment mark display
+        const averageLabAssignmentCell = row.querySelector('.assignment-average-value');
+        if (averageLabAssignmentCell) {
+            averageLabAssignmentCell.textContent = labAssignmentMark.toFixed(2);
+        }
+    } else {
+        const firstAssignmentMark = parseFloat(row.querySelector('input[name$="[first_assignment_mark]"]').value) || 0;
+        const secondAssignmentMark = parseFloat(row.querySelector('input[name$="[second_assignment_mark]"]').value) || 0;
+        const thirdAssignmentMark = parseFloat(row.querySelector('input[name$="[third_assignment_mark]"]').value) || 0;
+        
+        // Calculate average of ONLY the three assignment marks (NOT including attendance)
+        const assignmentMark = (firstAssignmentMark + secondAssignmentMark + thirdAssignmentMark) / 3;
+        const midtermMark = parseFloat(row.querySelector('input[name$="[midterm_mark]"]').value) || 0;
+        total += assignmentMark + midtermMark;
+        
+        // Update the average assignment mark display
+        const averageAssignmentCell = row.querySelector('.assignment-average-value');
+        console.log('Debug - First:', firstAssignmentMark, 'Second:', secondAssignmentMark, 'Third:', thirdAssignmentMark);
+        console.log('Debug - Calculated assignmentMark (average):', assignmentMark);
+        console.log('Debug - Found averageAssignmentCell:', averageAssignmentCell);
+        if (averageAssignmentCell) {
+            console.log('Debug - Current average cell value:', averageAssignmentCell.textContent);
+            averageAssignmentCell.textContent = assignmentMark.toFixed(2);
+            console.log('Debug - Updated average to:', assignmentMark.toFixed(2));
         } else {
-            const firstAssignmentMark = parseFloat(row.querySelector('input[name$="[first_assignment_mark]"]').value) || 0;
-            const secondAssignmentMark = parseFloat(row.querySelector('input[name$="[second_assignment_mark]"]').value) || 0;
-            const thirdAssignmentMark = parseFloat(row.querySelector('input[name$="[third_assignment_mark]"]').value) || 0;
-            
-            // Calculate average of ONLY the three assignment marks (NOT including attendance)
-            const assignmentMark = (firstAssignmentMark + secondAssignmentMark + thirdAssignmentMark) / 3;
-            const midtermMark = parseFloat(row.querySelector('input[name$="[midterm_mark]"]').value) || 0;
-            total += assignmentMark + midtermMark;
-            
-            // Update the average assignment mark display
-            const averageAssignmentCell = row.querySelector('.assignment-average-value');
-            console.log('Debug - First:', firstAssignmentMark, 'Second:', secondAssignmentMark, 'Third:', thirdAssignmentMark);
-            console.log('Debug - Calculated assignmentMark (average):', assignmentMark);
-            console.log('Debug - Found averageAssignmentCell:', averageAssignmentCell);
-            if (averageAssignmentCell) {
-                console.log('Debug - Current average cell value:', averageAssignmentCell.textContent);
-                averageAssignmentCell.textContent = assignmentMark.toFixed(2);
-                console.log('Debug - Updated average to:', assignmentMark.toFixed(2));
-            } else {
-                console.log('Debug - Could not find .assignment-average-value');
+            console.log('Debug - Could not find .assignment-average-value');
             }
         }
     }
@@ -1471,17 +1680,17 @@ function saveCAMarks() {
         } else {
             const attendanceMark = parseFloat(row.querySelector('input[name$="[attendance_mark]"]').value);
             marks['attendance_mark'] = attendanceMark; // This will be auto-calculated on the server
-            
-            if (isLabCourse) {
-                marks['first_lab_assignment_mark'] = parseFloat(row.querySelector('input[name$="[first_lab_assignment_mark]"]').value);
-                marks['second_lab_assignment_mark'] = parseFloat(row.querySelector('input[name$="[second_lab_assignment_mark]"]').value);
-                marks['third_lab_assignment_mark'] = parseFloat(row.querySelector('input[name$="[third_lab_assignment_mark]"]').value);
-                marks['lab_practical_mark'] = parseFloat(row.querySelector('input[name$="[lab_practical_mark]"]').value);
-            } else {
-                marks['first_assignment_mark'] = parseFloat(row.querySelector('input[name$="[first_assignment_mark]"]').value);
-                marks['second_assignment_mark'] = parseFloat(row.querySelector('input[name$="[second_assignment_mark]"]').value);
-                marks['third_assignment_mark'] = parseFloat(row.querySelector('input[name$="[third_assignment_mark]"]').value);
-                marks['midterm_mark'] = parseFloat(row.querySelector('input[name$="[midterm_mark]"]').value);
+
+        if (isLabCourse) {
+            marks['first_lab_assignment_mark'] = parseFloat(row.querySelector('input[name$="[first_lab_assignment_mark]"]').value);
+            marks['second_lab_assignment_mark'] = parseFloat(row.querySelector('input[name$="[second_lab_assignment_mark]"]').value);
+            marks['third_lab_assignment_mark'] = parseFloat(row.querySelector('input[name$="[third_lab_assignment_mark]"]').value);
+            marks['lab_practical_mark'] = parseFloat(row.querySelector('input[name$="[lab_practical_mark]"]').value);
+        } else {
+            marks['first_assignment_mark'] = parseFloat(row.querySelector('input[name$="[first_assignment_mark]"]').value);
+            marks['second_assignment_mark'] = parseFloat(row.querySelector('input[name$="[second_assignment_mark]"]').value);
+            marks['third_assignment_mark'] = parseFloat(row.querySelector('input[name$="[third_assignment_mark]"]').value);
+            marks['midterm_mark'] = parseFloat(row.querySelector('input[name$="[midterm_mark]"]').value);
             }
         }
         studentsData[studentId] = marks;

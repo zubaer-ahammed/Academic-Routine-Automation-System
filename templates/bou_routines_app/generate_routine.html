@@ -571,13 +571,16 @@
                     <div class="col-md-6">
                         <form id="pdfExportForm" method="get" action="{% url 'export-to-pdf' selected_semester_id %}" style="display:inline;">
                             <input type="hidden" name="teacher_short_name_newline" id="pdfTeacherShortNameNewline" value="1">
+                            {% if selected_centre_id %}
+                            <input type="hidden" name="centre" value="{{ selected_centre_id }}">
+                            {% endif %}
                             <button type="submit" class="btn btn-danger w-100">
                                 <i class="bi bi-file-earmark-pdf"></i> Download Routine as PDF
                             </button>
                         </form>
                     </div>
                     <div class="col-md-6">
-                        <a href="{% url 'export-to-excel' selected_semester_id %}" class="btn btn-success w-100">
+                        <a href="{% url 'export-to-excel' selected_semester_id %}{% if selected_centre_id %}?centre={{ selected_centre_id }}{% endif %}" class="btn btn-success w-100">
                             <i class="bi bi-file-earmark-excel"></i> Download Routine as Excel
                         </a>
                     </div>
@@ -1035,14 +1038,29 @@
                         select.empty().append(firstOption);
                     });
 
-                    // Fetch courses for the selected semester
+                    // Get centre and curriculum IDs for filtering
+                    const centreId = $('#centre').val();
+                    const curriculumId = $('#curriculum').val();
+                    console.log('loadSemesterCourses - Centre ID:', centreId, 'Curriculum ID:', curriculumId, 'Semester ID:', semesterId);
+                    
+                    // Fetch courses for the selected semester (filtered by centre and curriculum)
+                    const ajaxData = {
+                        'semester_id': semesterId
+                    };
+                    if (centreId) {
+                        ajaxData['centre_id'] = centreId;
+                    }
+                    if (curriculumId) {
+                        ajaxData['curriculum_id'] = curriculumId;
+                    }
+                    console.log('loadSemesterCourses - AJAX Data:', ajaxData);
+                    
                     $.ajax({
                         url: "{% url 'get-semester-courses' %}",
-                        data: {
-                            'semester_id': semesterId
-                        },
+                        data: ajaxData,
                         dataType: 'json',
                         success: function(data) {
+                            console.log('loadSemesterCourses - Received courses:', data.courses ? data.courses.length : 0, 'courses');
                             if (data.courses && data.courses.length > 0) {
                                 // Create options for each course
                                 const options = data.courses.map(course =>
@@ -1361,6 +1379,15 @@
                 }
             });
 
+            // Handle centre or curriculum change - reload courses if semester is already selected
+            $('#centre, #curriculum').change(function() {
+                const semesterId = $('#semester').val();
+                if (semesterId) {
+                    // Reload courses with the new centre/curriculum filter
+                    loadSemesterCourses(semesterId);
+                }
+            });
+
             // Handle semester change
             $('#semester').change(function() {
                 const semesterId = $(this).val();
@@ -1602,6 +1629,47 @@
                 // Append the new row
                 $('#courseRepeater').append($newRow);
 
+                // Clear and reload course options for the new row (filtered by centre)
+                const $courseSelect = $newRow.find('.course-select');
+                $courseSelect.empty();
+                $courseSelect.append('<option value="">Select Course</option>');
+                
+                // Reload courses filtered by centre and curriculum
+                const semesterId = $('#semester').val();
+                if (semesterId) {
+                    const centreId = $('#centre').val();
+                    const curriculumId = $('#curriculum').val();
+                    console.log('Add Course - Centre ID:', centreId, 'Curriculum ID:', curriculumId, 'Semester ID:', semesterId);
+                    const ajaxData = {
+                        'semester_id': semesterId
+                    };
+                    if (centreId) {
+                        ajaxData['centre_id'] = centreId;
+                    }
+                    if (curriculumId) {
+                        ajaxData['curriculum_id'] = curriculumId;
+                    }
+                    console.log('Add Course - AJAX Data:', ajaxData);
+                    
+                    $.ajax({
+                        url: "{% url 'get-semester-courses' %}",
+                        data: ajaxData,
+                        dataType: 'json',
+                        success: function(data) {
+                            console.log('Add Course - Received courses:', data.courses ? data.courses.length : 0, 'courses');
+                            if (data.courses && data.courses.length > 0) {
+                                const options = data.courses.map(course =>
+                                    `<option value="${course.id}" data-teacher-id="${course.teacher_id}">${course.code} - ${course.name} (${course.teacher_name})</option>`
+                                );
+                                $courseSelect.append(options.join(''));
+                            }
+                        },
+                        error: function(xhr, status, error) {
+                            console.error('Add Course - Error:', error, 'Response:', xhr.responseText);
+                        }
+                    });
+                }
+
                 // Re-initialize time pickers on the new row
                 $newRow.find('.mdtimepicker').mdtimepicker({
                     format: 'hh:mm',
@@ -1645,12 +1713,26 @@
                     return;
                 }
                 
-                // Fetch semester courses via AJAX
+                // Fetch semester courses via AJAX (filtered by centre and curriculum)
+                const centreId = $('#centre').val();
+                console.log('Inline Edit - Centre ID:', centreId, 'Curriculum ID:', curriculumId, 'Semester ID:', semesterId);
+                const ajaxData = {
+                    'semester_id': semesterId
+                };
+                if (centreId) {
+                    ajaxData['centre_id'] = centreId;
+                }
+                if (curriculumId) {
+                    ajaxData['curriculum_id'] = curriculumId;
+                }
+                console.log('Inline Edit - AJAX Data:', ajaxData);
+                
                 $.ajax({
                     url: "{% url 'get-semester-courses' %}",
-                    data: { 'semester_id': semesterId },
+                    data: ajaxData,
                     dataType: 'json',
                     success: function(data) {
+                        console.log('Inline Edit - Received courses:', data.courses ? data.courses.length : 0, 'courses');
                         const select = cell.find('.course-select-edit');
                         select.empty();
                         select.append('<option value="">Select Course</option>');
@@ -1935,13 +2017,23 @@
         });
 
         // Ensure the PDF export form submits the correct teacher short name option
-        document.getElementById('pdfExportForm').addEventListener('submit', function(e) {
-            var checked = document.getElementById('teacherShortNameNewline').checked;
-            document.getElementById('pdfTeacherShortNameNewline').value = checked ? '1' : '0';
-        });
+        var pdfExportForm = document.getElementById('pdfExportForm');
+        if (pdfExportForm) {
+            pdfExportForm.addEventListener('submit', function(e) {
+                var teacherShortNameCheckbox = document.getElementById('teacherShortNameNewline');
+                var pdfTeacherShortNameInput = document.getElementById('pdfTeacherShortNameNewline');
+                if (teacherShortNameCheckbox && pdfTeacherShortNameInput) {
+                    pdfTeacherShortNameInput.value = teacherShortNameCheckbox.checked ? '1' : '0';
+                }
+            });
+        }
 
         // On page load, set the PDF export hidden input to match the checkbox
-        document.getElementById('pdfTeacherShortNameNewline').value = document.getElementById('teacherShortNameNewline').checked ? '1' : '0';
+        var pdfTeacherShortNameInput = document.getElementById('pdfTeacherShortNameNewline');
+        var teacherShortNameCheckbox = document.getElementById('teacherShortNameNewline');
+        if (pdfTeacherShortNameInput && teacherShortNameCheckbox) {
+            pdfTeacherShortNameInput.value = teacherShortNameCheckbox.checked ? '1' : '0';
+        }
     </script>
     <script>
     document.addEventListener('DOMContentLoaded', function() {

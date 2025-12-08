@@ -432,7 +432,21 @@ def generate_routine(request):
     if request.method == "POST":
         save_only = request.POST.get("save_only") == "1"
         print("DEBUG save_only value:", request.POST.get("save_only"))
+        # Get semester from POST, but also check if curriculum and centre are in POST
         selected_semester_id = request.POST.get("semester")
+        # Update selected_curriculum_id and selected_centre_id from POST if present
+        if request.POST.get("curriculum"):
+            try:
+                selected_curriculum_id = int(request.POST.get("curriculum"))
+                selected_curriculum = Curriculum.objects.get(id=selected_curriculum_id)
+            except (Curriculum.DoesNotExist, ValueError):
+                pass
+        if request.POST.get("centre"):
+            try:
+                selected_centre_id = int(request.POST.get("centre"))
+                selected_centre = Centre.objects.get(id=selected_centre_id)
+            except (Centre.DoesNotExist, ValueError):
+                pass
         date_range = request.POST.get("date_range")
         days = request.POST.getlist("day[]")
         start_times = request.POST.getlist("start_time[]")
@@ -571,19 +585,40 @@ def generate_routine(request):
             # Get the teacher for this course from SemesterCourse
             try:
                 course = Course.objects.get(id=course_id)
-                # Get teacher from SemesterCourse for the selected semester
-                semester_course = SemesterCourse.objects.filter(
+                # Get teacher from SemesterCourse for the selected semester and centre
+                semester_course_query = SemesterCourse.objects.filter(
                     semester=selected_semester,
                     course=course
-                ).select_related('teacher').first()
+                ).select_related('teacher')
+                
+                # Filter by centre if selected
+                if selected_centre:
+                    semester_course_query = semester_course_query.filter(centre=selected_centre)
+                
+                semester_course = semester_course_query.first()
                 
                 if semester_course and semester_course.teacher:
                     teacher_id = semester_course.teacher.id
                 
                 # Only check for routines with the same teacher, same day, and overlapping time
                 # But exclude the course we're currently checking
+                    # Filter by semester and centre (via SemesterCourse)
                     # Note: We need to check routines by their teacher property, not course__teacher
-                    for routine in CurrentRoutine.objects.filter(day=day).exclude(course_id=course_id):
+                    routines_query = CurrentRoutine.objects.filter(
+                        day=day,
+                        semester=selected_semester
+                    ).exclude(course_id=course_id)
+                    
+                    # Filter by centre: only check routines where the course has a SemesterCourse for the selected centre
+                    if selected_centre:
+                        # Get course IDs that have SemesterCourse for the selected centre
+                        centre_course_ids = SemesterCourse.objects.filter(
+                            semester=selected_semester,
+                            centre=selected_centre
+                        ).values_list('course_id', flat=True)
+                        routines_query = routines_query.filter(course_id__in=centre_course_ids)
+                    
+                    for routine in routines_query:
                         if routine.teacher and routine.teacher.id == teacher_id:
                             if time_overlap(start, end, routine.start_time, routine.end_time):
                                 # Create a unique key for this conflict to avoid duplicates
@@ -604,6 +639,18 @@ def generate_routine(request):
                 
         if overlap_conflicts:
             messages.error(request, "Time conflicts detected. Please resolve all overlaps before generating a routine.")
+            # Re-filter semesters and courses based on selected curriculum (in case they changed)
+            if selected_curriculum:
+                semesters = Semester.objects.filter(curriculum=selected_curriculum).order_by('name')
+                courses = Course.objects.filter(curriculum=selected_curriculum).order_by('code')
+            else:
+                semesters = Semester.objects.all().order_by('name')
+                courses = Course.objects.all().order_by('code')
+            # Re-filter teachers based on selected centre
+            if selected_centre:
+                teachers = Teacher.objects.filter(centre=selected_centre).order_by('name')
+            else:
+                teachers = Teacher.objects.all().order_by('name')
             return render(request, "bou_routines_app/generate_routine.html", {
                 "semesters": semesters,
                 "courses": courses,
@@ -611,6 +658,13 @@ def generate_routine(request):
                 "generated_routines": generated_routines,
                 "overlap_conflicts": overlap_conflicts,
                 "form_rows": form_rows,
+                "curricula": curricula,
+                "selected_curriculum": selected_curriculum,
+                "selected_curriculum_id": selected_curriculum_id,
+                "centres": centres,
+                "selected_centre": selected_centre,
+                "selected_centre_id": selected_centre_id,
+                "selected_semester_id": selected_semester_id,
             })
         
         # No overlaps, continue with routine generation
@@ -624,6 +678,13 @@ def generate_routine(request):
                     "courses": courses,
                     "teachers": teachers,
                     "error": "Please provide a date range",
+                    "curricula": curricula,
+                    "selected_curriculum": selected_curriculum,
+                    "selected_curriculum_id": selected_curriculum.id if selected_curriculum else None,
+                    "centres": centres,
+                    "selected_centre": selected_centre,
+                    "selected_centre_id": selected_centre.id if selected_centre else None,
+                    "selected_semester_id": selected_semester_id,
                 })
             
             # Check if there are courses for this semester
@@ -634,6 +695,13 @@ def generate_routine(request):
                     "semesters": semesters,
                     "courses": courses,
                     "teachers": teachers,
+                    "curricula": curricula,
+                    "selected_curriculum": selected_curriculum,
+                    "selected_curriculum_id": selected_curriculum.id if selected_curriculum else None,
+                    "centres": centres,
+                    "selected_centre": selected_centre,
+                    "selected_centre_id": selected_centre.id if selected_centre else None,
+                    "selected_semester_id": selected_semester_id,
                 })
                 
             start_date_str, end_date_str = date_range.split(' - ')
@@ -729,6 +797,7 @@ def generate_routine(request):
                     'end_time': end_time_str if slot_minutes else None,
                     'day': days[i] if slot_minutes else None,
                     'course': sc.course,
+                    'semester_course': sc,  # Store SemesterCourse to access teacher
                 }
 
             # Build a set of makeup/reserve dates
@@ -779,6 +848,11 @@ def generate_routine(request):
                             'end_time': datetime.strptime(limit['end_time'], "%H:%M").time()
                         }
                     )
+                    # Get teacher from SemesterCourse
+                    teacher_name = 'N/A'
+                    if limit.get('semester_course') and limit['semester_course'].teacher:
+                        teacher_name = limit['semester_course'].teacher.name
+                    
                     generated_routines.append({
                         'id': None,
                         'course_id': limit['course'].id,
@@ -786,7 +860,7 @@ def generate_routine(request):
                         'day': limit['day'],
                         'course_code': limit['course'].code,
                         'course_name': limit['course'].name,
-                        'teacher': limit['course'].teacher.name,
+                        'teacher': teacher_name,
                         'start_time': limit['start_time'],
                         'end_time': limit['end_time']
                     })
@@ -1040,7 +1114,13 @@ def generate_routine(request):
                 "courses": courses,
                 "teachers": teachers,
                 "error": f"Error generating routines: {str(e)}",
-                "selected_semester_id": selected_semester_id
+                "selected_semester_id": selected_semester_id,
+                "curricula": curricula,
+                "selected_curriculum": selected_curriculum,
+                "selected_curriculum_id": selected_curriculum.id if selected_curriculum else None,
+                "centres": centres,
+                "selected_centre": selected_centre,
+                "selected_centre_id": selected_centre.id if selected_centre else None,
             })
 
     # Add selected_semester_id to the context if it was provided in POST
@@ -1322,9 +1402,13 @@ def get_semester_courses(request):
                 # Filter by centre if provided
                 if centre_id:
                     try:
+                        # Convert to int to ensure proper comparison
+                        centre_id = int(centre_id)
                         centre = Centre.objects.get(id=centre_id)
                         semester_courses = semester_courses.filter(centre=centre)
-                    except Centre.DoesNotExist:
+                        print(f"DEBUG: Filtering by centre_id={centre_id}, found {semester_courses.count()} courses")
+                    except (Centre.DoesNotExist, ValueError):
+                        print(f"DEBUG: Centre not found or invalid centre_id: {centre_id}")
                         pass
                 
                 # Filter by curriculum if provided
@@ -1335,14 +1419,25 @@ def get_semester_courses(request):
                     except Curriculum.DoesNotExist:
                         pass
                 
-                courses_data = [{
+                # Build courses_data, ensuring we only return one entry per course
+                # If centre is filtered, we'll only get one entry per course anyway
+                # But if not filtered, we need to deduplicate by course.id
+                courses_dict = {}
+                for sc in semester_courses:
+                    course_id = sc.course.id
+                    # If centre is filtered, we only want courses for that centre
+                    # If not filtered, we'll take the first occurrence of each course
+                    if course_id not in courses_dict:
+                        courses_dict[course_id] = {
                     'id': sc.course.id,
                     'code': sc.course.code,
                     'name': sc.course.name,
-                    'teacher_name': sc.effective_teacher.name if sc.effective_teacher else 'N/A',
-                    'teacher_id': sc.effective_teacher.id if sc.effective_teacher else None,
+                            'teacher_name': sc.effective_teacher.name if sc.effective_teacher else 'N/A',
+                            'teacher_id': sc.effective_teacher.id if sc.effective_teacher else None,
                     'number_of_classes': sc.number_of_classes
-                } for sc in semester_courses]
+                        }
+                
+                courses_data = list(courses_dict.values())
                 lunch_break_info = None
                 if semester.lunch_break_start and semester.lunch_break_end:
                     lunch_break_info = {
@@ -1665,6 +1760,15 @@ def export_to_excel(request, semester_id):
     """Export the routine to Excel file"""
     try:
         selected_semester = Semester.objects.get(id=semester_id)
+        
+        # Get centre from request parameter
+        centre_id = request.GET.get('centre')
+        centre = None
+        if centre_id:
+            try:
+                centre = Centre.objects.get(id=centre_id)
+            except Centre.DoesNotExist:
+                pass
 
         # Create a response for Excel file
         output = io.BytesIO()
@@ -1824,9 +1928,34 @@ def export_to_excel(request, semester_id):
             routines_for_row = []
             for r in routines:
                 if r.class_date == date and r.day == day:
+                    # Get teacher from SemesterCourse for the selected centre
+                    teacher_name = 'N/A'
+                    if r.course.code == 'CSE4246':
+                        teacher_name = 'Supervisor'
+                    else:
+                        # Get SemesterCourse for this course, semester, and centre
+                        semester_course = None
+                        if centre:
+                            semester_course = SemesterCourse.objects.filter(
+                                semester=selected_semester,
+                                course=r.course,
+                                centre=centre
+                            ).select_related('teacher').first()
+                        
+                        # Fallback if centre not provided or not found
+                        if not semester_course:
+                            semester_course = SemesterCourse.objects.filter(
+                                semester=selected_semester,
+                                course=r.course
+                            ).select_related('teacher').first()
+                        
+                        if semester_course and semester_course.teacher:
+                            teacher = semester_course.teacher
+                            teacher_name = teacher.short_name if teacher.short_name else teacher.name
+                    
                     routines_for_row.append({
                         'course_code': r.course.code,
-                        'teacher': 'Supervisor' if r.course.code == 'CSE4246' else (r.teacher.short_name if r.teacher and r.teacher.short_name else (r.teacher.name if r.teacher else 'N/A')),
+                        'teacher': teacher_name,
                         'start_time': r.start_time.strftime('%H:%M'),
                         'end_time': r.end_time.strftime('%H:%M'),
                         'is_lunch_break': False
@@ -2056,6 +2185,7 @@ def export_to_pdf(request, semester_id):
         selected_semester = Semester.objects.get(id=semester_id)
         # Get centre from request parameter
         centre_id = request.GET.get('centre')
+        centre = None
         centre_name = ''
         if centre_id:
             try:
@@ -2306,8 +2436,19 @@ def export_to_pdf(request, semester_id):
         elements.append(two_col_table)
         elements.append(Spacer(1, 4))  # Reduced from 16
 
-        # Get the routines from the database
-        routines = NewRoutine.objects.filter(semester=selected_semester).order_by('class_date', 'start_time')
+        # Get the routines from the database, filtered by centre if provided
+        routines = NewRoutine.objects.filter(semester=selected_semester)
+        
+        # Filter by centre: only include routines where the course has a SemesterCourse for the selected centre
+        if centre:
+            # Get course IDs that have SemesterCourse for the selected centre
+            centre_course_ids = SemesterCourse.objects.filter(
+                semester=selected_semester,
+                centre=centre
+            ).values_list('course_id', flat=True)
+            routines = routines.filter(course_id__in=centre_course_ids)
+        
+        routines = routines.order_by('class_date', 'start_time')
 
         # Get unique dates and days
         unique_dates_days = []
@@ -2408,9 +2549,39 @@ def export_to_pdf(request, semester_id):
             routines_for_row = []
             for r in routines:
                 if r.class_date == date:
+                    # Get teacher from SemesterCourse for the selected centre
+                    teacher_name = 'N/A'
+                    teacher_short_name = None
+                    if r.course.code == 'CSE4246':
+                        teacher_name = 'Supervisor'
+                    else:
+                        # Get SemesterCourse for this course, semester, and centre
+                        semester_course = None
+                        if centre:
+                            semester_course = SemesterCourse.objects.filter(
+                                semester=selected_semester,
+                                course=r.course,
+                                centre=centre
+                            ).select_related('teacher').first()
+                            # Skip this routine if it doesn't have a SemesterCourse for the selected centre
+                            if not semester_course:
+                                continue
+                        else:
+                            # Only use fallback if centre is not provided
+                            semester_course = SemesterCourse.objects.filter(
+                                semester=selected_semester,
+                                course=r.course
+                            ).select_related('teacher').first()
+                        
+                        if semester_course and semester_course.teacher:
+                            teacher = semester_course.teacher
+                            teacher_short_name = teacher.short_name
+                            teacher_name = teacher.short_name if teacher.short_name else teacher.name
+                    
                     routines_for_row.append({
                         'course_code': r.course.code,
-                        'teacher': 'Supervisor' if r.course.code == 'CSE4246' else (r.teacher.short_name if r.teacher and r.teacher.short_name else (r.teacher.name if r.teacher else 'N/A')),
+                        'teacher': teacher_name,
+                        'teacher_short_name': teacher_short_name,
                         'start_time': r.start_time.strftime('%H:%M'),
                         'end_time': r.end_time.strftime('%H:%M'),
                         'is_lunch_break': False
@@ -2622,8 +2793,12 @@ def export_to_pdf(request, semester_id):
         elements.append(Spacer(1, 6))  # Gap below the N.B. note
         elements.append(Paragraph("<br/>", styles['Normal']))
 
-        # Add the summary table of semester courses
+        # Add the summary table of semester courses, filtered by centre if provided
         semester_courses = SemesterCourse.objects.filter(semester=selected_semester).select_related('course', 'teacher')
+        
+        # Filter by centre if provided
+        if centre:
+            semester_courses = semester_courses.filter(centre=centre)
         summary_data = [[
             'Course Code', 'Title', 'Number of Class', 'Course Teacher'
         ]]
@@ -3923,7 +4098,7 @@ def attendance_calendar(request):
             if selected_centre_id:
                 courses_queryset = courses_queryset.filter(
                     semestercourse__centre_id=selected_centre_id
-                ).distinct()
+            ).distinct()
     
     context = {
         'teacher': teacher,
@@ -4138,7 +4313,7 @@ def attendance_calendar(request):
                     print(f"DEBUG: Found SemesterCourse with number_of_classes: {number_of_classes}")
                 else:
                     number_of_classes = len(semester_dates)  # Fallback to number of dates
-                    print(f"DEBUG: No SemesterCourse found, using fallback: {number_of_classes}")
+                print(f"DEBUG: No SemesterCourse found, using fallback: {number_of_classes}")
             except Exception as e:
                 number_of_classes = len(semester_dates)  # Fallback to number of dates
                 print(f"DEBUG: Error getting SemesterCourse: {e}, using fallback: {number_of_classes}")
@@ -4206,7 +4381,7 @@ def attendance_calendar(request):
             allowed_date_range = None
             if allowed_start_date and allowed_end_date:
                 allowed_date_range = (allowed_start_date, allowed_end_date)
-            
+
             context.update({
                 'semester': semester,
                 'course': course,

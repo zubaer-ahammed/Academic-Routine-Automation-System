@@ -431,6 +431,12 @@
         color: white;
     }
 
+    .badge-warning {
+        background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
+        color: #000000 !important;
+        font-weight: 600;
+    }
+
     .badge-primary {
         background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
         color: white;
@@ -1168,9 +1174,11 @@
                                             <option value="teacher2" {% if teacher_role == 'teacher2' %}selected{% endif %}>
                                                 {% if teacher2_evaluator %}{{ teacher2_evaluator.name }} (Second Evaluator - DUET){% else %}Teacher 2 (Second Evaluator - DUET){% endif %}
                                             </option>
+                                            {% if is_admin %}
                                             <option value="teacher3" {% if teacher_role == 'teacher3' %}selected{% endif %}>
                                                 {% if teacher3_evaluator %}{{ teacher3_evaluator.name }} (Third Evaluator){% else %}Teacher 3 (Third Evaluator - TBD){% endif %}
                                             </option>
+                                            {% endif %}
                                         </select>
                                     {% else %}
                                         <label for="teacher-role"><strong>Your Role:</strong></label>
@@ -1181,9 +1189,11 @@
                                             <option value="teacher2" {% if teacher_role == 'teacher2' %}selected{% endif %}>
                                                 {% if teacher2_evaluator %}{{ teacher2_evaluator.name }} (Second Evaluator - DUET){% else %}Teacher 2 (Second Evaluator - DUET){% endif %}
                                             </option>
+                                            {% if is_admin %}
                                             <option value="teacher3" {% if teacher_role == 'teacher3' %}selected{% endif %}>
                                                 {% if teacher3_evaluator %}{{ teacher3_evaluator.name }} (Third Evaluator){% else %}Teacher 3 (Third Evaluator - TBD){% endif %}
                                             </option>
+                                            {% endif %}
                                         </select>
                                         <input type="hidden" id="hidden-teacher-role" value="{{ teacher_role }}">
                                         <p class="mt-2 mb-0"><small class="text-info"><i class="fas fa-info-circle"></i> You can only view and enter marks for your assigned evaluator role.</small></p>
@@ -1358,6 +1368,11 @@
                                                         </td>
                                                     {% endif %}
                                                     
+                                                    <td class="total-mark">
+                                                        <span id="final-exam-total-{{ student.id }}">
+                                                            {% if final_mark %}{{ final_mark.final_exam_total|floatformat:2 }}{% else %}0.00{% endif %}
+                                                        </span>
+                                                    </td>
                                                     <td>
                                                         <input type="text" 
                                                                name="students_data[{{ student.id }}][notes]"
@@ -1397,6 +1412,60 @@
 </div>
 
 <script>
+// Tab persistence: preserve selected tab in URL and restore on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Get tab parameter from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const activeTab = urlParams.get('tab');
+    
+    // If tab parameter exists, activate that tab
+    if (activeTab === 'final-exam') {
+        // Remove active class from CA Marks tab
+        const caMarksTab = document.getElementById('ca-marks-tab');
+        const caMarksPane = document.getElementById('ca-marks');
+        const finalExamTab = document.getElementById('final-exam-tab');
+        const finalExamPane = document.getElementById('final-exam');
+        
+        if (caMarksTab && caMarksPane && finalExamTab && finalExamPane) {
+            caMarksTab.classList.remove('active');
+            caMarksTab.setAttribute('aria-selected', 'false');
+            caMarksPane.classList.remove('show', 'active');
+            
+            finalExamTab.classList.add('active');
+            finalExamTab.setAttribute('aria-selected', 'true');
+            finalExamPane.classList.add('show', 'active');
+        }
+    }
+    
+    // Add event listeners to tabs to update URL when switched
+    const caMarksTab = document.getElementById('ca-marks-tab');
+    const finalExamTab = document.getElementById('final-exam-tab');
+    
+    if (caMarksTab) {
+        caMarksTab.addEventListener('shown.bs.tab', function() {
+            updateURLParameter('tab', 'ca-marks');
+        });
+    }
+    
+    if (finalExamTab) {
+        finalExamTab.addEventListener('shown.bs.tab', function() {
+            updateURLParameter('tab', 'final-exam');
+        });
+    }
+});
+
+// Function to update URL parameter without reloading
+function updateURLParameter(key, value) {
+    const url = new URL(window.location);
+    if (value === 'ca-marks') {
+        // Remove tab parameter for default tab (CA Marks)
+        url.searchParams.delete('tab');
+    } else {
+        url.searchParams.set(key, value);
+    }
+    window.history.replaceState({}, '', url);
+}
+
 // Function to load semesters for a selected curriculum and centre
 function loadSemestersForCurriculum(curriculumId, preserveSemesterId = null, centreId = null) {
     const centreSelect = document.getElementById('centre');

@@ -6128,74 +6128,44 @@ def ca_management(request):
             # Add effective teacher to context for template use
             context['course_teacher'] = course_teacher
             
-            # Find teachers for this course from different centres
-            # Teacher 1 is from DRC, Teacher 2 is from DUET
+            # Find teachers for this course from SemesterCourse table
+            # Teacher 1 (First Evaluator) is from DRC centre
+            # Teacher 2 (Second Evaluator) is from DUET centre
+            # ALWAYS get teachers from SemesterCourse for the selected course and semester
+            # (Don't use existing marks as they might have wrong evaluators)
             drc_centre = Centre.objects.filter(code='DRC').first()
             duet_centre = Centre.objects.filter(code='DUET').first()
             
-            # First, check existing marks to see which teachers are assigned as evaluators
+            # Get Teacher 1 (First Evaluator) from SemesterCourse for DRC centre
+            if drc_centre:
+                drc_semester_course = SemesterCourse.objects.filter(
+                    semester=semester,
+                    course=course,
+                    centre=drc_centre
+                ).select_related('teacher').first()
+                
+                if drc_semester_course and drc_semester_course.teacher:
+                    teacher1_evaluator_obj = drc_semester_course.teacher
+            
+            # Get Teacher 2 (Second Evaluator) from SemesterCourse for DUET centre
+            if duet_centre:
+                duet_semester_course = SemesterCourse.objects.filter(
+                    semester=semester,
+                    course=course,
+                    centre=duet_centre
+                ).select_related('teacher').first()
+                
+                if duet_semester_course and duet_semester_course.teacher:
+                    teacher2_evaluator_obj = duet_semester_course.teacher
+            
+            # For Teacher 3, check existing marks (only Teacher 3 can be manually assigned)
             sample_mark = FinalExamMark.objects.filter(
                 course=course,
                 semester=semester
             ).first()
             
-            if sample_mark:
-                # Use evaluators from existing marks if available
-                if sample_mark.teacher1_evaluator:
-                    teacher1_evaluator_obj = sample_mark.teacher1_evaluator
-                if sample_mark.teacher2_evaluator:
-                    teacher2_evaluator_obj = sample_mark.teacher2_evaluator
-                if sample_mark.teacher3_evaluator:
-                    teacher3_evaluator_obj = sample_mark.teacher3_evaluator
-            
-            # If not found in marks, find teachers from the same course in different centre semesters
-            # The same course is taught in both DRC and DUET semesters
-            # Teacher 1 must be from DRC, Teacher 2 must be from DUET
-            if not teacher1_evaluator_obj and drc_centre:
-                # Find the course in DRC centre for this semester
-                drc_semester_course = SemesterCourse.objects.filter(
-                    semester=semester,
-                    course__code=course.code,
-                    course__curriculum=course.curriculum,
-                    centre=drc_centre
-                ).select_related('teacher', 'teacher__centre').first()
-                
-                if drc_semester_course and drc_semester_course.teacher:
-                    # Verify the teacher is actually from DRC centre
-                    if drc_semester_course.teacher.centre == drc_centre:
-                        teacher1_evaluator_obj = drc_semester_course.teacher
-            
-            if not teacher2_evaluator_obj and duet_centre:
-                # Find the course in DUET centre for this semester
-                duet_semester_course = SemesterCourse.objects.filter(
-                    semester=semester,
-                    course__code=course.code,
-                    course__curriculum=course.curriculum,
-                    centre=duet_centre
-                ).select_related('teacher', 'teacher__centre').first()
-                
-                if duet_semester_course and duet_semester_course.teacher:
-                    # Verify the teacher is actually from DUET centre
-                    # Also ensure it's not the same teacher as teacher1
-                    if (duet_semester_course.teacher.centre == duet_centre and 
-                        duet_semester_course.teacher != teacher1_evaluator_obj):
-                        teacher2_evaluator_obj = duet_semester_course.teacher
-            
-            # If teacher2 is still not found and we have teacher1, try to find any teacher from DUET
-            # (in case the course doesn't exist in DUET but we need a second evaluator)
-            if not teacher2_evaluator_obj and teacher1_evaluator_obj and duet_centre:
-                # Find any teacher from DUET centre who teaches this course
-                duet_semester_course = SemesterCourse.objects.filter(
-                    semester=semester,
-                    course__code=course.code,
-                    course__curriculum=course.curriculum,
-                    centre=duet_centre
-                ).exclude(teacher=teacher1_evaluator_obj).select_related('teacher', 'teacher__centre').first()
-                
-                if duet_semester_course and duet_semester_course.teacher:
-                    if (duet_semester_course.teacher.centre == duet_centre and 
-                        duet_semester_course.teacher != teacher1_evaluator_obj):
-                        teacher2_evaluator_obj = duet_semester_course.teacher
+            if sample_mark and sample_mark.teacher3_evaluator:
+                teacher3_evaluator_obj = sample_mark.teacher3_evaluator
             
         except (Semester.DoesNotExist, Course.DoesNotExist):
             pass

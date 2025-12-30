@@ -691,27 +691,22 @@ class FinalExamMark(models.Model):
             # Lab course: use single field
             return Decimal(str(self.lab_final_exam_mark or 0))
         else:
-            # Theory course: use average of available teachers
-            totals = []
+            # Theory course logic:
+            # If discrepancy exists (difference > 20% or > 14 marks), use Teacher 3's mark
+            # Otherwise, use the maximum of Teacher 1 and Teacher 2
             
-            # If third teacher is required and has marks, use all three
-            if self.requires_third_teacher and self.teacher3_total > 0:
-                if self.teacher1_total > 0:
-                    totals.append(self.teacher1_total)
-                if self.teacher2_total > 0:
-                    totals.append(self.teacher2_total)
-                if self.teacher3_total > 0:
-                    totals.append(self.teacher3_total)
-            else:
-                # Use teacher1 and teacher2
-                if self.teacher1_total > 0:
-                    totals.append(self.teacher1_total)
-                if self.teacher2_total > 0:
-                    totals.append(self.teacher2_total)
+            teacher1_total = float(self.teacher1_total or 0)
+            teacher2_total = float(self.teacher2_total or 0)
+            teacher3_total = float(self.teacher3_total or 0)
             
-            if totals:
-                avg = sum(totals) / len(totals)
-                return Decimal(str(avg))
+            # If discrepancy exists and Teacher 3 has evaluated, use Teacher 3's mark
+            if self.requires_third_teacher and teacher3_total > 0:
+                return Decimal(str(teacher3_total))
+            
+            # If no discrepancy (or Teacher 3 not yet evaluated), use the maximum of Teacher 1 and Teacher 2
+            if teacher1_total > 0 or teacher2_total > 0:
+                return Decimal(str(max(teacher1_total, teacher2_total)))
+            
             return Decimal('0')
     
     def save(self, *args, **kwargs):

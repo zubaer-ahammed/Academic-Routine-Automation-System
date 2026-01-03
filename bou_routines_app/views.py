@@ -268,6 +268,23 @@ def generate_routine(request):
                                 if not date_already_exists:
                                     unique_dates.append((makeup_date, day_name))
 
+                    # Add mid-term exam dates to unique_dates for existing routines display
+                    if selected_semester.mid_term_exam_dates:
+                        mid_term_exam_dates = [
+                            datetime.strptime(date.strip(), "%Y-%m-%d").date()
+                            for date in selected_semester.mid_term_exam_dates.split(',')
+                            if date.strip()
+                        ]
+                        for mid_term_date in mid_term_exam_dates:
+                            day_name = mid_term_date.strftime('%A')
+                            # Only add Friday and Saturday mid-term exam dates
+                            if day_name in ['Friday', 'Saturday']:
+                                date_str = mid_term_date.strftime('%Y-%m-%d')
+                                # Check if this date is not already in unique_dates
+                                date_already_exists = any(date[0].strftime('%Y-%m-%d') == date_str for date in unique_dates)
+                                if not date_already_exists:
+                                    unique_dates.append((mid_term_date, day_name))
+
                     unique_dates.sort(key=lambda x: x[0])
 
                     # Build merged time slot structure
@@ -332,10 +349,29 @@ def generate_routine(request):
                             'is_lunch_break': True
                         }
 
+                    # Build a set of mid-term exam dates for existing routines display
+                    mid_term_exam_dates_set_existing = set()
+                    if selected_semester.mid_term_exam_dates:
+                        mid_term_exam_dates_list = [
+                            datetime.strptime(date.strip(), "%Y-%m-%d").date()
+                            for date in selected_semester.mid_term_exam_dates.split(',')
+                            if date.strip()
+                        ]
+                        mid_term_exam_dates_set_existing = set(mid_term_exam_dates_list)
+
                     routine_table_rows = []
                     for date, day in unique_dates:
                         row_cells = []
                         slot_idx = 0
+                        
+                        # Check if this is a mid-term exam date - if so, display "Mid-Term Exam" across entire row
+                        if date in mid_term_exam_dates_set_existing:
+                            # Create a single cell that spans all time slots
+                            total_colspan = len(slot_ranges)
+                            row_cells.append({'content': 'Mid-Term Exam', 'colspan': total_colspan, 'is_mid_term_exam': True})
+                            routine_table_rows.append({'date': date, 'day': day, 'cells': row_cells})
+                            continue  # Skip the rest of the loop for this date
+                        
                         routines = routines_by_date.get((date, day), [])
                         routines_for_row = routines.copy()
                         if lunch_break:
@@ -483,6 +519,14 @@ def generate_routine(request):
                 if makeup_dates:
                     # Save comma-separated list of makeup dates directly
                     selected_semester.makeup_dates = makeup_dates
+                # Process and save mid-term exam dates (only for new curriculum)
+                mid_term_exam_dates = request.POST.get('mid_term_exam_date_list')
+                if mid_term_exam_dates:
+                    # Save comma-separated list of mid-term exam dates directly
+                    selected_semester.mid_term_exam_dates = mid_term_exam_dates
+                elif mid_term_exam_dates == '':
+                    # Clear mid-term exam dates if empty string is sent
+                    selected_semester.mid_term_exam_dates = None
                 selected_semester.save()
                 #messages.success(request, f"Updated lunch break for {selected_semester.name} to {lunch_break_start} - {lunch_break_end}")
             except Exception as e:
@@ -774,6 +818,15 @@ def generate_routine(request):
                     if date.strip()
                 ]
 
+            # Get mid-term exam dates from the semester model (only for new curriculum)
+            mid_term_exam_dates = []
+            if selected_semester.mid_term_exam_dates:
+                mid_term_exam_dates = [
+                    datetime.strptime(date.strip(), "%Y-%m-%d").date()
+                    for date in selected_semester.mid_term_exam_dates.split(',')
+                    if date.strip()
+                ]
+
             # --- CLASS COUNT LIMIT LOGIC ---
             # Build a map: course_id -> (allowed_classes, is_lab, slot_minutes)
             course_limits = {}
@@ -805,8 +858,10 @@ def generate_routine(request):
             makeup_dates_set = set(makeup_dates)
             # Build a set of holiday dates
             holiday_dates_set = set(holiday_dates)
+            # Build a set of mid-term exam dates
+            mid_term_exam_dates_set = set(mid_term_exam_dates)
 
-            # For each course, build a list of all valid dates (Fridays/Saturdays, not in makeup_dates, not in holidays, not after end_date)
+            # For each course, build a list of all valid dates (Fridays/Saturdays, not in makeup_dates, not in holidays, not in mid_term_exam_dates, not after end_date)
             for course_id, limit in course_limits.items():
                 if not limit['slot_minutes']:
                     continue  # skip if no slot info
@@ -821,7 +876,7 @@ def generate_routine(request):
                 valid_dates = []
                 current_date = start_date
                 while current_date <= end_date:
-                    if current_date in makeup_dates_set or current_date in holiday_dates_set:
+                    if current_date in makeup_dates_set or current_date in holiday_dates_set or current_date in mid_term_exam_dates_set:
                         current_date += timedelta(days=1)
                         continue
                     if current_date.strftime('%A') == limit['day']:
@@ -900,7 +955,21 @@ def generate_routine(request):
                             if not date_already_exists:
                                 unique_dates.append((makeup_date, day_name))
 
-                # Sort again after adding makeup dates
+            # Add mid-term exam dates to unique_dates as blank rows (only date and day, no classes)
+            if mid_term_exam_dates:
+                for mid_term_date in mid_term_exam_dates:
+                    # Only add if the mid-term exam date is within the date range
+                    if start_date <= mid_term_date <= end_date:
+                        day_name = mid_term_date.strftime('%A')
+                        # Only add Friday and Saturday mid-term exam dates
+                        if day_name in ['Friday', 'Saturday']:
+                            date_str = mid_term_date.strftime('%Y-%m-%d')
+                            # Check if this date is not already in unique_dates
+                            date_already_exists = any(date[0].strftime('%Y-%m-%d') == date_str for date in unique_dates)
+                            if not date_already_exists:
+                                unique_dates.append((mid_term_date, day_name))
+
+                # Sort again after adding makeup and mid-term exam dates
                 unique_dates.sort(key=lambda x: x[0])
 
             # --- NEW: Build merged time slot structure ---
@@ -971,6 +1040,15 @@ def generate_routine(request):
             for date, day in unique_dates:
                 row_cells = []
                 slot_idx = 0
+                
+                # Check if this is a mid-term exam date - if so, display "Mid-Term Exam" across entire row
+                if date in mid_term_exam_dates_set:
+                    # Create a single cell that spans all time slots
+                    total_colspan = len(slot_ranges)
+                    row_cells.append({'content': 'Mid-Term Exam', 'colspan': total_colspan, 'is_mid_term_exam': True})
+                    routine_table_rows.append({'date': date, 'day': day, 'cells': row_cells})
+                    continue  # Skip the rest of the loop for this date
+                
                 # Use filtered slot_ranges
                 # For this date, get all routines (by start/end)
                 routines = routines_by_date.get((date, day), [])
@@ -1459,6 +1537,10 @@ def get_semester_courses(request):
                 if semester.makeup_dates:
                     makeup_dates_info = semester.makeup_dates
                 
+                mid_term_exam_dates_info = None
+                if semester.mid_term_exam_dates:
+                    mid_term_exam_dates_info = semester.mid_term_exam_dates
+                
                 # Add all semester info fields
                 coordinator = semester.program_coordinator
                 semester_data = {
@@ -1481,6 +1563,7 @@ def get_semester_courses(request):
                     'date_range': date_range_info,
                     'holidays': holidays_info,
                     'makeup_dates': makeup_dates_info,
+                    'mid_term_exam_dates': mid_term_exam_dates_info,
                     'semester_data': semester_data
                 })
             except Semester.DoesNotExist:
@@ -2530,7 +2613,7 @@ def export_to_pdf(request, semester_id):
         span_commands = []  # To collect ('SPAN', ...) commands
         header_row = ["Date", "Day"] + [label for _, _, label in slot_ranges]
         table_data = [header_row]
-        # Merge all routine dates and makeup dates, sort, and ensure each date appears only once in order
+        # Merge all routine dates, makeup dates, and mid-term exam dates, sort, and ensure each date appears only once in order
         makeup_dates = []
         if selected_semester.makeup_dates:
             makeup_dates = [
@@ -2538,14 +2621,44 @@ def export_to_pdf(request, semester_id):
                 for date in selected_semester.makeup_dates.split(',')
                 if date.strip()
             ]
+        mid_term_exam_dates = []
+        if selected_semester.mid_term_exam_dates:
+            mid_term_exam_dates = [
+                datetime.strptime(date.strip(), "%Y-%m-%d").date()
+                for date in selected_semester.mid_term_exam_dates.split(',')
+                if date.strip()
+            ]
         day_by_date = {date: day for date, day in unique_dates_days}
-        all_dates = set(day_by_date.keys()) | set(makeup_dates)
+        all_dates = set(day_by_date.keys()) | set(makeup_dates) | set(mid_term_exam_dates)
         sorted_dates = sorted(all_dates)
 
         for row_idx, date in enumerate(sorted_dates, start=1):
             day = day_by_date.get(date, date.strftime('%A'))
             row = [date.strftime('%d/%m/%y'), day]
             slot_idx = 0
+            
+            # Check if this is a mid-term exam date - if so, display "Mid-Term Exam" across entire row
+            if date in mid_term_exam_dates:
+                # Create a single cell that spans all time slots
+                mid_term_exam_content = Paragraph("Mid-Term Exam", ParagraphStyle(
+                    'MidTermExam',
+                    fontName='Helvetica-Bold',
+                    fontSize=10,
+                    alignment=TA_CENTER,
+                    textColor=colors.white,
+                    leading=12,
+                    spaceBefore=0,
+                    spaceAfter=0,
+                ))
+                row.append(mid_term_exam_content)
+                # Add None for remaining columns (they will be merged)
+                for _ in range(len(slot_ranges) - 1):
+                    row.append(None)
+                # Add span command to merge all time slot columns
+                if len(slot_ranges) > 0:
+                    span_commands.append(('SPAN', (2, row_idx), (1 + len(slot_ranges), row_idx)))
+                table_data.append(row)
+                continue  # Skip the rest of the loop for this date
             # Build routines_for_row: all routines for this date, plus lunch break if present
             routines_for_row = []
             for r in routines:
@@ -2754,10 +2867,14 @@ def export_to_pdf(request, semester_id):
             # Set the background for the entire row if even (for non-class, non-break cells)
             if row_bg:
                 style.add('BACKGROUND', (0, i), (-1, i), row_bg)
-            # Override with special colors for break and class cells
+            # Override with special colors for break, mid-term exam, and class cells
             for j, cell in enumerate(row[2:], 2):
-                if isinstance(cell, Paragraph) and hasattr(cell, 'text') and "BREAK" in cell.text:
-                    style.add('BACKGROUND', (j, i), (j, i), colors.lightgrey)
+                if isinstance(cell, Paragraph) and hasattr(cell, 'text'):
+                    if "BREAK" in cell.text:
+                        style.add('BACKGROUND', (j, i), (j, i), colors.lightgrey)
+                    elif "Mid-Term Exam" in cell.text:
+                        # Apply info/blue background for mid-term exam
+                        style.add('BACKGROUND', (j, i), (j, i), colors.HexColor('#17a2b8'))  # Info blue color
                 elif cell:  # If there's content (a class)
                     class_bg = odd_class_bg if i % 2 == 1 else even_class_bg
                     style.add('BACKGROUND', (j, i), (j, i), class_bg)

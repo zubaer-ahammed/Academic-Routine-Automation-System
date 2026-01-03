@@ -312,6 +312,16 @@
                 <input type="hidden" name="govt_holiday_dates" id="govt_holiday_dates">
             </div>
 
+            {% if selected_curriculum and selected_curriculum.code != 'OLD' %}
+            <div class="mb-3" id="midTermExamDatesSection">
+                <label for="mid_term_exam_dates" class="form-label">Mid-Term Exam Dates <small class="text-muted">(No classes will be scheduled on these dates)</small></label>
+                <input type="text" name="mid_term_exam_dates" id="mid_term_exam_dates" class="form-control" placeholder="Click to select mid-term exam dates">
+                <div id="selectedMidTermExamDates" class="mt-2 d-flex flex-wrap gap-1"></div>
+                <!-- Hidden input to store formatted mid-term exam dates for backend processing -->
+                <input type="hidden" name="mid_term_exam_date_list" id="mid_term_exam_date_list">
+            </div>
+            {% endif %}
+
             <div class="mb-3">
                 <label for="makeup_dates" class="form-label">Makeup/Reserved Class Dates <small class="text-muted">(Only date and day will be shown, no pre-assigned classes)</small></label>
                 <input type="text" name="makeup_dates" id="makeup_dates" class="form-control" placeholder="Click to select makeup/extra class dates">
@@ -494,7 +504,9 @@
                                     <td class="text-center fw-bold align-middle">{{ row.day }}</td>
                                     {% for cell in row.cells %}
                                         {% if cell.content %}
-                                            {% if cell.is_lunch_break %}
+                                            {% if cell.is_mid_term_exam %}
+                                                <td colspan="{{ cell.colspan }}" class="bg-info text-white text-center align-middle fw-bold">{{ cell.content }}</td>
+                                            {% elif cell.is_lunch_break %}
                                                 <td colspan="{{ cell.colspan }}" class="bg-warning bg-opacity-25 text-center align-middle fw-bold">{{ cell.content }}</td>
                                             {% else %}
                                                 <td colspan="{{ cell.colspan }}" class="bg-primary text-white text-center align-middle course-cell" 
@@ -949,6 +961,92 @@
                 });
             }
 
+            // Initialize Flatpickr for mid-term exam dates selection (only for new curriculum)
+            if ($('#mid_term_exam_dates').length) {
+                $('#mid_term_exam_dates').flatpickr({
+                    mode: 'multiple',
+                    dateFormat: 'Y-m-d',
+                    onChange: function(selectedDates, dateStr, instance) {
+                        // Format dates for display and submission
+                        let formattedDates = selectedDates.map(date => {
+                            return instance.formatDate(date, 'Y-m-d');
+                        });
+
+                        // Store the selected dates in the hidden input for form submission
+                        $('#mid_term_exam_date_list').val(formattedDates.join(','));
+
+                        // Display selected dates as badges for user feedback
+                        $('#selectedMidTermExamDates').empty();
+                        formattedDates.forEach(date => {
+                            const formattedDate = new Date(date).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric'
+                            });
+                            const badge = $(`<span class="badge bg-warning me-1 mb-1" data-date="${date}">${formattedDate} <i class="bi bi-x-circle" style="cursor: pointer;"></i></span>`);
+                            $('#selectedMidTermExamDates').append(badge);
+                        });
+                    }
+                });
+
+                // Allow removing individual mid-term exam dates by clicking on the x icon
+                $(document).on('click', '#selectedMidTermExamDates .badge .bi-x-circle', function(e) {
+                    e.stopPropagation(); // Prevent event bubbling
+                    const badge = $(this).parent();
+                    const dateStr = badge.data('date');
+                    const picker = $('#mid_term_exam_dates')[0]._flatpickr;
+
+                    if (picker) {
+                        // First, remove the visual badge
+                        badge.remove();
+
+                        // Create a JavaScript Date object from the date string
+                        const dateToRemove = new Date(dateStr);
+
+                        // Get all current selected dates from the picker
+                        const currentDates = picker.selectedDates;
+
+                        // Find and remove the matching date
+                        const filteredDates = currentDates.filter(date => {
+                            // Compare dates by converting to the same format
+                            return picker.formatDate(date, 'Y-m-d') !== dateStr;
+                        });
+
+                        // Clear the picker completely
+                        picker.clear();
+
+                        // Set the remaining dates back
+                        if (filteredDates.length > 0) {
+                            picker.setDate(filteredDates, false); // false = don't trigger onChange
+                        }
+
+                        // Update the hidden input manually since we disabled the onChange trigger
+                        const formattedDates = filteredDates.map(date => {
+                            return picker.formatDate(date, 'Y-m-d');
+                        });
+                        $('#mid_term_exam_date_list').val(formattedDates.join(','));
+
+                        // Update the display of selected dates (in case anything was missed)
+                        updateMidTermExamDateBadges(filteredDates, picker);
+                    }
+                });
+
+                // Helper function to update the mid-term exam date badges display
+                function updateMidTermExamDateBadges(dates, picker) {
+                    $('#selectedMidTermExamDates').empty();
+                    dates.forEach(date => {
+                        const formattedDate = new Date(date).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                        });
+                        const dateStr = picker.formatDate(date, 'Y-m-d');
+                        const badge = $(`<span class="badge bg-warning me-1 mb-1" data-date="${dateStr}">${formattedDate} <i class="bi bi-x-circle" style="cursor: pointer;"></i></span>`);
+                        $('#selectedMidTermExamDates').append(badge);
+                    });
+                }
+            }
+
             // Initialize mdtimepicker for each time input
             function initMDTimePickers() {
                 $('.mdtimepicker').each(function() {
@@ -1247,6 +1345,54 @@
                                 $('#selectedMakeupDates').empty();
                             }
 
+                            // Populate mid-term exam dates if available (only for new curriculum)
+                            if ($('#mid_term_exam_dates').length && data.mid_term_exam_dates) {
+                                // Store mid-term exam dates data as a data attribute on the semester select
+                                $('#semester').data('mid-term-exam-dates', data.mid_term_exam_dates);
+
+                                // Get the Flatpickr instance
+                                const midTermExamPicker = $('#mid_term_exam_dates')[0]._flatpickr;
+                                if (midTermExamPicker) {
+                                    // Clear any existing selected dates
+                                    midTermExamPicker.clear();
+
+                                    // Parse the comma-separated dates
+                                    const midTermExamDateList = data.mid_term_exam_dates.split(',').filter(date => date.trim() !== '');
+
+                                    // Set the selected dates in the picker
+                                    if (midTermExamDateList.length > 0) {
+                                        const dateObjects = midTermExamDateList.map(date => new Date(date.trim()));
+                                        midTermExamPicker.setDate(dateObjects, true);
+
+                                        // Update the hidden input for form submission
+                                        $('#mid_term_exam_date_list').val(data.mid_term_exam_dates);
+
+                                        // Update visual display of selected mid-term exam dates
+                                        $('#selectedMidTermExamDates').empty();
+                                        midTermExamDateList.forEach(date => {
+                                            const formattedDate = new Date(date).toLocaleDateString('en-US', {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                year: 'numeric'
+                                            });
+                                            const badge = $(`<span class="badge bg-warning me-1 mb-1" data-date="${date}">${formattedDate} <i class="bi bi-x-circle" style="cursor: pointer;"></i></span>`);
+                                            $('#selectedMidTermExamDates').append(badge);
+                                        });
+                                    }
+                                }
+                            } else if ($('#mid_term_exam_dates').length) {
+                                // Clear the mid-term exam dates if none are stored
+                                $('#semester').removeData('mid-term-exam-dates');
+                                // Clear the flatpickr instance if it exists
+                                const midTermExamPicker = $('#mid_term_exam_dates')[0]._flatpickr;
+                                if (midTermExamPicker) {
+                                    midTermExamPicker.clear();
+                                }
+                                // Clear the hidden input and visual display
+                                $('#mid_term_exam_date_list').val('');
+                                $('#selectedMidTermExamDates').empty();
+                            }
+
                             // Fetch and display existing routines for this semester
                             if (semesterId) {
                                 $.ajax({
@@ -1379,14 +1525,44 @@
                 }
             });
 
+            // Function to show/hide mid-term exam dates field based on curriculum
+            function toggleMidTermExamDatesField() {
+                const curriculumId = $('#curriculum').val();
+                const curriculumSelect = $('#curriculum option:selected');
+                const curriculumText = curriculumSelect.text().toLowerCase();
+                // Check if it's old curriculum by checking if text contains "old" or if code is 'OLD'
+                const isOldCurriculum = curriculumText.includes('old') || curriculumSelect.val() === '';
+                const isNewCurriculum = !isOldCurriculum && curriculumId;
+                
+                // Only manipulate if the field exists in DOM
+                if ($('#midTermExamDatesSection').length) {
+                    if (isNewCurriculum) {
+                        $('#midTermExamDatesSection').show();
+                    } else {
+                        $('#midTermExamDatesSection').hide();
+                        // Clear mid-term exam dates when switching to old curriculum
+                        const midTermExamPicker = $('#mid_term_exam_dates')[0]._flatpickr;
+                        if (midTermExamPicker) {
+                            midTermExamPicker.clear();
+                        }
+                        $('#mid_term_exam_date_list').val('');
+                        $('#selectedMidTermExamDates').empty();
+                    }
+                }
+            }
+
             // Handle centre or curriculum change - reload courses if semester is already selected
             $('#centre, #curriculum').change(function() {
+                toggleMidTermExamDatesField();
                 const semesterId = $('#semester').val();
                 if (semesterId) {
                     // Reload courses with the new centre/curriculum filter
                     loadSemesterCourses(semesterId);
                 }
             });
+
+            // Initialize mid-term exam dates field visibility on page load
+            toggleMidTermExamDatesField();
 
             // Handle semester change
             $('#semester').change(function() {

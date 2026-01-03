@@ -138,6 +138,7 @@ class Semester(models.Model):
     end_date = models.DateField(null=True, blank=True)
     holidays = models.TextField(null=True, blank=True, help_text="Comma-separated list of holiday dates (YYYY-MM-DD)")
     makeup_dates = models.TextField(null=True, blank=True, help_text="Comma-separated list of makeup/extra class dates (YYYY-MM-DD)")
+    mid_term_exam_dates = models.TextField(null=True, blank=True, help_text="Comma-separated list of mid-term exam dates (YYYY-MM-DD). Only used for new curriculum.")
     theory_class_duration_minutes = models.PositiveIntegerField(default=60, help_text="Duration of theory classes in minutes (default: 60)")
     lab_class_duration_minutes = models.PositiveIntegerField(default=90, help_text="Duration of lab classes in minutes (default: 90)")
     teacher_short_name_newline = models.BooleanField(default=True, help_text="Show teacher's short name on a new line in PDF routine table (otherwise, show on same line as course code)")

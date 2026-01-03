@@ -721,20 +721,29 @@ class FinalExamMark(models.Model):
             return Decimal(str(self.lab_final_exam_mark or 0))
         else:
             # Theory course logic:
-            # If discrepancy exists (difference > 20% or > 14 marks), use Teacher 3's mark
-            # Otherwise, use the maximum of Teacher 1 and Teacher 2
+            # No discrepancy → Total = avg(Teacher 1, Teacher 2)
+            # Discrepancy exists + Teacher 3 evaluated → Total = avg(Teacher 1, Teacher 2, Teacher 3)
+            # Discrepancy exists + Teacher 3 not evaluated → Total = avg(Teacher 1, Teacher 2)
             
             teacher1_total = float(self.teacher1_total or 0)
             teacher2_total = float(self.teacher2_total or 0)
             teacher3_total = float(self.teacher3_total or 0)
             
-            # If discrepancy exists and Teacher 3 has evaluated, use Teacher 3's mark
-            if self.requires_third_teacher and teacher3_total > 0:
-                return Decimal(str(teacher3_total))
+            # Collect totals from teachers who have evaluated (total > 0)
+            evaluated_totals = []
+            if teacher1_total > 0:
+                evaluated_totals.append(teacher1_total)
+            if teacher2_total > 0:
+                evaluated_totals.append(teacher2_total)
             
-            # If no discrepancy (or Teacher 3 not yet evaluated), use the maximum of Teacher 1 and Teacher 2
-            if teacher1_total > 0 or teacher2_total > 0:
-                return Decimal(str(max(teacher1_total, teacher2_total)))
+            # If discrepancy exists and Teacher 3 has evaluated, include Teacher 3 in average
+            if self.requires_third_teacher and teacher3_total > 0:
+                evaluated_totals.append(teacher3_total)
+            
+            # Calculate average of all evaluated teachers
+            if evaluated_totals:
+                average = sum(evaluated_totals) / len(evaluated_totals)
+                return Decimal(str(average))
             
             return Decimal('0')
     

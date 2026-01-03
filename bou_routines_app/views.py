@@ -778,7 +778,8 @@ def generate_routine(request):
             # Build a map: course_id -> (allowed_classes, is_lab, slot_minutes)
             course_limits = {}
             for sc in semester_courses:
-                is_lab = 'P' in sc.course.code
+                # Use database field to detect lab course instead of checking course code
+                is_lab = sc.course.is_lab
                 slot_minutes = None
                 for i in range(len(days)):
                     if str(course_codes[i]) == str(sc.course.id):
@@ -6080,7 +6081,8 @@ def ca_management(request):
             messages.error(request, "Invalid semester or course selected.")
     
     # Determine teacher role based on user type
-    is_admin = request.user.is_superuser or request.user.is_staff
+    # Users with teacher profile are always treated as teachers, even if is_staff=True
+    is_admin = request.user.is_superuser or (request.user.is_staff and not teacher)
     teacher_role = None
     can_select_evaluator = False
     

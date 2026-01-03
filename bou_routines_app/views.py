@@ -2429,7 +2429,6 @@ def export_to_pdf(request, semester_id):
                 contact_info_lines.append(coordinator.designation)
             if coordinator.secondary_designation:
                 contact_info_lines.append(coordinator.secondary_designation)
-        contact_info_lines.append('School of Science and Technology')
         contact_info_lines.append('Bangladesh Open University')
         if coordinator.phone:
             contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
@@ -2437,7 +2436,6 @@ def export_to_pdf(request, semester_id):
             contact_info_lines.append(f'email:{coordinator.email}')
         else:
             # Default contact info if no coordinator
-            contact_info_lines.append('School of Science and Technology')
             contact_info_lines.append('Bangladesh Open University')
             # Create a simple label table for when there's no coordinator
             contact_label = Paragraph(
@@ -3227,7 +3225,6 @@ def export_academic_calendar_pdf(request, semester_id):
             contact_info_lines.append(coordinator.designation)
         if coordinator and coordinator.secondary_designation:
             contact_info_lines.append(coordinator.secondary_designation)
-        contact_info_lines.append('School of Science and Technology')
         contact_info_lines.append('Bangladesh Open University')
         if coordinator and coordinator.phone:
             contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')

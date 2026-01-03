@@ -3078,15 +3078,13 @@ def export_academic_calendar_pdf(request, semester_id):
         # Calculate calendar width early for consistent alignment across all elements
         month_day_width = 0.12 * available_width  # Month/Day column
         day_width = 0.10 * available_width        # Each day column (only F,S)
-        week_width = 0.12 * available_width       # Week column
-        remarks_width = 0.30 * available_width    # Remarks column
-        exams_width = 0.22 * available_width      # Exams column
+        remarks_width = 0.38 * available_width    # Remarks column (increased from 0.30)
+        exams_width = 0.28 * available_width      # Exams column (increased from 0.22)
         
         calendar_col_widths = [
             month_day_width,  # Month/Day
             day_width,        # F (Friday)
             day_width,        # S (Saturday)
-            week_width,       # Week
             remarks_width,    # Remarks
             exams_width       # Exams
         ]
@@ -3513,8 +3511,8 @@ def export_academic_calendar_pdf(request, semester_id):
                 # For the first month, create the overall header
                 if month_count == 0:
                     # Create the main header rows - two-row structure
-                    header_row_1 = ['Month', 'Day & Date', '', 'Weeks', 'Events', 'Exams']
-                    header_row_2 = ['', 'F', 'S', '', '', '']
+                    header_row_1 = ['Month', 'Day & Date', '', 'Events', 'Exams']
+                    header_row_2 = ['', 'F', 'S', '', '']
                     months_data.append([header_row_1])
                     months_data.append([header_row_2])
                 
@@ -3721,7 +3719,6 @@ def export_academic_calendar_pdf(request, semester_id):
                             cross_month_weeks[week_id] = {
                                 'remarks_set': remarks_set.copy(),
                                 'exams_set': exams_set.copy(),
-                                'week_number': week_number,
                                 'start_row': len(months_data),  # Current row index
                                 'needs_spanning': False
                             }
@@ -3730,7 +3727,7 @@ def export_academic_calendar_pdf(request, semester_id):
                     remarks = ', '.join(sorted(remarks_set)) if remarks_set else ''
                     exams = ', '.join(sorted(exams_set)) if exams_set else ''
                     
-                    week_data.extend([week_number, remarks, exams])
+                    week_data.extend([remarks, exams])
                     months_data.append([week_data])
                 
                 # If this month had no relevant events, we can stop here
@@ -3770,9 +3767,9 @@ def export_academic_calendar_pdf(request, semester_id):
         if not all_calendar_data:
             # If no calendar data, create a simple message with proper column structure
             is_fallback = True
-            all_calendar_data = [['Month', 'Day & Date', '', 'Weeks', 'Events', 'Exams'],
-                                ['', 'F', 'S', '', '', ''],
-                                ['No calendar data available for the selected semester date range.', '', '', '', '', '']]
+            all_calendar_data = [['Month', 'Day & Date', '', 'Events', 'Exams'],
+                                ['', 'F', 'S', '', ''],
+                                ['No calendar data available for the selected semester date range.', '', '', '', '']]
             # Keep the same column widths for consistency
         
         calendar_table = Table(all_calendar_data, colWidths=col_widths)
@@ -3801,9 +3798,8 @@ def export_academic_calendar_pdf(request, semester_id):
                 # Merge cells for header structure
                 ('SPAN', (0, 0), (0, 1)),  # Month column spans both rows
                 ('SPAN', (1, 0), (2, 0)),  # Day spans across F and S in first row
-                ('SPAN', (3, 0), (3, 1)),  # Weeks column spans both rows
-                ('SPAN', (4, 0), (4, 1)),  # Remarks column spans both rows
-                ('SPAN', (5, 0), (5, 1)),  # Exams column spans both rows
+                ('SPAN', (3, 0), (3, 1)),  # Remarks column spans both rows
+                ('SPAN', (4, 0), (4, 1)),  # Exams column spans both rows
             ])
             
             # Process each row after the header (starting from row 2 now)
@@ -3839,12 +3835,12 @@ def export_academic_calendar_pdf(request, semester_id):
                 ])
                 
                 # Check for events in this week and apply row coloring
-                if len(row_data) >= 6:  # Ensure we have all columns including exams
+                if len(row_data) >= 5:  # Ensure we have all columns including exams (5 columns: Month, F, S, Events, Exams)
                     week_event_color = None
                     has_exam_event = False
                     
-                    # Check if this row has exam events by looking at the exams column (index 5)
-                    exams_column = row_data[5] if len(row_data) > 5 else ''
+                    # Check if this row has exam events by looking at the exams column (index 4)
+                    exams_column = row_data[4] if len(row_data) > 4 else ''
                     if exams_column and exams_column.strip():
                         has_exam_event = True
                     
@@ -3921,14 +3917,14 @@ def export_academic_calendar_pdf(request, semester_id):
                     # Apply background color for non-holiday events
                     if non_holiday_event_color:
                         if has_exam_event:
-                            # For exam events: highlight entire row including Exams column (columns 1-5)
+                            # For exam events: highlight entire row including Exams column (columns 1-4)
                             calendar_style.append(
                                 ('BACKGROUND', (1, row_idx), (-1, row_idx), non_holiday_event_color)
                             )
                         else:
-                            # For non-exam events: highlight only up to Remarks column (columns 1-4)
+                            # For non-exam events: highlight only up to Remarks column (columns 1-3)
                             calendar_style.append(
-                                ('BACKGROUND', (1, row_idx), (4, row_idx), non_holiday_event_color)
+                                ('BACKGROUND', (1, row_idx), (3, row_idx), non_holiday_event_color)
                             )
                     
                     # Store color for potential cross-month week matching
@@ -3975,25 +3971,20 @@ def export_academic_calendar_pdf(request, semester_id):
                     start_row = week_data['start_row']
                     end_row = week_data['span_end_row']
                     
-                    # Span the week number column (column 3)
-                    calendar_style.append(
-                        ('SPAN', (3, start_row), (3, end_row))
-                    )
-                    
-                    # Span the remarks column (column 4) if both rows have the same remarks
+                    # Span the remarks column (column 3) if both rows have the same remarks
                     start_row_data = all_calendar_data[start_row]
                     end_row_data = all_calendar_data[end_row]
+                    if (len(start_row_data) > 3 and len(end_row_data) > 3 and 
+                        start_row_data[3] == end_row_data[3]):
+                        calendar_style.append(
+                            ('SPAN', (3, start_row), (3, end_row))
+                        )
+                    
+                    # Span the exams column (column 4) if both rows have the same exams
                     if (len(start_row_data) > 4 and len(end_row_data) > 4 and 
                         start_row_data[4] == end_row_data[4]):
                         calendar_style.append(
                             ('SPAN', (4, start_row), (4, end_row))
-                        )
-                    
-                    # Span the exams column (column 5) if both rows have the same exams
-                    if (len(start_row_data) > 5 and len(end_row_data) > 5 and 
-                        start_row_data[5] == end_row_data[5]):
-                        calendar_style.append(
-                            ('SPAN', (5, start_row), (5, end_row))
                         )
                     
                     # Apply same background color to both parts of cross-month weeks
@@ -4030,7 +4021,7 @@ def export_academic_calendar_pdf(request, semester_id):
                     # Apply the same background color to both rows
                     if final_color:
                         if final_has_exam:
-                            # For exam events: highlight entire row including Exams column (columns 1-5)
+                            # For exam events: highlight entire row including Exams column (columns 1-4)
                             calendar_style.append(
                                 ('BACKGROUND', (1, start_row), (-1, start_row), final_color)
                             )
@@ -4038,12 +4029,12 @@ def export_academic_calendar_pdf(request, semester_id):
                                 ('BACKGROUND', (1, end_row), (-1, end_row), final_color)
                             )
                         else:
-                            # For non-exam events: highlight only up to Remarks column (columns 1-4)
+                            # For non-exam events: highlight only up to Remarks column (columns 1-3)
                             calendar_style.append(
-                                ('BACKGROUND', (1, start_row), (4, start_row), final_color)
+                                ('BACKGROUND', (1, start_row), (3, start_row), final_color)
                             )
                             calendar_style.append(
-                                ('BACKGROUND', (1, end_row), (4, end_row), final_color)
+                                ('BACKGROUND', (1, end_row), (3, end_row), final_color)
                             )
             
             # Track and merge cells for 4-week final exam period in Exams column
@@ -4072,19 +4063,19 @@ def export_academic_calendar_pdf(request, semester_id):
                                 current_month = month_names.index(month_name) + 1
                 
                 # Check if this row has final exam events
-                if len(row_data) >= 6:  # Ensure we have all columns including exams
-                    exams_column = row_data[5] if len(row_data) > 5 else ''
+                if len(row_data) >= 5:  # Ensure we have all columns including exams
+                    exams_column = row_data[4] if len(row_data) > 4 else ''
                     if exams_column and 'Tentative Semester Final Exam' in str(exams_column):
                         final_exam_rows.append(row_idx)
             
-            # Apply cell spanning for final exam period in Exams column (column 5)
+            # Apply cell spanning for final exam period in Exams column (column 4)
             if len(final_exam_rows) > 1:
                 # Sort rows to ensure correct spanning
                 final_exam_rows.sort()
                 start_row = final_exam_rows[0]
                 end_row = final_exam_rows[-1]
                 calendar_style.append(
-                    ('SPAN', (5, start_row), (5, end_row))  # Span column 5 (Exams) across all final exam rows
+                    ('SPAN', (4, start_row), (4, end_row))  # Span column 4 (Exams) across all final exam rows
                 )
         
         # Add borders

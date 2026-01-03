@@ -3098,6 +3098,7 @@ def export_academic_calendar_pdf(request, semester_id):
         colors_dict = {
             'semester_begin': colors.HexColor('#90EE90'),  # Light Green
             'class_test': colors.HexColor('#00CED1'),  # Dark Turquoise
+            'mid_term_exam': colors.HexColor('#17a2b8'),  # Info Blue (same as routine)
             'assignment': colors.HexColor('#FFA500'),  # Orange
             'semester_end': colors.HexColor('#FFB6C1'),  # Light Pink
             'final_exam': colors.HexColor('#D3D3D3'),  # Light Gray
@@ -3355,29 +3356,45 @@ def export_academic_calendar_pdf(request, semester_id):
                 # Calculate key academic events based on weeks
                 duration_days = (semester_end - semester_start).days
                 
-                # First Class Test (6th week) - mark both Friday and Saturday
-                first_test_week = semester_start + timedelta(weeks=6)
-                if first_test_week <= semester_end:
-                    friday, saturday = get_friday_saturday_of_week(first_test_week)
-                    # If both days are holidays, find next available week
-                    if friday in holiday_dates_set and saturday in holiday_dates_set:
-                        first_test_week = find_next_available_week(first_test_week, holiday_dates_set, semester_end)
-                        friday, saturday = get_friday_saturday_of_week(first_test_week)
-                    # Set class test (even if date is a holiday, we'll show both markers in rendering)
-                    add_event_to_calendar(friday, 'class_test', 'First Class Test')
-                    add_event_to_calendar(saturday, 'class_test', 'First Class Test')
+                # Check if this is new curriculum (not OLD)
+                is_new_curriculum = selected_semester.curriculum and selected_semester.curriculum.code != 'OLD'
                 
-                # Second Class Test (10th week) - mark both Friday and Saturday
-                second_test_week = semester_start + timedelta(weeks=10)
-                if second_test_week <= semester_end:
-                    friday, saturday = get_friday_saturday_of_week(second_test_week)
-                    # If both days are holidays, find next available week
-                    if friday in holiday_dates_set and saturday in holiday_dates_set:
-                        second_test_week = find_next_available_week(second_test_week, holiday_dates_set, semester_end)
+                if is_new_curriculum:
+                    # For new curriculum: Add Mid-Term Exam dates instead of class tests
+                    if selected_semester.mid_term_exam_dates:
+                        mid_term_exam_dates = [
+                            datetime.strptime(date.strip(), "%Y-%m-%d").date()
+                            for date in selected_semester.mid_term_exam_dates.split(',')
+                            if date.strip()
+                        ]
+                        for mid_term_date in mid_term_exam_dates:
+                            if calendar_start <= mid_term_date <= calendar_end:
+                                add_event_to_calendar(mid_term_date, 'mid_term_exam', 'Mid-Term Exam')
+                else:
+                    # For old curriculum: Add class tests as before
+                    # First Class Test (6th week) - mark both Friday and Saturday
+                    first_test_week = semester_start + timedelta(weeks=6)
+                    if first_test_week <= semester_end:
+                        friday, saturday = get_friday_saturday_of_week(first_test_week)
+                        # If both days are holidays, find next available week
+                        if friday in holiday_dates_set and saturday in holiday_dates_set:
+                            first_test_week = find_next_available_week(first_test_week, holiday_dates_set, semester_end)
+                            friday, saturday = get_friday_saturday_of_week(first_test_week)
+                        # Set class test (even if date is a holiday, we'll show both markers in rendering)
+                        add_event_to_calendar(friday, 'class_test', 'First Class Test')
+                        add_event_to_calendar(saturday, 'class_test', 'First Class Test')
+                    
+                    # Second Class Test (10th week) - mark both Friday and Saturday
+                    second_test_week = semester_start + timedelta(weeks=10)
+                    if second_test_week <= semester_end:
                         friday, saturday = get_friday_saturday_of_week(second_test_week)
-                    # Set class test (even if date is a holiday, we'll show both markers in rendering)
-                    add_event_to_calendar(friday, 'class_test', 'Second Class Test')
-                    add_event_to_calendar(saturday, 'class_test', 'Second Class Test')
+                        # If both days are holidays, find next available week
+                        if friday in holiday_dates_set and saturday in holiday_dates_set:
+                            second_test_week = find_next_available_week(second_test_week, holiday_dates_set, semester_end)
+                            friday, saturday = get_friday_saturday_of_week(second_test_week)
+                        # Set class test (even if date is a holiday, we'll show both markers in rendering)
+                        add_event_to_calendar(friday, 'class_test', 'Second Class Test')
+                        add_event_to_calendar(saturday, 'class_test', 'Second Class Test')
                 
                 # First Assignment (4th week) - mark both Friday and Saturday
                 first_assignment_week = semester_start + timedelta(weeks=4)
@@ -3590,6 +3607,8 @@ def export_academic_calendar_pdf(request, semester_id):
                                     friday_str += ' (CE)'
                                 elif event_type == 'class_test':
                                     friday_str += ' (CT)'
+                                elif event_type == 'mid_term_exam':
+                                    friday_str += ' (MT)'
                                 elif event_type == 'assignment':
                                     friday_str += ' (Assn.)'
                                 elif event_type == 'final_exam':
@@ -3619,6 +3638,8 @@ def export_academic_calendar_pdf(request, semester_id):
                                     saturday_str += ' (CE)'
                                 elif event_type == 'class_test':
                                     saturday_str += ' (CT)'
+                                elif event_type == 'mid_term_exam':
+                                    saturday_str += ' (MT)'
                                 elif event_type == 'assignment':
                                     saturday_str += ' (Assn.)'
                                 elif event_type == 'final_exam':
@@ -3664,7 +3685,7 @@ def export_academic_calendar_pdf(request, semester_id):
                                     if event_type == 'holiday':
                                         # Skip holidays here since we already handled them above
                                         continue
-                                    elif event_type in ['class_test', 'final_exam']:
+                                    elif event_type in ['class_test', 'mid_term_exam', 'final_exam']:
                                         exams_set.add(description)
                                     else:
                                         remarks_set.add(description)
@@ -3887,10 +3908,10 @@ def export_academic_calendar_pdf(request, semester_id):
                                                 )
                                             elif event_type in colors_dict and non_holiday_event_color is None:
                                                 # For non-holiday events, store color for row highlighting
-                                                # Priority: class_test > assignment > other events
-                                                if event_type == 'class_test':
+                                                # Priority: class_test/mid_term_exam > assignment > other events
+                                                if event_type == 'class_test' or event_type == 'mid_term_exam':
                                                     non_holiday_event_color = colors_dict[event_type]
-                                                elif event_type == 'assignment' and non_holiday_event_color != colors_dict.get('class_test'):
+                                                elif event_type == 'assignment' and non_holiday_event_color not in [colors_dict.get('class_test'), colors_dict.get('mid_term_exam')]:
                                                     non_holiday_event_color = colors_dict[event_type]
                                                 elif non_holiday_event_color is None:
                                                     non_holiday_event_color = colors_dict[event_type]
@@ -4078,6 +4099,9 @@ def export_academic_calendar_pdf(request, semester_id):
         # Add legend with reduced spacing
         elements.append(Spacer(1, 4))  # Reduced from 20 to 8
         
+        # Check if this is new curriculum for legend
+        is_new_curriculum_legend = selected_semester.curriculum and selected_semester.curriculum.code != 'OLD'
+        
         # Create single-row legend with all items
         legend_data = [[
             Table([['Semester Begin (SB)']], style=TableStyle([
@@ -4087,13 +4111,28 @@ def export_academic_calendar_pdf(request, semester_id):
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                 ('BOX', (0,0), (-1,-1), 1, colors.black),
             ])),
-            Table([['Class Test (CT)']], style=TableStyle([
+        ]]
+        
+        # Add Class Test or Mid-Term Exam based on curriculum
+        if is_new_curriculum_legend:
+            legend_data[0].append(Table([['Mid-Term Exam (MT)']], style=TableStyle([
+                ('BACKGROUND', (0,0), (-1,-1), colors_dict['mid_term_exam']),
+                ('FONTSIZE', (0,0), (-1,-1), 9),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('BOX', (0,0), (-1,-1), 1, colors.black),
+            ])))
+        else:
+            legend_data[0].append(Table([['Class Test (CT)']], style=TableStyle([
                 ('BACKGROUND', (0,0), (-1,-1), colors_dict['class_test']),
                 ('FONTSIZE', (0,0), (-1,-1), 9),
                 ('ALIGN', (0,0), (-1,-1), 'CENTER'),
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                 ('BOX', (0,0), (-1,-1), 1, colors.black),
-            ])),
+            ])))
+        
+        # Continue with the rest of the legend
+        legend_data[0].extend([
             Table([['Assignment (Assn.)']], style=TableStyle([
                 ('BACKGROUND', (0,0), (-1,-1), colors_dict['assignment']),
                 ('FONTSIZE', (0,0), (-1,-1), 9),
@@ -4129,7 +4168,7 @@ def export_academic_calendar_pdf(request, semester_id):
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                 ('BOX', (0,0), (-1,-1), 1, colors.black),
             ])),
-        ]]
+        ])
         
         # Calculate column widths to match calendar width - 7 columns now
         legend_col_width = calendar_width / 7

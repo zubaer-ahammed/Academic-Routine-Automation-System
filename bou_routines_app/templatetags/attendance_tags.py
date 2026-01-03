@@ -40,10 +40,12 @@ def is_date_allowed(check_date, allowed_range):
     Check if a date is within the allowed range.
     allowed_range should be a tuple/list: (allowed_start_date, allowed_end_date)
     Returns True if date is within range, False otherwise.
+    If allowed_range is None, returns True (no restrictions - for admins).
     """
     try:
+        # If no allowed_range is provided (None), all dates are allowed (admin access)
         if not allowed_range:
-            return False
+            return True
         
         # Handle tuple/list
         if hasattr(allowed_range, '__iter__') and not isinstance(allowed_range, str):

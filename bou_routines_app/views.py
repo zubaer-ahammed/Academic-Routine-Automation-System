@@ -4574,6 +4574,20 @@ def mark_individual_attendance(request):
             }
         )
         
+        # Update CA mark to recalculate attendance mark
+        try:
+            ca_mark = CAMark.objects.filter(
+                student=student,
+                course=course,
+                semester=semester
+            ).first()
+            if ca_mark:
+                # Save will trigger auto-calculation of attendance_mark
+                ca_mark.save()
+        except Exception as e:
+            # Log error but don't fail the attendance marking
+            print(f"Error updating CA mark after attendance change: {e}")
+        
         return JsonResponse({
             'success': True,
             'created': created,
@@ -4654,6 +4668,8 @@ def mark_attendance(request):
         ).order_by('-first_two_digits', 'last_three_digits')
         
         attendance_count = 0
+        students_to_update_ca = set()  # Track students whose CA marks need updating
+        
         for student in students:
             is_present = request.POST.get(f'student_{student.id}') == 'on'
             
@@ -4671,6 +4687,22 @@ def mark_attendance(request):
                 }
             )
             attendance_count += 1
+            students_to_update_ca.add(student)
+        
+        # Update CA marks for all affected students to recalculate attendance marks
+        for student in students_to_update_ca:
+            try:
+                ca_mark = CAMark.objects.filter(
+                    student=student,
+                    course=course,
+                    semester=semester
+                ).first()
+                if ca_mark:
+                    # Save will trigger auto-calculation of attendance_mark
+                    ca_mark.save()
+            except Exception as e:
+                # Log error but don't fail the attendance marking
+                print(f"Error updating CA mark for student {student.id} after attendance change: {e}")
         
         messages.success(request, f'Attendance marked for {attendance_count} students on {attendance_date}')
         return JsonResponse({'success': True, 'message': f'Attendance marked for {attendance_count} students'})
@@ -6128,16 +6160,29 @@ def ca_management(request):
             # Add effective teacher to context for template use
             context['course_teacher'] = course_teacher
             
-            # Find teachers for this course from SemesterCourse table
-            # Teacher 1 (First Evaluator) is from DRC centre
-            # Teacher 2 (Second Evaluator) is from DUET centre
-            # ALWAYS get teachers from SemesterCourse for the selected course and semester
-            # (Don't use existing marks as they might have wrong evaluators)
+            # Find teachers for this course
+            # First check if evaluators are manually assigned in existing marks (admin can override)
+            # Then fall back to SemesterCourse for automatic assignment
+            sample_mark = FinalExamMark.objects.filter(
+                course=course,
+                semester=semester
+            ).first()
+            
+            # Check for manually assigned evaluators first
+            if sample_mark:
+                if sample_mark.teacher1_evaluator:
+                    teacher1_evaluator_obj = sample_mark.teacher1_evaluator
+                if sample_mark.teacher2_evaluator:
+                    teacher2_evaluator_obj = sample_mark.teacher2_evaluator
+                if sample_mark.teacher3_evaluator:
+                    teacher3_evaluator_obj = sample_mark.teacher3_evaluator
+            
+            # If not manually assigned, get from SemesterCourse
             drc_centre = Centre.objects.filter(code='DRC').first()
             duet_centre = Centre.objects.filter(code='DUET').first()
             
-            # Get Teacher 1 (First Evaluator) from SemesterCourse for DRC centre
-            if drc_centre:
+            # Get Teacher 1 (First Evaluator) from SemesterCourse for DRC centre if not manually assigned
+            if not teacher1_evaluator_obj and drc_centre:
                 drc_semester_course = SemesterCourse.objects.filter(
                     semester=semester,
                     course=course,
@@ -6147,8 +6192,8 @@ def ca_management(request):
                 if drc_semester_course and drc_semester_course.teacher:
                     teacher1_evaluator_obj = drc_semester_course.teacher
             
-            # Get Teacher 2 (Second Evaluator) from SemesterCourse for DUET centre
-            if duet_centre:
+            # Get Teacher 2 (Second Evaluator) from SemesterCourse for DUET centre if not manually assigned
+            if not teacher2_evaluator_obj and duet_centre:
                 duet_semester_course = SemesterCourse.objects.filter(
                     semester=semester,
                     course=course,
@@ -6158,21 +6203,17 @@ def ca_management(request):
                 if duet_semester_course and duet_semester_course.teacher:
                     teacher2_evaluator_obj = duet_semester_course.teacher
             
-            # For Teacher 3, check existing marks (only Teacher 3 can be manually assigned)
-            sample_mark = FinalExamMark.objects.filter(
-                course=course,
-                semester=semester
-            ).first()
-            
-            if sample_mark and sample_mark.teacher3_evaluator:
-                teacher3_evaluator_obj = sample_mark.teacher3_evaluator
-            
         except (Semester.DoesNotExist, Course.DoesNotExist):
             pass
     
     context['teacher1_evaluator'] = teacher1_evaluator_obj
     context['teacher2_evaluator'] = teacher2_evaluator_obj
     context['teacher3_evaluator'] = teacher3_evaluator_obj
+    
+    # Get all teachers for admin to select from (only for admins)
+    if is_admin:
+        all_teachers = Teacher.objects.all().order_by('name')
+        context['all_teachers'] = all_teachers
     
     return render(request, 'bou_routines_app/ca_management.html', context)
 
@@ -6457,5 +6498,67 @@ def save_final_exam_marks(request):
         
     except (Semester.DoesNotExist, Course.DoesNotExist):
         return JsonResponse({'error': 'Invalid semester or course'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@require_POST
+def assign_evaluator(request):
+    """
+    Assign or change evaluators for final exam marks (admin only)
+    """
+    if not (request.user.is_superuser or request.user.is_staff):
+        return JsonResponse({'error': 'Permission denied'}, status=403)
+    
+    try:
+        semester_id = request.POST.get('semester_id')
+        course_id = request.POST.get('course_id')
+        evaluator_number = request.POST.get('evaluator_number')
+        teacher_id = request.POST.get('teacher_id')
+        
+        if not all([semester_id, course_id, evaluator_number, teacher_id]):
+            return JsonResponse({'error': 'Missing required parameters'}, status=400)
+        
+        semester = Semester.objects.get(id=semester_id)
+        course = Course.objects.get(id=course_id)
+        teacher = Teacher.objects.get(id=teacher_id)
+        evaluator_number = int(evaluator_number)
+        
+        if evaluator_number not in [1, 2, 3]:
+            return JsonResponse({'error': 'Invalid evaluator number'}, status=400)
+        
+        # Get all students enrolled in this semester
+        students = Student.objects.filter(semesters=semester)
+        
+        # Update or create FinalExamMark records for all students
+        updated_count = 0
+        for student in students:
+            final_mark, created = FinalExamMark.objects.get_or_create(
+                student=student,
+                course=course,
+                semester=semester,
+                defaults={}
+            )
+            
+            # Assign the evaluator based on evaluator_number
+            if evaluator_number == 1:
+                final_mark.teacher1_evaluator = teacher
+            elif evaluator_number == 2:
+                final_mark.teacher2_evaluator = teacher
+            elif evaluator_number == 3:
+                final_mark.teacher3_evaluator = teacher
+            
+            final_mark.save()
+            updated_count += 1
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Evaluator {evaluator_number} assigned successfully to {updated_count} student(s)',
+            'teacher_name': teacher.name
+        })
+        
+    except (Semester.DoesNotExist, Course.DoesNotExist, Teacher.DoesNotExist) as e:
+        return JsonResponse({'error': str(e)}, status=404)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)

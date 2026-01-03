@@ -963,6 +963,7 @@
                                                                    max="{{ selected_course.effective_project_supervisor_weight }}"
                                                                    step="0.01"
                                                                    class="mark-input"
+                                                                   placeholder="Supervisor"
                                                                    oninput="calculateStudentTotal(this)">
                                                         </td>
                                                         <td>
@@ -973,6 +974,7 @@
                                                                    max="{{ selected_course.effective_project_evaluation_weight }}"
                                                                    step="0.01"
                                                                    class="mark-input"
+                                                                   placeholder="Evaluation"
                                                                    oninput="calculateStudentTotal(this)">
                                                         </td>
                                                         <td>
@@ -983,6 +985,7 @@
                                                                    max="{{ selected_course.effective_project_presentation_weight }}"
                                                                    step="0.01"
                                                                    class="mark-input"
+                                                                   placeholder="Presentation"
                                                                    oninput="calculateStudentTotal(this)">
                                                         </td>
                                                     {% else %}
@@ -1009,6 +1012,7 @@
                                                                    max="{{ selected_course.effective_lab_ca_assignment_weight }}"
                                                                    step="0.01"
                                                                    class="mark-input"
+                                                                   placeholder="First"
                                                                    oninput="calculateStudentTotal(this)">
                                                         </td>
                                                         <td>
@@ -1019,6 +1023,7 @@
                                                                    max="{{ selected_course.effective_lab_ca_assignment_weight }}"
                                                                    step="0.01"
                                                                    class="mark-input"
+                                                                   placeholder="Second"
                                                                    oninput="calculateStudentTotal(this)">
                                                         </td>
                                                         <td>
@@ -1029,6 +1034,7 @@
                                                                    max="{{ selected_course.effective_lab_ca_assignment_weight }}"
                                                                    step="0.01"
                                                                    class="mark-input"
+                                                                   placeholder="Third"
                                                                    oninput="calculateStudentTotal(this)">
                                                         </td>
                                                         <td class="total-mark assignment-average">
@@ -1042,6 +1048,7 @@
                                                                    max="{{ selected_course.effective_lab_ca_practical_weight }}"
                                                                    step="0.01"
                                                                    class="mark-input"
+                                                                   placeholder="Experiment/Lab Project"
                                                                    oninput="calculateStudentTotal(this)">
                                                         </td>
                                                     {% else %}
@@ -1054,6 +1061,7 @@
                                                                    max="{{ selected_course.effective_ca_assignment_weight }}"
                                                                    step="0.01"
                                                                    class="mark-input"
+                                                                   placeholder="First"
                                                                    oninput="calculateStudentTotal(this)">
                                                         </td>
                                                         <td>
@@ -1064,6 +1072,7 @@
                                                                    max="{{ selected_course.effective_ca_assignment_weight }}"
                                                                    step="0.01"
                                                                    class="mark-input"
+                                                                   placeholder="Second"
                                                                    oninput="calculateStudentTotal(this)">
                                                         </td>
                                                         <td>
@@ -1074,6 +1083,7 @@
                                                                    max="{{ selected_course.effective_ca_assignment_weight }}"
                                                                    step="0.01"
                                                                    class="mark-input"
+                                                                   placeholder="Third"
                                                                    oninput="calculateStudentTotal(this)">
                                                         </td>
                                                         <td class="total-mark assignment-average">
@@ -1087,6 +1097,7 @@
                                                                    max="{{ selected_course.effective_ca_midterm_weight }}"
                                                                    step="0.01"
                                                                    class="mark-input"
+                                                                   placeholder="Mid-Term Exam"
                                                                    oninput="calculateStudentTotal(this)">
                                                         </td>
                                                     {% endif %}
@@ -1107,7 +1118,7 @@
                                                         <input type="text" 
                                                                name="students_data[{{ student.id }}][notes]"
                                                                value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.notes }}{% endif %}{% endfor %}"
-                                                               placeholder="Notes..."
+                                                               placeholder="Enter notes..."
                                                                style="width: 100px; padding: 4px; border: 1px solid #ced4da; border-radius: 4px;">
                                                     </td>
                                                 </tr>
@@ -1166,20 +1177,61 @@
                                 <!-- Teacher Role Selector for Theory Course -->
                                 <div class="teacher-role-selector">
                                     {% if can_select_evaluator %}
-                                        <label for="teacher-role"><strong>Select Evaluator:</strong></label>
-                                        <select id="teacher-role" class="form-control" style="width: 300px; display: inline-block; margin-left: 10px;" onchange="updateTeacherRole()">
-                                            <option value="teacher1" {% if teacher_role == 'teacher1' %}selected{% endif %}>
-                                                {% if teacher1_evaluator %}{{ teacher1_evaluator.name }} (First Evaluator - DRC){% else %}Teacher 1 (First Evaluator - DRC){% endif %}
-                                            </option>
-                                            <option value="teacher2" {% if teacher_role == 'teacher2' %}selected{% endif %}>
-                                                {% if teacher2_evaluator %}{{ teacher2_evaluator.name }} (Second Evaluator - DUET){% else %}Teacher 2 (Second Evaluator - DUET){% endif %}
-                                            </option>
-                                            {% if is_admin %}
-                                            <option value="teacher3" {% if teacher_role == 'teacher3' %}selected{% endif %}>
-                                                {% if teacher3_evaluator %}{{ teacher3_evaluator.name }} (Third Evaluator){% else %}Teacher 3 (Third Evaluator - TBD){% endif %}
-                                            </option>
-                                            {% endif %}
-                                        </select>
+                                        <!-- Admin: Can select which evaluator role to view/edit -->
+                                        <div class="mb-3">
+                                            <label for="teacher-role"><strong>Select Evaluator Role to View/Edit:</strong></label>
+                                            <select id="teacher-role" class="form-control" style="width: 300px; display: inline-block; margin-left: 10px;" onchange="updateTeacherRole()">
+                                                <option value="teacher1" {% if teacher_role == 'teacher1' %}selected{% endif %}>
+                                                    {% if teacher1_evaluator %}{{ teacher1_evaluator.name }} (First Evaluator - DRC){% else %}Teacher 1 (First Evaluator - DRC){% endif %}
+                                                </option>
+                                                <option value="teacher2" {% if teacher_role == 'teacher2' %}selected{% endif %}>
+                                                    {% if teacher2_evaluator %}{{ teacher2_evaluator.name }} (Second Evaluator - DUET){% else %}Teacher 2 (Second Evaluator - DUET){% endif %}
+                                                </option>
+                                                <option value="teacher3" {% if teacher_role == 'teacher3' %}selected{% endif %}>
+                                                    {% if teacher3_evaluator %}{{ teacher3_evaluator.name }} (Third Evaluator){% else %}Teacher 3 (Third Evaluator - TBD){% endif %}
+                                                </option>
+                                            </select>
+                                        </div>
+                                        
+                                        <!-- Admin: Can assign/change evaluators -->
+                                        <div class="mb-3">
+                                            <label><strong>Assign Evaluators:</strong></label>
+                                            <div class="row mt-2">
+                                                <div class="col-md-4">
+                                                    <label for="assign-teacher1" class="form-label">First Evaluator (DRC):</label>
+                                                    <select id="assign-teacher1" class="form-control" onchange="assignEvaluator(1, this.value)">
+                                                        <option value="">-- Select Teacher --</option>
+                                                        {% for teacher in all_teachers %}
+                                                        <option value="{{ teacher.id }}" {% if teacher1_evaluator and teacher1_evaluator.id == teacher.id %}selected{% endif %}>
+                                                            {{ teacher.name }} ({{ teacher.centre.code }})
+                                                        </option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label for="assign-teacher2" class="form-label">Second Evaluator (DUET):</label>
+                                                    <select id="assign-teacher2" class="form-control" onchange="assignEvaluator(2, this.value)">
+                                                        <option value="">-- Select Teacher --</option>
+                                                        {% for teacher in all_teachers %}
+                                                        <option value="{{ teacher.id }}" {% if teacher2_evaluator and teacher2_evaluator.id == teacher.id %}selected{% endif %}>
+                                                            {{ teacher.name }} ({{ teacher.centre.code }})
+                                                        </option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label for="assign-teacher3" class="form-label">Third Evaluator:</label>
+                                                    <select id="assign-teacher3" class="form-control" onchange="assignEvaluator(3, this.value)">
+                                                        <option value="">-- Select Teacher --</option>
+                                                        {% for teacher in all_teachers %}
+                                                        <option value="{{ teacher.id }}" {% if teacher3_evaluator and teacher3_evaluator.id == teacher.id %}selected{% endif %}>
+                                                            {{ teacher.name }} ({{ teacher.centre.code }})
+                                                        </option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
                                     {% else %}
                                         <label for="teacher-role"><strong>Your Role:</strong></label>
                                         <select id="teacher-role" class="form-control" style="width: 300px; display: inline-block; margin-left: 10px; background-color: #e9ecef; cursor: not-allowed;" disabled>
@@ -1261,6 +1313,7 @@
                                                                    max="60"
                                                                    step="0.01"
                                                                    class="mark-input"
+                                                                   placeholder="Final Exam Mark"
                                                                    oninput="calculateFinalExamTotal(this)">
                                                         </td>
                                                         <td>
@@ -1278,6 +1331,7 @@
                                                                    class="question-set-input"
                                                                    data-student-id="{{ student.id }}"
                                                                    data-question="1"
+                                                                   placeholder="Q1 (max 14)"
                                                                    oninput="validateQuestionSet(this)">
                                                         </td>
                                                         <td>
@@ -1290,6 +1344,7 @@
                                                                    class="question-set-input"
                                                                    data-student-id="{{ student.id }}"
                                                                    data-question="2"
+                                                                   placeholder="Q2 (max 14)"
                                                                    oninput="validateQuestionSet(this)">
                                                         </td>
                                                         <td>
@@ -1302,6 +1357,7 @@
                                                                    class="question-set-input"
                                                                    data-student-id="{{ student.id }}"
                                                                    data-question="3"
+                                                                   placeholder="Q3 (max 14)"
                                                                    oninput="validateQuestionSet(this)">
                                                         </td>
                                                         <td>
@@ -1314,6 +1370,7 @@
                                                                    class="question-set-input"
                                                                    data-student-id="{{ student.id }}"
                                                                    data-question="4"
+                                                                   placeholder="Q4 (max 14)"
                                                                    oninput="validateQuestionSet(this)">
                                                         </td>
                                                         <td>
@@ -1326,6 +1383,7 @@
                                                                    class="question-set-input"
                                                                    data-student-id="{{ student.id }}"
                                                                    data-question="5"
+                                                                   placeholder="Q5 (max 14)"
                                                                    oninput="validateQuestionSet(this)">
                                                         </td>
                                                         <td>
@@ -1338,6 +1396,7 @@
                                                                    class="question-set-input"
                                                                    data-student-id="{{ student.id }}"
                                                                    data-question="6"
+                                                                   placeholder="Q6 (max 14)"
                                                                    oninput="validateQuestionSet(this)">
                                                         </td>
                                                         <td>
@@ -1350,6 +1409,7 @@
                                                                    class="question-set-input"
                                                                    data-student-id="{{ student.id }}"
                                                                    data-question="7"
+                                                                   placeholder="Q7 (max 14)"
                                                                    oninput="validateQuestionSet(this)">
                                                         </td>
                                                         <td class="total-mark">
@@ -1377,7 +1437,7 @@
                                                         <input type="text" 
                                                                name="students_data[{{ student.id }}][notes]"
                                                                value="{% if final_mark %}{{ final_mark.notes }}{% endif %}"
-                                                               placeholder="Notes..."
+                                                               placeholder="Enter notes..."
                                                                style="width: 100px; padding: 4px; border: 1px solid #ced4da; border-radius: 4px;">
                                                     </td>
                                                 </tr>
@@ -2112,6 +2172,54 @@ function saveFinalExamMarks() {
     .catch(error => {
         console.error('Error saving final exam marks:', error);
         alert('An error occurred while saving final exam marks.');
+    });
+}
+
+// Function to assign evaluators (for admin only)
+function assignEvaluator(evaluatorNumber, teacherId) {
+    if (!teacherId) {
+        return; // Don't do anything if no teacher selected
+    }
+    
+    const semesterId = document.querySelector('input[name="semester_id"]')?.value;
+    const courseId = document.querySelector('input[name="course_id"]')?.value;
+    
+    if (!semesterId || !courseId) {
+        alert('Please select a semester and course first.');
+        return;
+    }
+    
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+    
+    fetch('{% url "assign-evaluator" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': csrfToken
+        },
+        body: new URLSearchParams({
+            'semester_id': semesterId,
+            'course_id': courseId,
+            'evaluator_number': evaluatorNumber,
+            'teacher_id': teacherId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Update the evaluator role dropdown to reflect the change
+            const roleSelect = document.getElementById('teacher-role');
+            if (roleSelect) {
+                // Reload page to show updated evaluator
+                window.location.reload();
+            }
+        } else {
+            alert('Error: ' + (data.error || 'Failed to assign evaluator'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while assigning evaluator.');
     });
 }
 </script>

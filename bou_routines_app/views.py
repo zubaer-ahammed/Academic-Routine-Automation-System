@@ -268,8 +268,8 @@ def generate_routine(request):
                                 if not date_already_exists:
                                     unique_dates.append((makeup_date, day_name))
 
-                    # Add mid-term exam dates to unique_dates for existing routines display
-                    if selected_semester.mid_term_exam_dates:
+                    # Add mid-term exam dates to unique_dates for existing routines display (only for new curriculum)
+                    if selected_semester.mid_term_exam_dates and selected_semester.curriculum and selected_semester.curriculum.code != 'OLD':
                         mid_term_exam_dates = [
                             datetime.strptime(date.strip(), "%Y-%m-%d").date()
                             for date in selected_semester.mid_term_exam_dates.split(',')
@@ -349,9 +349,9 @@ def generate_routine(request):
                             'is_lunch_break': True
                         }
 
-                    # Build a set of mid-term exam dates for existing routines display
+                    # Build a set of mid-term exam dates for existing routines display (only for new curriculum)
                     mid_term_exam_dates_set_existing = set()
-                    if selected_semester.mid_term_exam_dates:
+                    if selected_semester.mid_term_exam_dates and selected_semester.curriculum and selected_semester.curriculum.code != 'OLD':
                         mid_term_exam_dates_list = [
                             datetime.strptime(date.strip(), "%Y-%m-%d").date()
                             for date in selected_semester.mid_term_exam_dates.split(',')
@@ -820,7 +820,7 @@ def generate_routine(request):
 
             # Get mid-term exam dates from the semester model (only for new curriculum)
             mid_term_exam_dates = []
-            if selected_semester.mid_term_exam_dates:
+            if selected_semester.mid_term_exam_dates and selected_semester.curriculum and selected_semester.curriculum.code != 'OLD':
                 mid_term_exam_dates = [
                     datetime.strptime(date.strip(), "%Y-%m-%d").date()
                     for date in selected_semester.mid_term_exam_dates.split(',')
@@ -2621,8 +2621,9 @@ def export_to_pdf(request, semester_id):
                 for date in selected_semester.makeup_dates.split(',')
                 if date.strip()
             ]
+        # Get mid-term exam dates (only for new curriculum)
         mid_term_exam_dates = []
-        if selected_semester.mid_term_exam_dates:
+        if selected_semester.mid_term_exam_dates and selected_semester.curriculum and selected_semester.curriculum.code != 'OLD':
             mid_term_exam_dates = [
                 datetime.strptime(date.strip(), "%Y-%m-%d").date()
                 for date in selected_semester.mid_term_exam_dates.split(',')

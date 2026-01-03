@@ -683,6 +683,35 @@ class FinalExamMark(models.Model):
                         return True
         return False
     
+    @property
+    def discrepancy_reason(self):
+        """Get the reason for discrepancy as a formatted string"""
+        if not self.course.is_lab:
+            teacher1_total = float(self.teacher1_total or 0)
+            teacher2_total = float(self.teacher2_total or 0)
+            
+            if teacher1_total == 0 and teacher2_total == 0:
+                return "No marks entered yet"
+            
+            difference = abs(teacher1_total - teacher2_total)
+            avg = (teacher1_total + teacher2_total) / 2 if (teacher1_total > 0 or teacher2_total > 0) else 0
+            
+            reasons = []
+            if difference > 14:
+                reasons.append(f"Difference of {difference:.2f} marks exceeds 14 marks (20% of 70)")
+            
+            if avg > 0:
+                percentage_diff = (difference / avg) * 100
+                if percentage_diff > 20:
+                    reasons.append(f"Difference of {percentage_diff:.1f}% exceeds 20% threshold")
+            
+            if reasons:
+                return " | ".join(reasons)
+            else:
+                return "No discrepancy detected"
+        
+        return "N/A (Lab course)"
+    
     def calculate_final_total(self):
         """Calculate final exam total based on course type"""
         from decimal import Decimal

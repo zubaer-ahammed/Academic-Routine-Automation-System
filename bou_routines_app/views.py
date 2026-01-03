@@ -5941,10 +5941,10 @@ def ca_management(request):
     courses_queryset = Course.objects.none()
     if semester_id:
         if teacher:
-            # Teacher can only see their own courses
+            # Teacher can only see their own courses (filter through SemesterCourse)
             courses_queryset = Course.objects.filter(
                 semestercourse__semester_id=semester_id,
-                teacher=teacher
+                semestercourse__teacher=teacher
             ).distinct()
         else:
             # Admin users can see all courses in the selected semester

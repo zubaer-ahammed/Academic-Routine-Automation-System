@@ -664,10 +664,64 @@
     .discrepancy-row {
         background-color: #fff3cd !important;
         border-left: 4px solid #ffc107;
+        box-shadow: 0 2px 4px rgba(255, 193, 7, 0.3) !important;
     }
 
     .discrepancy-row:hover {
         background-color: #ffe69c !important;
+        box-shadow: 0 4px 8px rgba(255, 193, 7, 0.4) !important;
+    }
+    
+    .discrepancy-row td {
+        background-color: inherit !important;
+    }
+    
+    .discrepancy-tooltip {
+        position: relative;
+        display: inline-block;
+        margin-left: 5px;
+        cursor: help;
+    }
+    
+    .discrepancy-tooltip .tooltip-icon {
+        color: #856404;
+        font-size: 0.9em;
+    }
+    
+    .discrepancy-tooltip .tooltip-text {
+        visibility: hidden;
+        width: 300px;
+        background-color: #333;
+        color: #fff;
+        text-align: left;
+        border-radius: 6px;
+        padding: 8px 12px;
+        position: absolute;
+        z-index: 1000;
+        bottom: 125%;
+        left: 50%;
+        margin-left: -150px;
+        opacity: 0;
+        transition: opacity 0.3s;
+        font-size: 0.85em;
+        line-height: 1.4;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+    
+    .discrepancy-tooltip .tooltip-text::after {
+        content: "";
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        margin-left: -5px;
+        border-width: 5px;
+        border-style: solid;
+        border-color: #333 transparent transparent transparent;
+    }
+    
+    .discrepancy-tooltip:hover .tooltip-text {
+        visibility: visible;
+        opacity: 1;
     }
 
     .final-exam-section {
@@ -1421,7 +1475,13 @@
                                                         </td>
                                                         <td>
                                                             {% if final_mark and final_mark.requires_third_teacher %}
-                                                                <span class="badge badge-warning">Discrepancy</span>
+                                                                <span class="badge badge-warning">
+                                                                    Discrepancy
+                                                                    <span class="discrepancy-tooltip">
+                                                                        <i class="fas fa-info-circle tooltip-icon"></i>
+                                                                        <span class="tooltip-text">{{ final_mark.discrepancy_reason }}</span>
+                                                                    </span>
+                                                                </span>
                                                             {% else %}
                                                                 <span class="badge badge-info">OK</span>
                                                             {% endif %}

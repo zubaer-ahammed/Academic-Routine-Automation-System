@@ -3300,6 +3300,7 @@ def export_academic_calendar_pdf(request, semester_id):
             calendar_end = datetime(current_year + 1, 6, 30).date()
 
         # Define academic events based on semester dates
+        # Changed to support multiple events per date (e.g., assignment and class test on same week)
         events_calendar = {}
         
         def get_friday_saturday_of_week(target_date):
@@ -3310,14 +3311,49 @@ def export_academic_calendar_pdf(request, semester_id):
             saturday_date = friday_date + timedelta(days=1)
             return friday_date, saturday_date
         
+        def find_next_available_week(start_week, holiday_dates_set, semester_end, max_weeks_ahead=4):
+            """Find the next available week where at least one of Friday or Saturday is not a holiday"""
+            for week_offset in range(max_weeks_ahead + 1):
+                check_week = start_week + timedelta(weeks=week_offset)
+                if check_week > semester_end:
+                    break
+                friday, saturday = get_friday_saturday_of_week(check_week)
+                # Check if at least one day is not a holiday
+                if friday not in holiday_dates_set or saturday not in holiday_dates_set:
+                    return check_week
+            # If no available week found, return the original week
+            return start_week
+        
+        def add_event_to_calendar(date, event_type, description):
+            """Add an event to the calendar, supporting multiple events per date"""
+            if date not in events_calendar:
+                events_calendar[date] = []
+            # Check if this event type already exists for this date
+            event_exists = any(et == event_type for et, _ in events_calendar[date])
+            if not event_exists:
+                events_calendar[date].append((event_type, description))
+        
         try:
             if selected_semester.start_date and selected_semester.end_date:
                 semester_start = selected_semester.start_date
                 semester_end = selected_semester.end_date
                 
+                # Load holidays first to check against them
+                holiday_dates_set = set()
+                if selected_semester.holidays:
+                    holiday_dates = [
+                        datetime.strptime(date.strip(), "%Y-%m-%d").date()
+                        for date in selected_semester.holidays.split(',')
+                        if date.strip()
+                    ]
+                    holiday_dates_set = set(holiday_dates)
+                    for holiday_date in holiday_dates:
+                        if calendar_start <= holiday_date <= calendar_end:
+                            add_event_to_calendar(holiday_date, 'holiday', 'Holiday')
+                
                 # Mark semester begin and end
-                events_calendar[semester_start] = ('semester_begin', 'Semester Begins')
-                events_calendar[semester_end] = ('semester_end', 'Class Ends')
+                add_event_to_calendar(semester_start, 'semester_begin', 'Semester Begins')
+                add_event_to_calendar(semester_end, 'semester_end', 'Class Ends')
                 
                 # Calculate key academic events based on weeks
                 duration_days = (semester_end - semester_start).days
@@ -3326,47 +3362,62 @@ def export_academic_calendar_pdf(request, semester_id):
                 first_test_week = semester_start + timedelta(weeks=6)
                 if first_test_week <= semester_end:
                     friday, saturday = get_friday_saturday_of_week(first_test_week)
-                    events_calendar[friday] = ('class_test', 'First Class Test')
-                    events_calendar[saturday] = ('class_test', 'First Class Test')
+                    # If both days are holidays, find next available week
+                    if friday in holiday_dates_set and saturday in holiday_dates_set:
+                        first_test_week = find_next_available_week(first_test_week, holiday_dates_set, semester_end)
+                        friday, saturday = get_friday_saturday_of_week(first_test_week)
+                    # Set class test (even if date is a holiday, we'll show both markers in rendering)
+                    add_event_to_calendar(friday, 'class_test', 'First Class Test')
+                    add_event_to_calendar(saturday, 'class_test', 'First Class Test')
                 
                 # Second Class Test (10th week) - mark both Friday and Saturday
                 second_test_week = semester_start + timedelta(weeks=10)
                 if second_test_week <= semester_end:
                     friday, saturday = get_friday_saturday_of_week(second_test_week)
-                    events_calendar[friday] = ('class_test', 'Second Class Test')
-                    events_calendar[saturday] = ('class_test', 'Second Class Test')
+                    # If both days are holidays, find next available week
+                    if friday in holiday_dates_set and saturday in holiday_dates_set:
+                        second_test_week = find_next_available_week(second_test_week, holiday_dates_set, semester_end)
+                        friday, saturday = get_friday_saturday_of_week(second_test_week)
+                    # Set class test (even if date is a holiday, we'll show both markers in rendering)
+                    add_event_to_calendar(friday, 'class_test', 'Second Class Test')
+                    add_event_to_calendar(saturday, 'class_test', 'Second Class Test')
                 
                 # First Assignment (4th week) - mark both Friday and Saturday
                 first_assignment_week = semester_start + timedelta(weeks=4)
                 if first_assignment_week <= semester_end:
                     friday, saturday = get_friday_saturday_of_week(first_assignment_week)
-                    events_calendar[friday] = ('assignment', 'First Assignment')
-                    events_calendar[saturday] = ('assignment', 'First Assignment')
+                    # If both days are holidays, find next available week
+                    if friday in holiday_dates_set and saturday in holiday_dates_set:
+                        first_assignment_week = find_next_available_week(first_assignment_week, holiday_dates_set, semester_end)
+                        friday, saturday = get_friday_saturday_of_week(first_assignment_week)
+                    # Set assignment (even if date is a holiday, we'll show both markers in rendering)
+                    add_event_to_calendar(friday, 'assignment', 'First Assignment')
+                    add_event_to_calendar(saturday, 'assignment', 'First Assignment')
                 
                 # Second Assignment (8th week) - mark both Friday and Saturday
                 second_assignment_week = semester_start + timedelta(weeks=8)
                 if second_assignment_week <= semester_end:
                     friday, saturday = get_friday_saturday_of_week(second_assignment_week)
-                    events_calendar[friday] = ('assignment', 'Second Assignment')
-                    events_calendar[saturday] = ('assignment', 'Second Assignment')
+                    # If both days are holidays, find next available week (can be same week as class test)
+                    if friday in holiday_dates_set and saturday in holiday_dates_set:
+                        second_assignment_week = find_next_available_week(second_assignment_week, holiday_dates_set, semester_end)
+                        friday, saturday = get_friday_saturday_of_week(second_assignment_week)
+                    # Set assignment (even if date is a holiday, we'll show both markers in rendering)
+                    # This can be on the same week as Second Class Test
+                    add_event_to_calendar(friday, 'assignment', 'Second Assignment')
+                    add_event_to_calendar(saturday, 'assignment', 'Second Assignment')
                 
                 # Third Assignment (12th week) - mark both Friday and Saturday
                 third_assignment_week = semester_start + timedelta(weeks=12)
                 if third_assignment_week <= semester_end:
                     friday, saturday = get_friday_saturday_of_week(third_assignment_week)
-                    events_calendar[friday] = ('assignment', 'Third Assignment')
-                    events_calendar[saturday] = ('assignment', 'Third Assignment')
-                
-                # Add holidays from semester
-                if selected_semester.holidays:
-                    holiday_dates = [
-                        datetime.strptime(date.strip(), "%Y-%m-%d").date()
-                        for date in selected_semester.holidays.split(',')
-                        if date.strip()
-                    ]
-                    for holiday_date in holiday_dates:
-                        if calendar_start <= holiday_date <= calendar_end:
-                            events_calendar[holiday_date] = ('holiday', 'Holiday')
+                    # If both days are holidays, find next available week
+                    if friday in holiday_dates_set and saturday in holiday_dates_set:
+                        third_assignment_week = find_next_available_week(third_assignment_week, holiday_dates_set, semester_end)
+                        friday, saturday = get_friday_saturday_of_week(third_assignment_week)
+                    # Set assignment (even if date is a holiday, we'll show both markers in rendering)
+                    add_event_to_calendar(friday, 'assignment', 'Third Assignment')
+                    add_event_to_calendar(saturday, 'assignment', 'Third Assignment')
                 
                 # Add makeup/extra classes from semester and determine final exam date
                 latest_makeup_date = None
@@ -3378,7 +3429,7 @@ def export_academic_calendar_pdf(request, semester_id):
                     ]
                     for makeup_date in makeup_dates:
                         # Include makeup dates even if they're after semester end
-                        events_calendar[makeup_date] = ('makeup_class', 'Makeup/Extra Class')
+                        add_event_to_calendar(makeup_date, 'makeup_class', 'Makeup/Extra Class')
                         if latest_makeup_date is None or makeup_date > latest_makeup_date:
                             latest_makeup_date = makeup_date
                 
@@ -3398,8 +3449,8 @@ def export_academic_calendar_pdf(request, semester_id):
                 for week_offset in range(4):
                     current_exam_week = final_exam_week + timedelta(weeks=week_offset)
                     friday, saturday = get_friday_saturday_of_week(current_exam_week)
-                    events_calendar[friday] = ('final_exam', 'Tentative Semester Final Exam')
-                    events_calendar[saturday] = ('final_exam', 'Tentative Semester Final Exam')
+                    add_event_to_calendar(friday, 'final_exam', 'Tentative Semester Final Exam')
+                    add_event_to_calendar(saturday, 'final_exam', 'Tentative Semester Final Exam')
                 
         except Exception as e:
             # If there's an error calculating events, continue with empty events
@@ -3415,13 +3466,20 @@ def export_academic_calendar_pdf(request, semester_id):
             smart_calendar_end = calendar_end
             
             # Check if we have final exam events and find the actual end of the final exam period
-            final_exam_dates = [date for date, (event_type, _) in events_calendar.items() if event_type == 'final_exam']
+            final_exam_dates = []
+            for date, events in events_calendar.items():
+                # Ensure events is a list
+                if not isinstance(events, list):
+                    events = [events]
+                # Check if any event is a final exam
+                if any(et == 'final_exam' for et, _ in events):
+                    final_exam_dates.append(date)
             if final_exam_dates:
                 # Use the latest final exam date as our smart cutoff
                 smart_calendar_end = max(final_exam_dates)
             else:
                 # Fallback: extend calendar range to include all events (makeup dates, etc.)
-                for event_date, (event_type, _) in events_calendar.items():
+                for event_date in events_calendar.keys():
                     if event_date > smart_calendar_end:
                         smart_calendar_end = event_date
             
@@ -3516,41 +3574,61 @@ def export_academic_calendar_pdf(request, semester_id):
                     
                     if friday_day:
                         friday_str = str(friday_day)
-                        if friday_date in events_calendar:
-                            event_type, description = events_calendar[friday_date]
-                            if event_type == 'semester_begin':
-                                friday_str += ' (SB)'
-                            elif event_type == 'semester_end':
-                                friday_str += ' (CE)'
-                            elif event_type == 'class_test':
-                                friday_str += ' (CT)'
-                            elif event_type == 'assignment':
-                                friday_str += ' (Assn.)'
-                            elif event_type == 'final_exam':
-                                friday_str += ' (FE)'
-                            elif event_type == 'holiday':
-                                friday_str += ' (H)'
-                            elif event_type == 'makeup_class':
-                                friday_str += ' (MC)'
+                        # Check for holiday first - if it's a holiday, only show holiday marker
+                        is_holiday = friday_date in holiday_dates_set
+                        if is_holiday:
+                            # If it's a holiday, only show holiday marker (no other events)
+                            friday_str += ' (H)'
+                        elif friday_date in events_calendar:
+                            # Handle multiple events per date (only if not a holiday)
+                            events = events_calendar[friday_date]
+                            # Ensure events is a list
+                            if not isinstance(events, list):
+                                events = [events]
+                            # Show markers for all events (excluding holidays)
+                            for event_type, description in events:
+                                if event_type == 'semester_begin':
+                                    friday_str += ' (SB)'
+                                elif event_type == 'semester_end':
+                                    friday_str += ' (CE)'
+                                elif event_type == 'class_test':
+                                    friday_str += ' (CT)'
+                                elif event_type == 'assignment':
+                                    friday_str += ' (Assn.)'
+                                elif event_type == 'final_exam':
+                                    friday_str += ' (FE)'
+                                elif event_type == 'makeup_class':
+                                    friday_str += ' (MC)'
+                                # Skip holiday type here since we already checked above
                     
                     if saturday_day:
                         saturday_str = str(saturday_day)
-                        if saturday_date in events_calendar:
-                            event_type, description = events_calendar[saturday_date]
-                            if event_type == 'semester_begin':
-                                saturday_str += ' (SB)'
-                            elif event_type == 'semester_end':
-                                saturday_str += ' (CE)'
-                            elif event_type == 'class_test':
-                                saturday_str += ' (CT)'
-                            elif event_type == 'assignment':
-                                saturday_str += ' (Assn.)'
-                            elif event_type == 'final_exam':
-                                saturday_str += ' (FE)'
-                            elif event_type == 'holiday':
-                                saturday_str += ' (H)'
-                            elif event_type == 'makeup_class':
-                                saturday_str += ' (MC)'
+                        # Check for holiday first - if it's a holiday, only show holiday marker
+                        is_holiday = saturday_date in holiday_dates_set
+                        if is_holiday:
+                            # If it's a holiday, only show holiday marker (no other events)
+                            saturday_str += ' (H)'
+                        elif saturday_date in events_calendar:
+                            # Handle multiple events per date (only if not a holiday)
+                            events = events_calendar[saturday_date]
+                            # Ensure events is a list
+                            if not isinstance(events, list):
+                                events = [events]
+                            # Show markers for all events (excluding holidays)
+                            for event_type, description in events:
+                                if event_type == 'semester_begin':
+                                    saturday_str += ' (SB)'
+                                elif event_type == 'semester_end':
+                                    saturday_str += ' (CE)'
+                                elif event_type == 'class_test':
+                                    saturday_str += ' (CT)'
+                                elif event_type == 'assignment':
+                                    saturday_str += ' (Assn.)'
+                                elif event_type == 'final_exam':
+                                    saturday_str += ' (FE)'
+                                elif event_type == 'makeup_class':
+                                    saturday_str += ' (MC)'
+                                # Skip holiday type here since we already checked above
                     
                     week_data.extend([friday_str, saturday_str])
                     
@@ -3572,12 +3650,27 @@ def export_academic_calendar_pdf(request, semester_id):
                     
                     # Check events for Friday and Saturday
                     for date_obj in [friday_date, saturday_date]:
-                        if date_obj and date_obj in events_calendar:
-                            event_type, description = events_calendar[date_obj]
-                            if event_type in ['class_test', 'final_exam']:
-                                exams_set.add(description)
-                            else:
-                                remarks_set.add(description)
+                        if date_obj:
+                            # Check if it's a holiday first
+                            is_holiday = date_obj in holiday_dates_set
+                            if is_holiday:
+                                # If it's a holiday, only add holiday to remarks
+                                remarks_set.add('Holiday')
+                            elif date_obj in events_calendar:
+                                # Only process non-holiday events
+                                events = events_calendar[date_obj]
+                                # Ensure events is a list
+                                if not isinstance(events, list):
+                                    events = [events]
+                                # Process all events for this date (excluding holidays)
+                                for event_type, description in events:
+                                    if event_type == 'holiday':
+                                        # Skip holidays here since we already handled them above
+                                        continue
+                                    elif event_type in ['class_test', 'final_exam']:
+                                        exams_set.add(description)
+                                    else:
+                                        remarks_set.add(description)
                     
                     # Handle cross-month week logic
                     if is_cross_month_continuation:
@@ -3639,7 +3732,10 @@ def export_academic_calendar_pdf(request, semester_id):
                     break
                     
         except Exception as e:
-            # If there's any error in calendar generation, create a fallback
+            # If there's any error in calendar generation, log it and create a fallback
+            import traceback
+            print(f"Error in calendar generation: {e}")
+            print(traceback.format_exc())
             months_data = []
 
         # Create the main calendar table - flatten the structure
@@ -3650,19 +3746,24 @@ def export_academic_calendar_pdf(request, semester_id):
         # Use pre-calculated column widths for consistent alignment
         col_widths = calendar_col_widths
         
+        # Track if we're using fallback data
+        is_fallback = False
         # Ensure we have data to create the table
         if not all_calendar_data:
-            # If no calendar data, create a simple message
-            all_calendar_data = [['No calendar data available for the selected semester date range.']]
-            col_widths = [calendar_width]
+            # If no calendar data, create a simple message with proper column structure
+            is_fallback = True
+            all_calendar_data = [['Month', 'Day & Date', '', 'Weeks', 'Events', 'Exams'],
+                                ['', 'F', 'S', '', '', ''],
+                                ['No calendar data available for the selected semester date range.', '', '', '', '', '']]
+            # Keep the same column widths for consistency
         
         calendar_table = Table(all_calendar_data, colWidths=col_widths)
         
         # Style the calendar table with event colors
         calendar_style = []
         
-        # Only add styling if we have actual calendar data
-        if all_calendar_data:
+        # Only add styling if we have actual calendar data (not fallback)
+        if all_calendar_data and not is_fallback:
             # Style the main header rows (first two rows)
             calendar_style.extend([
                 # First header row
@@ -3776,15 +3877,26 @@ def export_academic_calendar_pdf(request, semester_id):
                                     day_num = int(str(day_text).split()[0])  # Get day number before any markers
                                     date_obj = datetime(current_year, current_month, day_num).date()
                                     if date_obj in events_calendar:
-                                        event_type, _ = events_calendar[date_obj]
-                                        if event_type == 'holiday':
-                                            # For holidays, apply red color only to the specific date cell
-                                            calendar_style.append(
-                                                ('TEXTCOLOR', (day_col, row_idx), (day_col, row_idx), colors.HexColor('#FF0000'))
-                                            )
-                                        elif event_type in colors_dict and non_holiday_event_color is None:
-                                            # For non-holiday events, store color for row highlighting
-                                            non_holiday_event_color = colors_dict[event_type]
+                                        events = events_calendar[date_obj]
+                                        # Ensure events is a list
+                                        if not isinstance(events, list):
+                                            events = [events]
+                                        # Process all events for this date
+                                        for event_type, _ in events:
+                                            if event_type == 'holiday':
+                                                # For holidays, apply red color only to the specific date cell
+                                                calendar_style.append(
+                                                    ('TEXTCOLOR', (day_col, row_idx), (day_col, row_idx), colors.HexColor('#FF0000'))
+                                                )
+                                            elif event_type in colors_dict and non_holiday_event_color is None:
+                                                # For non-holiday events, store color for row highlighting
+                                                # Priority: class_test > assignment > other events
+                                                if event_type == 'class_test':
+                                                    non_holiday_event_color = colors_dict[event_type]
+                                                elif event_type == 'assignment' and non_holiday_event_color != colors_dict.get('class_test'):
+                                                    non_holiday_event_color = colors_dict[event_type]
+                                                elif non_holiday_event_color is None:
+                                                    non_holiday_event_color = colors_dict[event_type]
                                 except (ValueError, TypeError):
                                     continue
                     

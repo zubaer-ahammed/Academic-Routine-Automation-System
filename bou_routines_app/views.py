@@ -2414,7 +2414,7 @@ def export_to_pdf(request, semester_id):
             # Add 4px gap below the label using a single-cell table row with bottom padding
             contact_label_table = Table(
                 [[contact_label]],
-                colWidths=[180],
+                colWidths=[190],
                 hAlign='RIGHT',
                 style=TableStyle([
                     ('BOTTOMPADDING', (0,0), (-1,-1), 0),
@@ -2453,7 +2453,7 @@ def export_to_pdf(request, semester_id):
             )
             contact_label_table = Table(
                 [[contact_label]],
-                colWidths=[180],
+                colWidths=[190],
                 hAlign='RIGHT',
                 style=TableStyle([
                     ('BOTTOMPADDING', (0,0), (-1,-1), 0),
@@ -2479,7 +2479,7 @@ def export_to_pdf(request, semester_id):
         )
         contact_table = Table(
             [[contact_label_table], [contact_info_para]],
-            colWidths=[180],
+            colWidths=[190],
             hAlign='RIGHT',
         )
         contact_table.setStyle(TableStyle([
@@ -2497,7 +2497,7 @@ def export_to_pdf(request, semester_id):
         # Vertically center the left header content to match the contact box
         left_box_table = Table(
             [[left_content]],
-            colWidths=[available_width-180],
+            colWidths=[available_width-190],
             hAlign='LEFT',
             style=TableStyle([
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
@@ -2505,7 +2505,7 @@ def export_to_pdf(request, semester_id):
         )
         two_col_table = Table(
             [[left_box_table, contact_table]],
-            colWidths=[available_width-180, 180],
+            colWidths=[available_width-190, 190],
             hAlign='LEFT'
         )
         two_col_table.setStyle(TableStyle([
@@ -3208,7 +3208,7 @@ def export_academic_calendar_pdf(request, semester_id):
         # Add 4px gap below the label using a single-cell table row with bottom padding
         contact_label_table = Table(
             [[contact_label]],
-            colWidths=[180],
+            colWidths=[190],
             hAlign='RIGHT',
             style=TableStyle([
                 ('BOTTOMPADDING', (0,0), (-1,-1), 0),
@@ -3246,7 +3246,7 @@ def export_academic_calendar_pdf(request, semester_id):
         )
         contact_table = Table(
             [[contact_label_table], [contact_info_para]],
-            colWidths=[180],
+            colWidths=[190],
         )
         contact_table.setStyle(TableStyle([
             ('BOX', (0, 0), (-1, -1), 1, colors.black),  # Single, lighter border
@@ -3263,14 +3263,14 @@ def export_academic_calendar_pdf(request, semester_id):
         # Vertically center the left header content to match the contact box
         left_box_table = Table(
             [[left_content]],
-            colWidths=[calendar_width-180],
+            colWidths=[calendar_width-190],
             style=TableStyle([
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ])
         )
         two_col_table = Table(
             [[left_box_table, contact_table]],
-            colWidths=[calendar_width-180, 180],
+            colWidths=[calendar_width-190, 190],
         )
         two_col_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (0, 0), 'MIDDLE'),

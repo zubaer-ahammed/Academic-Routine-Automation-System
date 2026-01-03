@@ -1608,7 +1608,7 @@
                             </td>
                             {% for date in semester_dates %}
                                 {% with date_allowed=date|is_date_allowed:allowed_date_range %}
-                                <td class="attendance-cell{% if date|date:'Y-m-d' == today|date:'Y-m-d' %} current-date-cell{% endif %}{% if date|date:'Y-m-d' == current_week_date|date:'Y-m-d' %} current-week-cell{% endif %}{% if date in makeup_dates %} makeup-date-cell{% endif %}{% if not date_allowed %} date-disabled{% endif %}" data-date="{{ date|date:'Y-m-d' }}" data-student="{{ student.id }}">
+                                <td class="attendance-cell{% if date|date:'Y-m-d' == today|date:'Y-m-d' %} current-date-cell{% endif %}{% if date|date:'Y-m-d' == current_week_date|date:'Y-m-d' %} current-week-cell{% endif %}{% if date in makeup_dates %} makeup-date-cell{% endif %}{% if not date_allowed %} date-disabled{% endif %}" data-date="{{ date|date:'Y-m-d' }}" data-student="{{ student.id }}" {% if not date_allowed %}data-disabled="true"{% endif %}>
                                 {% with attendance_status|default_if_none:""|dict_key:student.id|default_if_none:""|dict_key:date as status %}
                                 <div class="attendance-checkbox-container">
                                     <input type="checkbox" 
@@ -1619,9 +1619,10 @@
                                            data-semester="{{ semester.id }}"
                                            data-course="{{ course.id }}"
                                            {% if status == True %}checked{% endif %}
-                                           {% if not date_allowed %}disabled{% endif %}
+                                           {% if not date_allowed %}disabled readonly{% endif %}
+                                           style="{% if not date_allowed %}cursor: not-allowed; opacity: 0.6;{% endif %}"
                                            title="{% if not date_allowed %}Date outside allowed range (current week ± 1 week){% else %}Click to mark present/absent{% endif %}">
-                                    <label for="attendance_{{ student.id }}_{{ date|date:'Y-m-d' }}" class="checkbox-label{% if not date_allowed %} disabled-label{% endif %}"></label>
+                                    <label for="attendance_{{ student.id }}_{{ date|date:'Y-m-d' }}" class="checkbox-label{% if not date_allowed %} disabled-label{% endif %}" {% if not date_allowed %}style="pointer-events: none; cursor: not-allowed;"{% endif %}></label>
                                 </div>
                                 {% endwith %}
                             </td>
@@ -2130,14 +2131,52 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Handle attendance checkbox clicks
     document.querySelectorAll('.attendance-checkbox').forEach(checkbox => {
+        // Ensure disabled checkboxes stay disabled
+        if (checkbox.disabled) {
+            checkbox.setAttribute('disabled', 'disabled');
+            checkbox.setAttribute('readonly', 'readonly');
+            checkbox.style.pointerEvents = 'none';
+            checkbox.style.cursor = 'not-allowed';
+            checkbox.style.opacity = '0.6';
+        }
+        
         checkbox.addEventListener('change', function() {
+            // Don't process if checkbox is disabled
+            if (this.disabled || this.hasAttribute('readonly')) {
+                // Revert the change
+                this.checked = !this.checked;
+                console.log('Attempted to change disabled checkbox for date:', this.dataset.date);
+                return;
+            }
             markIndividualAttendance(this);
+        });
+        
+        // Also prevent clicks on disabled checkboxes
+        checkbox.addEventListener('click', function(e) {
+            if (this.disabled || this.hasAttribute('readonly')) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
         });
     });
     
     // Handle attendance cell clicks for bulk actions
     document.querySelectorAll('.attendance-cell').forEach(cell => {
+        // Skip disabled cells
+        if (cell.dataset.disabled === 'true' || cell.classList.contains('date-disabled')) {
+            cell.style.pointerEvents = 'none';
+            cell.style.cursor = 'not-allowed';
+        }
+        
         cell.addEventListener('click', function(e) {
+            // Don't process clicks on disabled cells
+            if (this.dataset.disabled === 'true' || this.classList.contains('date-disabled')) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            
             // Don't trigger if clicking on checkbox
             if (e.target.type === 'checkbox') {
                 return;

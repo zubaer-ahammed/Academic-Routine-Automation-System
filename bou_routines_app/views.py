@@ -3320,6 +3320,24 @@ def export_academic_calendar_pdf(request, semester_id):
             # If no available week found, return the original week
             return start_week
         
+        def find_nth_valid_week(semester_start, semester_end, holiday_dates_set, n):
+            """Find the Nth week counting only weeks where at least one day (Friday or Saturday) is not a holiday"""
+            current_date = semester_start
+            valid_week_count = 0
+            
+            while current_date <= semester_end and valid_week_count < n:
+                friday, saturday = get_friday_saturday_of_week(current_date)
+                # Count this week only if at least one day is not a holiday
+                if friday not in holiday_dates_set or saturday not in holiday_dates_set:
+                    valid_week_count += 1
+                    if valid_week_count == n:
+                        return current_date
+                # Move to next week (Monday)
+                current_date += timedelta(weeks=1)
+            
+            # If we couldn't find the Nth week, return the last valid week or semester_end
+            return current_date if current_date <= semester_end else semester_end
+        
         def add_event_to_calendar(date, event_type, description):
             """Add an event to the calendar, supporting multiple events per date"""
             if date not in events_calendar:
@@ -3394,39 +3412,28 @@ def export_academic_calendar_pdf(request, semester_id):
                         add_event_to_calendar(friday, 'class_test', 'Second Class Test')
                         add_event_to_calendar(saturday, 'class_test', 'Second Class Test')
                 
-                # First Assignment (4th week) - mark both Friday and Saturday
-                first_assignment_week = semester_start + timedelta(weeks=4)
+                # Assignments: Use proper week counting (only count weeks with at least one non-holiday day)
+                # For both new and old curriculum: 4th, 8th, 12th week
+                # First Assignment (4th valid week) - mark both Friday and Saturday
+                first_assignment_week = find_nth_valid_week(semester_start, semester_end, holiday_dates_set, 4)
                 if first_assignment_week <= semester_end:
                     friday, saturday = get_friday_saturday_of_week(first_assignment_week)
-                    # If both days are holidays, find next available week
-                    if friday in holiday_dates_set and saturday in holiday_dates_set:
-                        first_assignment_week = find_next_available_week(first_assignment_week, holiday_dates_set, semester_end)
-                        friday, saturday = get_friday_saturday_of_week(first_assignment_week)
                     # Set assignment (even if date is a holiday, we'll show both markers in rendering)
                     add_event_to_calendar(friday, 'assignment', 'First Assignment')
                     add_event_to_calendar(saturday, 'assignment', 'First Assignment')
                 
-                # Second Assignment (8th week) - mark both Friday and Saturday
-                second_assignment_week = semester_start + timedelta(weeks=8)
+                # Second Assignment (8th valid week) - mark both Friday and Saturday
+                second_assignment_week = find_nth_valid_week(semester_start, semester_end, holiday_dates_set, 8)
                 if second_assignment_week <= semester_end:
                     friday, saturday = get_friday_saturday_of_week(second_assignment_week)
-                    # If both days are holidays, find next available week (can be same week as class test)
-                    if friday in holiday_dates_set and saturday in holiday_dates_set:
-                        second_assignment_week = find_next_available_week(second_assignment_week, holiday_dates_set, semester_end)
-                        friday, saturday = get_friday_saturday_of_week(second_assignment_week)
                     # Set assignment (even if date is a holiday, we'll show both markers in rendering)
-                    # This can be on the same week as Second Class Test
                     add_event_to_calendar(friday, 'assignment', 'Second Assignment')
                     add_event_to_calendar(saturday, 'assignment', 'Second Assignment')
                 
-                # Third Assignment (12th week) - mark both Friday and Saturday
-                third_assignment_week = semester_start + timedelta(weeks=12)
+                # Third Assignment (12th valid week) - mark both Friday and Saturday
+                third_assignment_week = find_nth_valid_week(semester_start, semester_end, holiday_dates_set, 12)
                 if third_assignment_week <= semester_end:
                     friday, saturday = get_friday_saturday_of_week(third_assignment_week)
-                    # If both days are holidays, find next available week
-                    if friday in holiday_dates_set and saturday in holiday_dates_set:
-                        third_assignment_week = find_next_available_week(third_assignment_week, holiday_dates_set, semester_end)
-                        friday, saturday = get_friday_saturday_of_week(third_assignment_week)
                     # Set assignment (even if date is a holiday, we'll show both markers in rendering)
                     add_event_to_calendar(friday, 'assignment', 'Third Assignment')
                     add_event_to_calendar(saturday, 'assignment', 'Third Assignment')

@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import User
+from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 from django import forms
 from django.contrib import messages
 from django.shortcuts import redirect
@@ -160,8 +161,8 @@ class SemesterCourseAdmin(admin.ModelAdmin):
     fields = ('semester', 'course', 'centre', 'teacher', 'number_of_classes')
     autocomplete_fields = ('teacher',)
 
-class TeacherUserAdminForm(forms.ModelForm):
-    """Custom form for User admin that includes Type and conditional Teacher/Student selection"""
+class BaseTeacherUserAdminForm:
+    """Base class with common fields for both add and change forms"""
     USER_TYPE_CHOICES = [
         ('', 'Select Type'),
         ('administrator', 'Administrator'),
@@ -188,13 +189,154 @@ class TeacherUserAdminForm(forms.ModelForm):
         empty_label="Select a Student (optional)",
         help_text="Select an existing student to link to this user. Only shown when Type is 'Student'."
     )
+
+class TeacherUserAdminAddForm(UserCreationForm, BaseTeacherUserAdminForm):
+    """Custom form for adding users that includes Type and conditional Teacher/Student selection"""
     
-    class Meta:
+    class Meta(UserCreationForm.Meta):
         model = User
         fields = '__all__'
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Ensure custom fields are added (they might be filtered out)
+        # Add fields from BaseTeacherUserAdminForm if they don't exist
+        if 'user_type' not in self.fields:
+            self.fields['user_type'] = forms.ChoiceField(
+                choices=BaseTeacherUserAdminForm.USER_TYPE_CHOICES,
+                required=False,
+                help_text="Select the type of user. This determines which profile can be linked."
+            )
+        if 'teacher' not in self.fields:
+            self.fields['teacher'] = forms.ModelChoiceField(
+                queryset=Teacher.objects.all().order_by('name'),
+                required=False,
+                empty_label="Select a Teacher (optional)",
+                help_text="Select an existing teacher to link to this user. Only shown when Type is 'Teacher'."
+            )
+        if 'student' not in self.fields:
+            self.fields['student'] = forms.ModelChoiceField(
+                queryset=Student.objects.all().order_by('name'),
+                required=False,
+                empty_label="Select a Student (optional)",
+                help_text="Select an existing student to link to this user. Only shown when Type is 'Student'."
+            )
+    
+    def clean(self):
+        """Validate that user can only be one type at a time"""
+        cleaned_data = super().clean()
+        user_type = cleaned_data.get('user_type')
+        teacher_id = cleaned_data.get('teacher')
+        student_id = cleaned_data.get('student')
+        
+        # Validate that only one profile type is selected
+        if user_type == 'teacher' and student_id:
+            raise forms.ValidationError({
+                'student': 'Cannot select a student when user type is Teacher.'
+            })
+        
+        if user_type == 'student' and teacher_id:
+            raise forms.ValidationError({
+                'teacher': 'Cannot select a teacher when user type is Student.'
+            })
+        
+        if user_type == 'administrator' and (teacher_id or student_id):
+            raise forms.ValidationError(
+                'Administrators should not have teacher or student profiles.'
+            )
+        
+        # Validate that required profile is selected
+        if user_type == 'teacher' and not teacher_id:
+            raise forms.ValidationError({
+                'teacher': 'Please select a teacher when user type is Teacher.'
+            })
+        
+        if user_type == 'student' and not student_id:
+            raise forms.ValidationError({
+                'student': 'Please select a student when user type is Student.'
+            })
+        
+        return cleaned_data
+    
+    def save(self, commit=True):
+        user = super().save(commit=commit)
+        
+        if commit:
+            user_type = self.cleaned_data.get('user_type')
+            teacher_id = self.cleaned_data.get('teacher')
+            student_id = self.cleaned_data.get('student')
+            
+            # Now link based on type
+            if user_type == 'teacher' and teacher_id:
+                # Unlink the selected teacher from its current user (if any)
+                try:
+                    existing_teacher = Teacher.objects.get(id=teacher_id)
+                    if existing_teacher.user and existing_teacher.user != user:
+                        existing_teacher.user = None
+                        existing_teacher.save()
+                except Teacher.DoesNotExist:
+                    pass
+                
+                # Link the selected teacher to this user
+                try:
+                    teacher = Teacher.objects.get(id=teacher_id)
+                    teacher.user = user
+                    teacher.save()
+                except Teacher.DoesNotExist:
+                    pass
+                    
+            elif user_type == 'student' and student_id:
+                # Unlink the selected student from its current user (if any)
+                try:
+                    existing_student = Student.objects.get(id=student_id)
+                    if existing_student.user and existing_student.user != user:
+                        existing_student.user = None
+                        existing_student.save()
+                except Student.DoesNotExist:
+                    pass
+                
+                # Link the selected student to this user
+                try:
+                    student = Student.objects.get(id=student_id)
+                    student.user = user
+                    student.save()
+                except Student.DoesNotExist:
+                    pass
+        
+        return user
+
+class TeacherUserAdminChangeForm(UserChangeForm, BaseTeacherUserAdminForm):
+    """Custom form for changing users that includes Type and conditional Teacher/Student selection"""
+    
+    class Meta(UserChangeForm.Meta):
+        model = User
+        fields = '__all__'
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Ensure custom fields are added (they might be filtered out by UserChangeForm)
+        # Add fields from BaseTeacherUserAdminForm if they don't exist
+        if 'user_type' not in self.fields:
+            self.fields['user_type'] = forms.ChoiceField(
+                choices=BaseTeacherUserAdminForm.USER_TYPE_CHOICES,
+                required=False,
+                help_text="Select the type of user. This determines which profile can be linked."
+            )
+        if 'teacher' not in self.fields:
+            self.fields['teacher'] = forms.ModelChoiceField(
+                queryset=Teacher.objects.all().order_by('name'),
+                required=False,
+                empty_label="Select a Teacher (optional)",
+                help_text="Select an existing teacher to link to this user. Only shown when Type is 'Teacher'."
+            )
+        if 'student' not in self.fields:
+            self.fields['student'] = forms.ModelChoiceField(
+                queryset=Student.objects.all().order_by('name'),
+                required=False,
+                empty_label="Select a Student (optional)",
+                help_text="Select an existing student to link to this user. Only shown when Type is 'Student'."
+            )
+        
         # Set initial values if user has a teacher or student
         if self.instance and self.instance.pk:
             try:
@@ -310,9 +452,26 @@ class TeacherUserAdminForm(forms.ModelForm):
         return user
 
 class TeacherUserAdmin(UserAdmin):
-    form = TeacherUserAdminForm
+    form = TeacherUserAdminChangeForm
+    add_form = TeacherUserAdminAddForm
     list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'get_user_type', 'get_profile_name')
     list_filter = ('is_staff', 'is_superuser', 'is_active', 'date_joined')
+    
+    # Override add_fieldsets to exclude custom fields (they're form fields, not model fields)
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('username', 'password1', 'password2'),
+        }),
+    )
+    
+    def get_fieldsets(self, request, obj=None):
+        """Override to get fieldsets without custom fields"""
+        # Custom fields will be rendered by the form automatically
+        # and positioned via JavaScript
+        if obj is None:
+            return self.add_fieldsets
+        return super().get_fieldsets(request, obj)
     
     def get_user_type(self, obj):
         try:
@@ -339,32 +498,13 @@ class TeacherUserAdmin(UserAdmin):
     get_profile_name.short_description = 'Profile Name'
     
     def get_fieldsets(self, request, obj=None):
-        fieldsets = list(super().get_fieldsets(request, obj))
-        # Add Type, Teacher, and Student fields to the first fieldset (after password)
-        if fieldsets:
-            # Get the fields from the first fieldset
-            first_fields = list(fieldsets[0][1]['fields'])
-            # Insert fields after 'password' if password exists, otherwise append
-            if 'password' in first_fields:
-                password_index = first_fields.index('password')
-                # Insert user_type, teacher, and student after password
-                first_fields.insert(password_index + 1, 'user_type')
-                first_fields.insert(password_index + 2, 'teacher')
-                first_fields.insert(password_index + 3, 'student')
-            else:
-                first_fields.extend(['user_type', 'teacher', 'student'])
-            
-            fieldsets[0] = (
-                fieldsets[0][0],
-                {
-                    'fields': tuple(first_fields)
-                }
-            )
-        else:
-            fieldsets = [
-                (None, {'fields': ('username', 'password', 'user_type', 'teacher', 'student')}),
-            ] + fieldsets
-        return fieldsets
+        """Override to add custom form fields (not model fields) to fieldsets"""
+        # Don't add custom fields to fieldsets - Django validates them against the model
+        # Instead, we'll let the form handle them and they'll appear automatically
+        # We can add them to fieldsets after form creation if needed
+        if obj is None:
+            return super().add_fieldsets
+        return super().get_fieldsets(request, obj)
     
     class Media:
         js = ('admin/js/user_type_handler.js',)

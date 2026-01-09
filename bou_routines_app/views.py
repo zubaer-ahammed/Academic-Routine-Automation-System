@@ -3348,8 +3348,8 @@ def export_academic_calendar_pdf(request, semester_id):
                             add_event_to_calendar(holiday_date, 'holiday', 'Holiday')
                 
                 # Mark semester begin and end
-                add_event_to_calendar(semester_start, 'semester_begin', 'Semester Begins')
-                add_event_to_calendar(semester_end, 'semester_end', 'Class Ends')
+                add_event_to_calendar(semester_start, 'semester_begin', 'First Day of Classes')
+                add_event_to_calendar(semester_end, 'semester_end', 'Last Day of Classes')
                 
                 # Calculate key academic events based on weeks
                 duration_days = (semester_end - semester_start).days
@@ -3461,8 +3461,8 @@ def export_academic_calendar_pdf(request, semester_id):
                 for week_offset in range(4):
                     current_exam_week = final_exam_week + timedelta(weeks=week_offset)
                     friday, saturday = get_friday_saturday_of_week(current_exam_week)
-                    add_event_to_calendar(friday, 'final_exam', 'Tentative Semester Final Exam')
-                    add_event_to_calendar(saturday, 'final_exam', 'Tentative Semester Final Exam')
+                    add_event_to_calendar(friday, 'final_exam', 'Semester-end Final Examination (Tentative)')
+                    add_event_to_calendar(saturday, 'final_exam', 'Semester-end Final Examination (Tentative)')
                 
         except Exception as e:
             # If there's an error calculating events, continue with empty events
@@ -3590,7 +3590,7 @@ def export_academic_calendar_pdf(request, semester_id):
                         is_holiday = friday_date in holiday_dates_set
                         if is_holiday:
                             # If it's a holiday, only show holiday marker (no other events)
-                            friday_str += ' (H)'
+                            friday_str += ' (Holiday)'
                         elif friday_date in events_calendar:
                             # Handle multiple events per date (only if not a holiday)
                             events = events_calendar[friday_date]
@@ -3621,7 +3621,7 @@ def export_academic_calendar_pdf(request, semester_id):
                         is_holiday = saturday_date in holiday_dates_set
                         if is_holiday:
                             # If it's a holiday, only show holiday marker (no other events)
-                            saturday_str += ' (H)'
+                            saturday_str += ' (Holiday)'
                         elif saturday_date in events_calendar:
                             # Handle multiple events per date (only if not a holiday)
                             events = events_calendar[saturday_date]
@@ -3684,7 +3684,12 @@ def export_academic_calendar_pdf(request, semester_id):
                                         # Skip holidays here since we already handled them above
                                         continue
                                     elif event_type in ['class_test', 'mid_term_exam', 'final_exam']:
-                                        exams_set.add(description)
+                                        # Add admit card note for final exam
+                                        if event_type == 'final_exam':
+                                            description_with_note = f"{description}\nAdmit Card Required - NO Admit, NO Exam"
+                                            exams_set.add(description_with_note)
+                                        else:
+                                            exams_set.add(description)
                                     else:
                                         remarks_set.add(description)
                     
@@ -4065,7 +4070,7 @@ def export_academic_calendar_pdf(request, semester_id):
                 # Check if this row has final exam events
                 if len(row_data) >= 5:  # Ensure we have all columns including exams
                     exams_column = row_data[4] if len(row_data) > 4 else ''
-                    if exams_column and 'Tentative Semester Final Exam' in str(exams_column):
+                    if exams_column and 'Semester-end Final Examination (Tentative)' in str(exams_column):
                         final_exam_rows.append(row_idx)
             
             # Apply cell spanning for final exam period in Exams column (column 4)
@@ -4095,7 +4100,7 @@ def export_academic_calendar_pdf(request, semester_id):
         
         # Create single-row legend with all items
         legend_data = [[
-            Table([['Semester Begin (SB)']], style=TableStyle([
+            Table([['First Day of Classes (FDC)']], style=TableStyle([
                 ('BACKGROUND', (0,0), (-1,-1), colors_dict['semester_begin']),
                 ('FONTSIZE', (0,0), (-1,-1), 9),
                 ('ALIGN', (0,0), (-1,-1), 'CENTER'),
@@ -4131,7 +4136,7 @@ def export_academic_calendar_pdf(request, semester_id):
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                 ('BOX', (0,0), (-1,-1), 1, colors.black),
             ])),
-            Table([['Class Ends (CE)']], style=TableStyle([
+            Table([['Last Day of Classes (LDC)']], style=TableStyle([
                 ('BACKGROUND', (0,0), (-1,-1), colors_dict['semester_end']),
                 ('FONTSIZE', (0,0), (-1,-1), 9),
                 ('ALIGN', (0,0), (-1,-1), 'CENTER'),
@@ -4140,13 +4145,6 @@ def export_academic_calendar_pdf(request, semester_id):
             ])),
             Table([['Final Exam (FE)']], style=TableStyle([
                 ('BACKGROUND', (0,0), (-1,-1), colors_dict['final_exam']),
-                ('FONTSIZE', (0,0), (-1,-1), 9),
-                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                ('BOX', (0,0), (-1,-1), 1, colors.black),
-            ])),
-            Table([['Holiday (H)']], style=TableStyle([
-                ('BACKGROUND', (0,0), (-1,-1), colors_dict['holiday']),
                 ('FONTSIZE', (0,0), (-1,-1), 9),
                 ('ALIGN', (0,0), (-1,-1), 'CENTER'),
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
@@ -4161,9 +4159,9 @@ def export_academic_calendar_pdf(request, semester_id):
             ])),
         ])
         
-        # Calculate column widths to match calendar width - 7 columns now
-        legend_col_width = calendar_width / 7
-        legend_table = Table(legend_data, colWidths=[legend_col_width] * 7)
+        # Calculate column widths to match calendar width - 6 columns now (Holiday removed)
+        legend_col_width = calendar_width / 6
+        legend_table = Table(legend_data, colWidths=[legend_col_width] * 6)
         legend_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),

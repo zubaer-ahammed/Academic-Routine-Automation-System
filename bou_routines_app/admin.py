@@ -515,7 +515,7 @@ admin.site.register(User, TeacherUserAdmin)
 
 @admin.register(Teacher)
 class TeacherAdmin(admin.ModelAdmin):
-    list_display = ('name', 'username', 'email', 'short_name', 'centre', 'designation', 'department', 'phone')
+    list_display = ('name', 'username', 'email', 'short_name', 'centre')
     search_fields = ('name', 'short_name', 'user__username', 'user__email', 'designation', 'centre__name')
     list_filter = ('centre', 'department', 'designation')
     ordering = ('name',)
@@ -548,7 +548,7 @@ class ProgramCoordinatorAdmin(admin.ModelAdmin):
 
 @admin.register(Semester)
 class SemesterAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'semester_full_name', 'curriculum', 'theory_class_duration_minutes', 'lab_class_duration_minutes', 'lunch_break_start', 'lunch_break_end', 'start_date')
+    list_display = ('id', 'name', 'semester_full_name', 'curriculum', 'theory_class_duration_minutes', 'lab_class_duration_minutes', 'start_date')
     list_filter = ('curriculum',)
     search_fields = ('name', 'curriculum__name')
     ordering = ('name',)

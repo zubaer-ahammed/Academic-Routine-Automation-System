@@ -593,21 +593,32 @@ class LoginLogAdmin(admin.ModelAdmin):
 
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'username', 'get_semesters', 'session', 'roll_number', 'email')
-    list_filter = ('semesters', 'session', 'centre')
-    search_fields = ('id', 'name', 'roll_number', 'email', 'user__username', 'user__email')
+    list_display = ('id', 'name', 'get_centre', 'get_semesters', 'session', 'email')
+    list_filter = ('semesters', 'session', 'centre', 'gender')
+    search_fields = ('id', 'name', 'roll_number', 'email', 'user__username', 'user__email', 'father_name', 'mother_name')
     ordering = ('id',)
     filter_horizontal = ('semesters',)
-    fields = ('user', 'id', 'name', 'centre', 'semesters', 'session', 'roll_number', 'email', 'phone')
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('user', 'id', 'name', 'centre', 'semesters', 'session', 'roll_number')
+        }),
+        ('Contact Information', {
+            'fields': ('email', 'phone')
+        }),
+        ('Personal Information', {
+            'fields': ('gender', 'date_of_birth', 'father_name', 'mother_name')
+        }),
+    )
     readonly_fields = ('user',)
     
     def get_semesters(self, obj):
         return ", ".join([semester.name for semester in obj.semesters.all()])
     get_semesters.short_description = 'Semesters'
     
-    def username(self, obj):
-        return obj.user.username if obj.user else ""
-    username.short_description = 'Username'
+    def get_centre(self, obj):
+        return obj.centre.name if obj.centre else "-"
+    get_centre.short_description = 'Study Center'
+    get_centre.admin_order_field = 'centre__name'
 
 
 @admin.register(Attendance)

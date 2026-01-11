@@ -1097,7 +1097,7 @@ def generate_routine(request):
                     if not found:
                         # If this is a makeup/reserved date, show 'Reserved Class'
                         if date in makeup_dates:
-                            row_cells.append({'content': 'Makeup Class', 'colspan': 1, 'is_makeup_class': True})
+                            row_cells.append({'content': 'Review Class', 'colspan': 1, 'is_makeup_class': True})
                         else:
                             row_cells.append({'content': '', 'colspan': 1, 'is_lunch_break': False})
                         slot_idx += 1
@@ -2089,7 +2089,7 @@ def export_to_excel(request, semester_id):
                 if not found:
                     # If this is a makeup/reserved date, show 'Reserved Class'
                     if date in makeup_dates:
-                        worksheet.write(row, col_idx, "Makeup Class", cell_format if not is_even_row else even_row_bg_format)
+                        worksheet.write(row, col_idx, "Review Class", cell_format if not is_even_row else even_row_bg_format)
                     else:
                         worksheet.write(row, col_idx, "", cell_format if not is_even_row else even_row_bg_format)
                     col_idx += 1
@@ -2767,9 +2767,9 @@ def export_to_pdf(request, semester_id):
                         found = True
                         break
                 if not found:
-                    # If this is a makeup date, show 'Makeup Class'
+                    # If this is a makeup date, show 'Review Class'
                     if date in makeup_dates:
-                        cell_content = Paragraph("Makeup Class", ParagraphStyle(
+                        cell_content = Paragraph("Review Class", ParagraphStyle(
                             'MakeupClass',
                             fontName='Helvetica-Bold',
                             fontSize=9,
@@ -3448,7 +3448,7 @@ def export_academic_calendar_pdf(request, semester_id):
                     ]
                     for makeup_date in makeup_dates:
                         # Include makeup dates even if they're after semester end
-                        add_event_to_calendar(makeup_date, 'makeup_class', 'Makeup/Extra Class')
+                        add_event_to_calendar(makeup_date, 'makeup_class', 'Review Class')
                         if latest_makeup_date is None or makeup_date > latest_makeup_date:
                             latest_makeup_date = makeup_date
                 
@@ -3519,7 +3519,7 @@ def export_academic_calendar_pdf(request, semester_id):
                 if month_count == 0:
                     # Create the main header rows - two-row structure
                     header_row_1 = ['Month', 'Day & Date', '', 'Events', 'Exams']
-                    header_row_2 = ['', 'F', 'S', '', '']
+                    header_row_2 = ['', 'Friday', 'Saturday', '', '']
                     months_data.append([header_row_1])
                     months_data.append([header_row_2])
                 
@@ -3607,9 +3607,9 @@ def export_academic_calendar_pdf(request, semester_id):
                             # Show markers for all events (excluding holidays)
                             for event_type, description in events:
                                 if event_type == 'semester_begin':
-                                    friday_str += ' (SB)'
+                                    friday_str += ' (FDC)'
                                 elif event_type == 'semester_end':
-                                    friday_str += ' (CE)'
+                                    friday_str += ' (LDC)'
                                 elif event_type == 'class_test':
                                     friday_str += ' (CT)'
                                 elif event_type == 'mid_term_exam':
@@ -3617,9 +3617,9 @@ def export_academic_calendar_pdf(request, semester_id):
                                 elif event_type == 'assignment':
                                     friday_str += ' (Assn.)'
                                 elif event_type == 'final_exam':
-                                    friday_str += ' (FE)'
+                                    friday_str += ' (SEFE)'
                                 elif event_type == 'makeup_class':
-                                    friday_str += ' (MC)'
+                                    friday_str += ' (RC)'
                                 # Skip holiday type here since we already checked above
                     
                     if saturday_day:
@@ -3638,9 +3638,9 @@ def export_academic_calendar_pdf(request, semester_id):
                             # Show markers for all events (excluding holidays)
                             for event_type, description in events:
                                 if event_type == 'semester_begin':
-                                    saturday_str += ' (SB)'
+                                    saturday_str += ' (FDC)'
                                 elif event_type == 'semester_end':
-                                    saturday_str += ' (CE)'
+                                    saturday_str += ' (LDC)'
                                 elif event_type == 'class_test':
                                     saturday_str += ' (CT)'
                                 elif event_type == 'mid_term_exam':
@@ -3648,9 +3648,9 @@ def export_academic_calendar_pdf(request, semester_id):
                                 elif event_type == 'assignment':
                                     saturday_str += ' (Assn.)'
                                 elif event_type == 'final_exam':
-                                    saturday_str += ' (FE)'
+                                    saturday_str += ' (SEFE)'
                                 elif event_type == 'makeup_class':
-                                    saturday_str += ' (MC)'
+                                    saturday_str += ' (RC)'
                                 # Skip holiday type here since we already checked above
                     
                     week_data.extend([friday_str, saturday_str])
@@ -3780,7 +3780,7 @@ def export_academic_calendar_pdf(request, semester_id):
             # If no calendar data, create a simple message with proper column structure
             is_fallback = True
             all_calendar_data = [['Month', 'Day & Date', '', 'Events', 'Exams'],
-                                ['', 'F', 'S', '', ''],
+                                ['', 'Friday', 'Saturday', '', ''],
                                 ['No calendar data available for the selected semester date range.', '', '', '', '']]
             # Keep the same column widths for consistency
         
@@ -4150,14 +4150,14 @@ def export_academic_calendar_pdf(request, semester_id):
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                 ('BOX', (0,0), (-1,-1), 1, colors.black),
             ])),
-            Table([['Final Exam (FE)']], style=TableStyle([
+            Table([['Semester-end Final Examination (SEFE)']], style=TableStyle([
                 ('BACKGROUND', (0,0), (-1,-1), colors_dict['final_exam']),
                 ('FONTSIZE', (0,0), (-1,-1), 9),
                 ('ALIGN', (0,0), (-1,-1), 'CENTER'),
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                 ('BOX', (0,0), (-1,-1), 1, colors.black),
             ])),
-            Table([['Makeup Class (MC)']], style=TableStyle([
+            Table([['Review Class (RC)']], style=TableStyle([
                 ('BACKGROUND', (0,0), (-1,-1), colors_dict['makeup_class']),
                 ('FONTSIZE', (0,0), (-1,-1), 9),
                 ('ALIGN', (0,0), (-1,-1), 'CENTER'),
@@ -4167,13 +4167,27 @@ def export_academic_calendar_pdf(request, semester_id):
         ])
         
         # Calculate column widths to match calendar width - 6 columns now (Holiday removed)
-        legend_col_width = calendar_width / 6
-        legend_table = Table(legend_data, colWidths=[legend_col_width] * 6)
+        # Use proportional widths: smaller for short items, larger for "Semester-end Final Examination (SEFE)"
+        # Widths: FDC, MT/CT, Assn., LDC, SEFE, RC
+        base_width = calendar_width / 10
+        legend_col_widths = [
+            base_width * 1.25,  # First Day of Classes (FDC)
+            base_width * 1.0,  # Mid-Term Exam (MT) or Class Test (CT) - reduced
+            base_width * 1.0,  # Assignment (Assn.) - reduced
+            base_width * 1.2,  # Last Day of Classes (LDC)
+            base_width * 1.8,  # Semester-end Final Examination (SEFE) - increased
+            base_width * 0.9,  # Review Class (RC)
+        ]
+        # Normalize to match calendar width
+        total_width = sum(legend_col_widths)
+        legend_col_widths = [w * calendar_width / total_width for w in legend_col_widths]
+        
+        legend_table = Table(legend_data, colWidths=legend_col_widths)
         legend_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 4),   # Uniform left padding
-            ('RIGHTPADDING', (0, 0), (-1, -1), 4),  # Uniform right padding
+            ('LEFTPADDING', (0, 0), (-1, -1), 2),   # Reduced from 4 to 2
+            ('RIGHTPADDING', (0, 0), (-1, -1), 2),  # Reduced from 4 to 2
             ('TOPPADDING', (0, 0), (-1, -1), 2),    # Uniform top padding
             ('BOTTOMPADDING', (0, 0), (-1, -1), 2), # Uniform bottom padding
         ]))

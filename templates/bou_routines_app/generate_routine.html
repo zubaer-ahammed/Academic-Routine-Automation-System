@@ -323,7 +323,7 @@
             {% endif %}
 
             <div class="mb-3">
-                <label for="makeup_dates" class="form-label">Makeup/Reserved Class Dates <small class="text-muted">(Only date and day will be shown, no pre-assigned classes)</small></label>
+                <label for="makeup_dates" class="form-label">Makeup/Review Class Dates <small class="text-muted">(Only date and day will be shown, no pre-assigned classes)</small></label>
                 <input type="text" name="makeup_dates" id="makeup_dates" class="form-control" placeholder="Click to select makeup/extra class dates">
                 <div id="selectedMakeupDates" class="mt-2 d-flex flex-wrap gap-1"></div>
                 <!-- Hidden input to store formatted makeup dates for backend processing -->
@@ -552,7 +552,7 @@
                                                 </span>
                                                 <div class="empty-cell-content" style="display: block;">
                                                     {% if makeup_dates and row.date in makeup_dates %}
-                                                        <small class="text-info">Makeup Class</small>
+                                                        <small class="text-info">Review Class</small>
                                                     {% else %}
                                                         <small class="text-muted">Click to add course</small>
                                                     {% endif %}

@@ -1502,6 +1502,13 @@
                                                 <i class="fas fa-file-pdf text-danger"></i> PDF
                                             </a>
                                         </li>
+                                        {% if user.is_superuser or user.is_staff %}
+                                        <li>
+                                            <a class="dropdown-item" href="{% url 'export-blank-attendance-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}">
+                                                <i class="fas fa-file-pdf text-danger"></i> Blank PDF
+                                            </a>
+                                        </li>
+                                        {% endif %}
                                         <li>
                                             <a class="dropdown-item" href="{% url 'export-attendance-excel' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}">
                                                 <i class="fas fa-file-excel text-success"></i> Excel

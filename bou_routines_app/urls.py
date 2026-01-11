@@ -22,6 +22,7 @@ urlpatterns = [
     path('attendance/data/', views.get_attendance_data, name='get-attendance-data'),
     path('attendance/report/', views.attendance_report, name='attendance-report'),
     path('attendance/export-pdf/', views.export_attendance_pdf, name='export-attendance-pdf'),
+    path('attendance/export-blank-pdf/', views.export_blank_attendance_pdf, name='export-blank-attendance-pdf'),
     path('attendance/export-excel/', views.export_attendance_excel, name='export-attendance-excel'),
     path('attendance/courses/', views.get_courses_for_semester, name='get-courses-for-semester'),
     path('attendance/semesters/', views.get_semesters_for_curriculum, name='get-semesters-for-curriculum'),

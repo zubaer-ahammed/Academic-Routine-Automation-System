@@ -6,6 +6,7 @@ from collections import defaultdict
 from django.contrib import messages
 from django.http import JsonResponse, HttpResponse, FileResponse
 import io
+import os
 import calendar
 import xlsxwriter
 import re
@@ -5705,6 +5706,483 @@ def export_attendance_pdf(request):
         
         response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
         filename = f"Attendance_{course.code}_{semester.name}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+        
+    except Exception as e:
+        return HttpResponse(f"Error generating PDF: {str(e)}", status=500)
+
+@login_required
+def export_blank_attendance_pdf(request):
+    """Export blank attendance sheet to PDF (only Student ID and Name filled, all other columns blank)"""
+    try:
+        # Check permissions - only admin/superuser can download blank sheets
+        if not (request.user.is_superuser or request.user.is_staff):
+            messages.error(request, "You don't have permission to export blank attendance sheets.")
+            return redirect('attendance-calendar')
+        
+        semester_id = request.GET.get('semester')
+        course_id = request.GET.get('course')
+        
+        if not semester_id or not course_id:
+            messages.error(request, "Please select a semester and course.")
+            return redirect('attendance-calendar')
+        
+        semester = Semester.objects.get(id=semester_id)
+        course = Course.objects.get(id=course_id)
+        
+        # Get all students with custom sorting
+        students = Student.objects.filter(semesters=semester).extra(
+            select={
+                'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
+                'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
+            }
+        ).order_by('-first_two_digits', 'last_three_digits')
+        
+        # Generate semester dates based on course schedule (same logic as attendance_calendar)
+        from datetime import timedelta, datetime
+        from bou_routines_app.models import NewRoutine
+        
+        # Get the course's scheduled days from NewRoutine table
+        course_routines = NewRoutine.objects.filter(
+            course=course,
+            semester=semester
+        ).values_list('day', flat=True).distinct()
+        
+        # Generate dates based on semester start/end dates and course schedule
+        semester_dates = []
+        if semester.start_date and semester.end_date:
+            current_date = semester.start_date
+            end_date = semester.end_date
+            
+            # Get holidays for this semester
+            holiday_dates = set()
+            if semester.holidays:
+                for date_str in semester.holidays.split(','):
+                    if date_str.strip():
+                        try:
+                            holiday_date = datetime.strptime(date_str.strip(), "%Y-%m-%d").date()
+                            holiday_dates.add(holiday_date)
+                        except ValueError:
+                            pass
+            
+            # Get makeup dates from semester
+            makeup_dates = []
+            if semester.makeup_dates:
+                for date_str in semester.makeup_dates.split(','):
+                    if date_str.strip():
+                        try:
+                            makeup_date = datetime.strptime(date_str.strip(), "%Y-%m-%d").date()
+                            makeup_dates.append(makeup_date)
+                        except ValueError:
+                            pass
+            
+            # Determine which days to show based on course routine
+            days_to_show = []
+            if 'Friday' in course_routines and 'Saturday' in course_routines:
+                days_to_show = ['Friday', 'Saturday']
+            elif 'Friday' in course_routines:
+                days_to_show = ['Friday']
+            elif 'Saturday' in course_routines:
+                days_to_show = ['Saturday']
+            else:
+                # Fallback: show Friday and Saturday if no specific schedule found
+                days_to_show = ['Friday', 'Saturday']
+            
+            # Generate dates based on the determined days to show
+            while current_date <= end_date:
+                day_name = current_date.strftime('%A')
+                if day_name in days_to_show:
+                    # Only add if not a holiday
+                    if current_date not in holiday_dates:
+                        semester_dates.append(current_date)
+                current_date += timedelta(days=1)
+            
+            # Add makeup dates to the semester dates
+            for makeup_date in makeup_dates:
+                if makeup_date not in semester_dates:
+                    semester_dates.append(makeup_date)
+            
+            # Sort all dates chronologically
+            semester_dates.sort()
+        
+        # Use semester_dates (fallback to empty list if no schedule)
+        attendance_dates = semester_dates if semester_dates else []
+        
+        # Get centre name for header
+        centre_name = None
+        if students.exists():
+            first_student = students.first()
+            if first_student.centre:
+                centre_name = first_student.centre.name
+        
+        # Create PDF in landscape mode for more horizontal space
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=landscape(A4),
+            rightMargin=54,
+            leftMargin=54,
+            topMargin=34,
+            bottomMargin=34
+        )
+        
+        # Get page width and calculate available width
+        page_width, page_height = landscape(A4)
+        available_width = page_width - doc.leftMargin - doc.rightMargin
+        
+        elements = []
+        
+        # --- HEADER IMAGE SECTION ---
+        header_img_path = 'bou_routines_app/static/pdf_routine_top.png'
+        try:
+            padding_for_image = 2
+            img_obj = Image(header_img_path, width=available_width - (2 * padding_for_image), height=45)
+            header_img_table = Table([[img_obj]], colWidths=[available_width])
+            header_img_table.setStyle(TableStyle([
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('LEFTPADDING', (0,0), (-1, -1), padding_for_image),
+                ('RIGHTPADDING', (0,0), (-1, -1), padding_for_image),
+                ('TOPPADDING', (0,0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0,0), (-1, -1), 0),
+            ]))
+            elements.append(header_img_table)
+        except Exception as e:
+            print(f"Error loading header image: {e}")
+            pass
+        elements.append(Spacer(1, -4))
+        
+        # Initialize centre_name if not set
+        if not centre_name:
+            first_sc = SemesterCourse.objects.filter(semester=semester).select_related('centre').first()
+            if first_sc and first_sc.centre:
+                centre_name = first_sc.centre.name
+        
+        # Build left column (program/session/term/commencement/study center)
+        header_style = ParagraphStyle(
+            'HeaderStyle',
+            fontName='Helvetica-Bold',
+            fontSize=15,
+            alignment=1,
+            leading=18,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+        header_style_small = ParagraphStyle(
+            'HeaderStyleSmall',
+            fontName='Helvetica-Bold',
+            fontSize=11,
+            alignment=1,
+            leading=14,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+        header_style_normal = ParagraphStyle(
+            'HeaderStyleNormal',
+            fontName='Helvetica',
+            fontSize=10,
+            alignment=1,
+            leading=11,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+        header_style_bold = ParagraphStyle(
+            'HeaderStyleBold',
+            fontName='Helvetica-Bold',
+            fontSize=12,
+            alignment=1,
+            leading=15,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+        
+        left_content = []
+        program_name = 'B. Sc in Computer Science and Engineering Program'
+        left_content.append(Paragraph(program_name, header_style))
+        session = semester.session or ''
+        if session:
+            left_content.append(Paragraph(f'{session} Session', header_style_small))
+        term = semester.term or ''
+        semester_full_name = semester.semester_full_name or ''
+        if term or semester_full_name:
+            combined = f'{term} Term {semester_full_name}'.strip()
+            left_content.append(Paragraph(combined, header_style_small))
+        left_content.append(Spacer(1, 2))
+        course_name_display = f"{course.code} - {course.name}" if course else "Course"
+        left_content.append(Paragraph(f'Blank Attendance Sheet - {course_name_display}', header_style_bold))
+        commencement = semester.start_date.strftime('%d %B %Y') if semester.start_date else ''
+        if commencement:
+            left_content.append(Paragraph(f'<b>Date of Commencement:</b> {commencement}', header_style_normal))
+        if centre_name:
+            left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
+        
+        # Build right column (contact person box)
+        coordinator = semester.program_coordinator
+        contact_info_lines = []
+        
+        if coordinator:
+            contact_label = Paragraph(
+                'Contact Person',
+                ParagraphStyle(
+                    'ContactLabel',
+                    fontName='Helvetica-Bold',
+                    fontSize=11,
+                    alignment=0,
+                    textColor=colors.white,
+                    spaceAfter=0,
+                    spaceBefore=0,
+                    leading=14,
+                )
+            )
+            contact_label_table = Table(
+                [[contact_label]],
+                colWidths=[190],
+                hAlign='RIGHT',
+                style=TableStyle([
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+                    ('TOPPADDING', (0,0), (-1,-1), -3),
+                    ('LEFTPADDING', (0,0), (-1,-1), 0),
+                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                ])
+            )
+            if coordinator.teacher:
+                contact_info_lines.append(coordinator.teacher.name)
+            if coordinator.designation:
+                contact_info_lines.append(coordinator.designation)
+            if coordinator.secondary_designation:
+                contact_info_lines.append(coordinator.secondary_designation)
+        contact_info_lines.append('Bangladesh Open University')
+        if coordinator and coordinator.phone:
+            contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
+        if coordinator and coordinator.email:
+            contact_info_lines.append(f'email:{coordinator.email}')
+        else:
+            contact_info_lines.append('Bangladesh Open University')
+            contact_label = Paragraph(
+                'Contact Person',
+                ParagraphStyle(
+                    'ContactLabel',
+                    fontName='Helvetica-Bold',
+                    fontSize=11,
+                    alignment=0,
+                    textColor=colors.white,
+                    spaceAfter=0,
+                    spaceBefore=0,
+                    leading=14,
+                )
+            )
+            contact_label_table = Table(
+                [[contact_label]],
+                colWidths=[190],
+                hAlign='RIGHT',
+                style=TableStyle([
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+                    ('TOPPADDING', (0,0), (-1,-1), -3),
+                    ('LEFTPADDING', (0,0), (-1,-1), 0),
+                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                ])
+            )
+        
+        contact_info_para = Paragraph(
+            '<br/>'.join(contact_info_lines),
+            ParagraphStyle(
+                'ContactBox',
+                fontName='Helvetica',
+                fontSize=10,
+                alignment=0,
+                textColor=colors.black,
+                leftIndent=2,
+                leading=10,
+                spaceBefore=0,
+                spaceAfter=0,
+            )
+        )
+        contact_table = Table(
+            [[contact_label_table], [contact_info_para]],
+            colWidths=[190],
+            hAlign='RIGHT',
+        )
+        contact_table.setStyle(TableStyle([
+            ('BOX', (0, 0), (-1, -1), 1, colors.black),
+            ('ROUNDED', (0, 0), (-1, -1), 6),
+            ('BACKGROUND', (0, 0), (0, 0), colors.HexColor('#2c3e50')),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (0, 0), 6),
+            ('BOTTOMPADDING', (0, 0), (0, 0), 4),
+            ('TOPPADDING', (0, 1), (0, 1), 4),
+            ('BOTTOMPADDING', (0, 1), (0, 1), 6),
+        ]))
+        
+        left_box_table = Table(
+            [[left_content]],
+            colWidths=[available_width-190],
+            hAlign='LEFT',
+            style=TableStyle([
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ])
+        )
+        two_col_table = Table(
+            [[left_box_table, contact_table]],
+            colWidths=[available_width-190, 190],
+            hAlign='LEFT'
+        )
+        two_col_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (0, 0), 'MIDDLE'),
+            ('VALIGN', (1, 0), (1, 0), 'MIDDLE'),
+            ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ]))
+        elements.append(Spacer(1, 4))
+        elements.append(two_col_table)
+        elements.append(Spacer(1, 4))
+        
+        # Build table data
+        table_data = []
+        
+        # Header row - make date columns vertical to save space
+        styles = getSampleStyleSheet()
+        vertical_header_style = ParagraphStyle(
+            'VerticalHeader',
+            parent=styles['Normal'],
+            fontSize=6,
+            textColor=colors.white,
+            alignment=TA_CENTER,
+            leading=6,
+            spaceBefore=0,
+            spaceAfter=0,
+            wordWrap='CJK',
+        )
+        
+        def make_date_header(date):
+            """Create vertical date header: Day of week, Day, Month"""
+            day_abbrev = date.strftime('%a')
+            day_num = date.strftime('%d')
+            month_abbrev = date.strftime('%b')
+            date_text = f"{day_abbrev}<br/>{day_num}<br/>{month_abbrev}"
+            para = Paragraph(date_text, vertical_header_style)
+            return para
+        
+        header = ['Student ID', 'Name']
+        # Add date columns with vertical format
+        for date in attendance_dates:
+            header.append(make_date_header(date))
+        # Add Present, Absent, and % columns (horizontal)
+        header.extend(['Present', 'Absent', '%'])
+        table_data.append(header)
+        
+        # Data rows - only Student ID and Name filled, all other cells blank
+        for student in students:
+            row = [student.id, student.name.upper()]
+            # Add blank cells for all dates
+            for date in attendance_dates:
+                row.append('')  # Blank cell
+            # Add blank cells for Present, Absent, %
+            row.extend(['', '', ''])
+            table_data.append(row)
+        
+        # Calculate column widths dynamically for landscape orientation
+        available_width = 752
+        fixed_cols_width = 70 + 128 + 32 + 32 + 32  # Student ID + Name + Present + Absent + %
+        num_date_cols = len(attendance_dates)
+        date_col_width = max(22, (available_width - fixed_cols_width) / num_date_cols) if num_date_cols > 0 else 25
+        
+        col_widths = [70, 128] + [date_col_width] * len(attendance_dates) + [32, 32, 32]
+        
+        # Create table with adjusted column widths
+        table = Table(table_data, colWidths=col_widths, repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            ('TOPPADDING', (0, 0), (-1, 0), 8),
+            ('ROWHEIGHT', (0, 0), (-1, 0), 50),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            ('FONTSIZE', (0, 1), (-1, -1), 7),
+            ('FONTSIZE', (1, 1), (1, -1), 6),  # Smaller font for Name column
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 1), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+        ]))
+        
+        elements.append(table)
+        
+        # Add footer with signatures
+        elements.append(Spacer(1, 40))
+        signature_style = ParagraphStyle(
+            'SignatureStyle',
+            fontName='Helvetica',
+            fontSize=10,
+            alignment=TA_RIGHT,
+            leading=6,
+            spaceBefore=0,
+            spaceAfter=0,
+        )
+        signature_style_left = ParagraphStyle(
+            'SignatureStyleLeft',
+            fontName='Helvetica',
+            fontSize=10,
+            alignment=0,
+            leading=6,
+            spaceBefore=0,
+            spaceAfter=0,
+        )
+        dean_line = Paragraph("Dean", signature_style)
+        school_line = Paragraph("School of Science and Technology", signature_style)
+        bou_line = Paragraph("Bangladesh Open University", signature_style)
+        coordinator_line = Paragraph("Program Co-ordinator", signature_style_left)
+        school_line_left = Paragraph("School of Science and Technology", signature_style_left)
+        bou_line_left = Paragraph("Bangladesh Open University", signature_style_left)
+        signature_data = [
+            [dean_line],
+            [school_line],
+            [bou_line]
+        ]
+        signature_data_left = [
+            [coordinator_line],
+            [school_line_left],
+            [bou_line_left]
+        ]
+        signature_table_width = 250
+        signature_table = Table(signature_data, colWidths=[signature_table_width])
+        signature_table.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'RIGHT'),
+            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
+            ('TOPPADDING', (0,0), (0,0), 4),
+        ]))
+        signature_table_left = Table(signature_data_left, colWidths=[signature_table_width])
+        signature_table_left.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
+            ('TOPPADDING', (0,0), (0,0), 4),
+        ]))
+        wrapper_col_widths = [available_width - signature_table_width * 2, signature_table_width, signature_table_width]
+        signature_wrapper_table = Table([[signature_table_left, '', signature_table]], colWidths=wrapper_col_widths)
+        signature_wrapper_table.setStyle(TableStyle([
+            ('ALIGN', (0,0), (0,0), 'LEFT'),
+            ('ALIGN', (2,0), (2,0), 'RIGHT'),
+            ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
+            ('LEFTPADDING', (0,0), (-1,-1), 0),
+            ('RIGHTPADDING', (0,0), (-1,-1), 0),
+            ('TOPPADDING', (0,0), (-1,-1), 0),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+        ]))
+        elements.append(signature_wrapper_table)
+        
+        # Build PDF
+        doc.build(elements)
+        buffer.seek(0)
+        
+        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        filename = f"Blank_Attendance_{course.code}_{semester.name}.pdf"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
         

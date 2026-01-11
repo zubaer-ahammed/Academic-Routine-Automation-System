@@ -687,8 +687,27 @@
                 updateFieldStates();
                 toggleSemesterInfoFields();
                 const semesterId = $(this).val();
+                
+                // Update URL with semester parameter
+                var url = new URL(window.location);
                 if (semesterId) {
-                loadSemesterCourses(semesterId);
+                    url.searchParams.set('semester', semesterId);
+                } else {
+                    url.searchParams.delete('semester');
+                }
+                // Preserve curriculum and centre parameters
+                var curriculumId = $('#curriculum').val();
+                if (curriculumId) {
+                    url.searchParams.set('curriculum', curriculumId);
+                }
+                var centreId = $('#centre').val();
+                if (centreId) {
+                    url.searchParams.set('centre', centreId);
+                }
+                window.history.replaceState({}, '', url);
+                
+                if (semesterId) {
+                    loadSemesterCourses(semesterId);
                 }
             });
 

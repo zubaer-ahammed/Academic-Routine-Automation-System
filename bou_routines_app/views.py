@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect
-from .models import CurrentRoutine, Teacher, Semester, Course, NewRoutine, SemesterCourse, Student, Attendance, Curriculum, CAMark, FinalExamMark, Centre, ProgramCoordinator
+from .models import CurrentRoutine, Teacher, Semester, Course, NewRoutine, SemesterCourse, Student, Attendance, Curriculum, CAMark, FinalExamMark, Centre, ProgramCoordinator, SemesterCentreCoordinator
 from .forms import RoutineForm, TeacherRegistrationForm
 from datetime import datetime, timedelta, date
 from collections import defaultdict
@@ -1410,22 +1410,74 @@ def update_semester_courses(request):
     if request.method == "POST":
         semester_id = request.POST.get("semester")
         context["selected_semester_id"] = semester_id
-        semester = Semester.objects.get(id=semester_id)
+        
+        # Get parameters for redirect (preserve on errors)
+        selected_curriculum_id = request.POST.get("curriculum") or request.GET.get('curriculum')
+        selected_centre_id = request.POST.get("centre") or request.GET.get('centre')
+        
+        # Helper function to build redirect URL with preserved parameters
+        def build_redirect_url():
+            base_url = reverse('update-semester-courses')
+            params = {}
+            if selected_curriculum_id:
+                params['curriculum'] = selected_curriculum_id
+            if selected_centre_id:
+                params['centre'] = selected_centre_id
+            if semester_id:
+                params['semester'] = semester_id
+            if params:
+                query_string = urlencode(params)
+                return f"{base_url}?{query_string}"
+            return base_url
+        
+        if not semester_id:
+            messages.error(request, "Semester is required.")
+            return redirect(build_redirect_url())
+        
+        try:
+            semester = Semester.objects.get(id=semester_id)
+        except Semester.DoesNotExist:
+            messages.error(request, "Invalid semester selected.")
+            return redirect(build_redirect_url())
 
         # Update semester info fields from POST
         semester.semester_full_name = request.POST.get("semester_full_name", semester.semester_full_name)
         semester.term = request.POST.get("term", semester.term)
         semester.session = request.POST.get("session", semester.session)
         
-        # Update program coordinator
+        # Get centre from request first (needed for validation)
+        centre_id = request.POST.get("centre")
+        if not centre_id:
+            messages.error(request, "Centre is required when updating semester courses.")
+            return redirect(build_redirect_url())
+        
+        try:
+            centre = Centre.objects.get(id=centre_id)
+        except Centre.DoesNotExist:
+            messages.error(request, "Invalid centre selected.")
+            return redirect(build_redirect_url())
+        
+        # Update program coordinator - now centre-specific using SemesterCentreCoordinator
         program_coordinator_id = request.POST.get("program_coordinator")
         if program_coordinator_id:
             try:
-                semester.program_coordinator = ProgramCoordinator.objects.get(id=program_coordinator_id)
+                coordinator = ProgramCoordinator.objects.get(id=program_coordinator_id)
+                # Validate that the coordinator belongs to the selected centre
+                if coordinator.centre != centre:
+                    messages.error(request, f"Selected Program Coordinator belongs to {coordinator.centre.name}, but you selected {centre.name}. Please select a coordinator for the correct centre.")
+                    return redirect(build_redirect_url())
+                
+                # Create or update SemesterCentreCoordinator for this semester/centre combination
+                SemesterCentreCoordinator.objects.update_or_create(
+                    semester=semester,
+                    centre=centre,
+                    defaults={'program_coordinator': coordinator}
+                )
             except ProgramCoordinator.DoesNotExist:
                 pass
         elif program_coordinator_id == '':
-            semester.program_coordinator = None
+            # Clear coordinator for this specific semester/centre combination
+            SemesterCentreCoordinator.objects.filter(semester=semester, centre=centre).delete()
         
         # Update class duration fields
         theory_duration = request.POST.get("theory_class_duration_minutes")
@@ -1443,17 +1495,7 @@ def update_semester_courses(request):
         
         semester.save()
 
-        # Get centre from request (required for SemesterCourse)
-        centre_id = request.POST.get("centre")
-        if not centre_id:
-            messages.error(request, "Centre is required when updating semester courses.")
-            return redirect('update-semester-courses')
-        
-        try:
-            centre = Centre.objects.get(id=centre_id)
-        except Centre.DoesNotExist:
-            messages.error(request, "Invalid centre selected.")
-            return redirect('update-semester-courses')
+        # Centre is already retrieved above for validation
         
         # Delete existing SemesterCourse records for this semester and centre
         SemesterCourse.objects.filter(semester=semester, centre=centre).delete()
@@ -1482,6 +1524,7 @@ def update_semester_courses(request):
                 semester_course.save()
         #messages.success(request, f"Successfully updated courses for {semester.name}")
         # Redirect to the same page with selected semester, curriculum, centre and success param
+        # Use the POST values for redirect (they're already set in build_redirect_url scope)
         base_url = reverse('update-semester-courses')
         params = {'semester': semester_id, 'success': 1}
         if selected_curriculum_id:
@@ -1574,18 +1617,33 @@ def get_semester_courses(request):
                     mid_term_exam_dates_info = semester.mid_term_exam_dates
                 
                 # Add all semester info fields
-                coordinator = semester.program_coordinator
+                # Get coordinator for this specific semester/centre combination
+                coordinator_id = None
+                coordinator = None
+                if centre_id:
+                    try:
+                        centre = Centre.objects.get(id=centre_id)
+                        semester_centre_coordinator = SemesterCentreCoordinator.objects.filter(
+                            semester=semester,
+                            centre=centre
+                        ).select_related('program_coordinator', 'program_coordinator__teacher').first()
+                        if semester_centre_coordinator:
+                            coordinator = semester_centre_coordinator.program_coordinator
+                            coordinator_id = coordinator.id
+                    except Centre.DoesNotExist:
+                        pass
+                
                 semester_data = {
                     'semester_full_name': semester.semester_full_name,
                     'term': semester.term,
                     'session': semester.session,
                     'centre': '',  # Centre is now at SemesterCourse level, not Semester level
-                    'program_coordinator_id': coordinator.id if coordinator else None,
-                    'contact_person': coordinator.teacher.name if coordinator and coordinator.teacher else '',
-                    'contact_person_designation': coordinator.designation if coordinator else '',
-                    'contact_person_secondary_designation': coordinator.secondary_designation if coordinator else '',
-                    'contact_person_phone': coordinator.phone if coordinator else '',
-                    'contact_person_email': coordinator.email if coordinator else '',
+                    'program_coordinator_id': coordinator_id,
+                    'contact_person': coordinator.teacher.name if coordinator and coordinator_id else '',
+                    'contact_person_designation': coordinator.designation if coordinator and coordinator_id else '',
+                    'contact_person_secondary_designation': coordinator.secondary_designation if coordinator and coordinator_id else '',
+                    'contact_person_phone': coordinator.phone if coordinator and coordinator_id else '',
+                    'contact_person_email': coordinator.email if coordinator and coordinator_id else '',
                     'theory_class_duration_minutes': semester.theory_class_duration_minutes,
                     'lab_class_duration_minutes': semester.lab_class_duration_minutes,
                 }
@@ -2430,7 +2488,15 @@ def export_to_pdf(request, semester_id):
 
         # Build right column (contact person box)
         contact_lines = []
-        coordinator = selected_semester.program_coordinator
+        # Get coordinator for this specific semester/centre combination
+        coordinator = None
+        if centre:
+            semester_centre_coordinator = SemesterCentreCoordinator.objects.filter(
+                semester=selected_semester,
+                centre=centre
+            ).select_related('program_coordinator', 'program_coordinator__teacher').first()
+            if semester_centre_coordinator:
+                coordinator = semester_centre_coordinator.program_coordinator
         contact_info_lines = []
         
         if coordinator:
@@ -3268,7 +3334,15 @@ def export_academic_calendar_pdf(request, semester_id):
             ])
         )
         contact_info_lines = []
-        coordinator = selected_semester.program_coordinator
+        # Get coordinator for this specific semester/centre combination
+        coordinator = None
+        if centre:
+            semester_centre_coordinator = SemesterCentreCoordinator.objects.filter(
+                semester=selected_semester,
+                centre=centre
+            ).select_related('program_coordinator', 'program_coordinator__teacher').first()
+            if semester_centre_coordinator:
+                coordinator = semester_centre_coordinator.program_coordinator
         if coordinator and coordinator.teacher:
             contact_info_lines.append(coordinator.teacher.name)
         if coordinator and coordinator.designation:
@@ -5470,7 +5544,31 @@ def export_attendance_pdf(request):
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
         
         # Build right column (contact person box)
-        coordinator = semester.program_coordinator
+        # Get coordinator for this specific semester/centre combination
+        coordinator = None
+        if centre_id:
+            try:
+                centre_obj = Centre.objects.get(id=centre_id)
+                semester_centre_coordinator = SemesterCentreCoordinator.objects.filter(
+                    semester=semester,
+                    centre=centre_obj
+                ).select_related('program_coordinator', 'program_coordinator__teacher').first()
+                if semester_centre_coordinator:
+                    coordinator = semester_centre_coordinator.program_coordinator
+            except Centre.DoesNotExist:
+                pass
+        # Fallback: try to get centre from centre_name if centre_id not available
+        if not coordinator and centre_name:
+            try:
+                centre_obj = Centre.objects.get(name=centre_name)
+                semester_centre_coordinator = SemesterCentreCoordinator.objects.filter(
+                    semester=semester,
+                    centre=centre_obj
+                ).select_related('program_coordinator', 'program_coordinator__teacher').first()
+                if semester_centre_coordinator:
+                    coordinator = semester_centre_coordinator.program_coordinator
+            except Centre.DoesNotExist:
+                pass
         contact_info_lines = []
         
         if coordinator:
@@ -5986,7 +6084,31 @@ def export_blank_attendance_pdf(request):
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
         
         # Build right column (contact person box)
-        coordinator = semester.program_coordinator
+        # Get coordinator for this specific semester/centre combination
+        coordinator = None
+        if centre_id:
+            try:
+                centre_obj = Centre.objects.get(id=centre_id)
+                semester_centre_coordinator = SemesterCentreCoordinator.objects.filter(
+                    semester=semester,
+                    centre=centre_obj
+                ).select_related('program_coordinator', 'program_coordinator__teacher').first()
+                if semester_centre_coordinator:
+                    coordinator = semester_centre_coordinator.program_coordinator
+            except Centre.DoesNotExist:
+                pass
+        # Fallback: try to get centre from centre_name if centre_id not available
+        if not coordinator and centre_name:
+            try:
+                centre_obj = Centre.objects.get(name=centre_name)
+                semester_centre_coordinator = SemesterCentreCoordinator.objects.filter(
+                    semester=semester,
+                    centre=centre_obj
+                ).select_related('program_coordinator', 'program_coordinator__teacher').first()
+                if semester_centre_coordinator:
+                    coordinator = semester_centre_coordinator.program_coordinator
+            except Centre.DoesNotExist:
+                pass
         contact_info_lines = []
         
         if coordinator:
@@ -6581,7 +6703,31 @@ def export_ca_marks_pdf(request):
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
         
         # Build right column (contact person box)
-        coordinator = semester.program_coordinator
+        # Get coordinator for this specific semester/centre combination
+        coordinator = None
+        if centre_id:
+            try:
+                centre_obj = Centre.objects.get(id=centre_id)
+                semester_centre_coordinator = SemesterCentreCoordinator.objects.filter(
+                    semester=semester,
+                    centre=centre_obj
+                ).select_related('program_coordinator', 'program_coordinator__teacher').first()
+                if semester_centre_coordinator:
+                    coordinator = semester_centre_coordinator.program_coordinator
+            except Centre.DoesNotExist:
+                pass
+        # Fallback: try to get centre from centre_name if centre_id not available
+        if not coordinator and centre_name:
+            try:
+                centre_obj = Centre.objects.get(name=centre_name)
+                semester_centre_coordinator = SemesterCentreCoordinator.objects.filter(
+                    semester=semester,
+                    centre=centre_obj
+                ).select_related('program_coordinator', 'program_coordinator__teacher').first()
+                if semester_centre_coordinator:
+                    coordinator = semester_centre_coordinator.program_coordinator
+            except Centre.DoesNotExist:
+                pass
         contact_info_lines = []
         
         if coordinator:
@@ -7114,7 +7260,15 @@ def export_blank_ca_marks_pdf(request):
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
         
         # Build right column (contact person box) - same as regular export
-        coordinator = semester.program_coordinator
+        # Get coordinator for this specific semester/centre combination
+        coordinator = None
+        if centre:
+            semester_centre_coordinator = SemesterCentreCoordinator.objects.filter(
+                semester=semester,
+                centre=centre
+            ).select_related('program_coordinator', 'program_coordinator__teacher').first()
+            if semester_centre_coordinator:
+                coordinator = semester_centre_coordinator.program_coordinator
         contact_info_lines = []
         
         if coordinator:
@@ -7796,7 +7950,31 @@ def export_final_exam_pdf(request):
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
         
         # Build right column (contact person box)
-        coordinator = semester.program_coordinator
+        # Get coordinator for this specific semester/centre combination
+        coordinator = None
+        if centre_id:
+            try:
+                centre_obj = Centre.objects.get(id=centre_id)
+                semester_centre_coordinator = SemesterCentreCoordinator.objects.filter(
+                    semester=semester,
+                    centre=centre_obj
+                ).select_related('program_coordinator', 'program_coordinator__teacher').first()
+                if semester_centre_coordinator:
+                    coordinator = semester_centre_coordinator.program_coordinator
+            except Centre.DoesNotExist:
+                pass
+        # Fallback: try to get centre from centre_name if centre_id not available
+        if not coordinator and centre_name:
+            try:
+                centre_obj = Centre.objects.get(name=centre_name)
+                semester_centre_coordinator = SemesterCentreCoordinator.objects.filter(
+                    semester=semester,
+                    centre=centre_obj
+                ).select_related('program_coordinator', 'program_coordinator__teacher').first()
+                if semester_centre_coordinator:
+                    coordinator = semester_centre_coordinator.program_coordinator
+            except Centre.DoesNotExist:
+                pass
         contact_info_lines = []
         
         if coordinator:
@@ -8289,7 +8467,15 @@ def export_blank_final_exam_pdf(request):
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
         
         # Build right column (contact person box) - same as regular export
-        coordinator = semester.program_coordinator
+        # Get coordinator for this specific semester/centre combination
+        coordinator = None
+        if centre:
+            semester_centre_coordinator = SemesterCentreCoordinator.objects.filter(
+                semester=semester,
+                centre=centre
+            ).select_related('program_coordinator', 'program_coordinator__teacher').first()
+            if semester_centre_coordinator:
+                coordinator = semester_centre_coordinator.program_coordinator
         contact_info_lines = []
         
         if coordinator:

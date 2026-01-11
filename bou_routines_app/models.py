@@ -316,6 +316,27 @@ class Course(models.Model):
                 'midterm': self.ca_midterm_weight,
             }
 
+class SemesterCentreCoordinator(models.Model):
+    """
+    Links a Program Coordinator to a specific Semester and Centre.
+    This allows different coordinators for different study centres within the same semester.
+    """
+    id = models.AutoField(primary_key=True)
+    semester = models.ForeignKey(Semester, on_delete=models.CASCADE, help_text="Semester this coordinator is assigned to")
+    centre = models.ForeignKey('Centre', on_delete=models.PROTECT, help_text="Study Centre this coordinator is assigned to")
+    program_coordinator = models.ForeignKey('ProgramCoordinator', on_delete=models.CASCADE, help_text="Program Coordinator for this semester/centre")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ('semester', 'centre')
+        ordering = ['semester', 'centre']
+        verbose_name = "Semester Centre Coordinator"
+        verbose_name_plural = "Semester Centre Coordinators"
+    
+    def __str__(self):
+        return f"{self.semester.name} - {self.centre.name} - {self.program_coordinator.teacher.name}"
+
 class SemesterCourse(models.Model):
     id = models.AutoField(primary_key=True)
     semester = models.ForeignKey(Semester, on_delete=models.CASCADE)

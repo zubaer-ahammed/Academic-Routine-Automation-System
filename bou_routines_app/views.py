@@ -6619,30 +6619,6 @@ def export_ca_marks_pdf(request):
         elements.append(two_col_table)
         elements.append(Spacer(1, 4))
         
-        styles = getSampleStyleSheet()
-        title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
-            fontSize=16,
-            textColor=colors.HexColor('#c41e3a'),
-            spaceAfter=12,
-            alignment=TA_CENTER
-        )
-        
-        # Title
-        title = Paragraph(f"CA Marks Report - {semester.name}", title_style)
-        elements.append(title)
-        elements.append(Spacer(1, 12))
-        
-        # Course info
-        course_info = Paragraph(
-            f"<b>Course:</b> {course.code} - {course.name}<br/>"
-            f"<b>Course Type:</b> {'Lab Course' if course.is_lab else 'Theory Course'}",
-            styles['Normal']
-        )
-        elements.append(course_info)
-        elements.append(Spacer(1, 12))
-        
         # Build table data with multi-row headers matching the marks page
         table_data = []
         
@@ -6676,7 +6652,7 @@ def export_ca_marks_pdf(request):
                 '', '',
                 f'Attendance\n({course.effective_lab_ca_attendance_weight}%)',
                 f'Assignment/Lab Report\n({course.effective_lab_ca_assignment_weight}%)', '', '', '',
-                f'Exp./Lab Project\n({course.effective_lab_ca_practical_weight}%)',
+                f'Experiment/\nLab Project\n({course.effective_lab_ca_practical_weight}%)',
                 ''
             ]
             header_row_3 = [
@@ -6700,7 +6676,7 @@ def export_ca_marks_pdf(request):
                 '', '',
                 f'Attendance\n({course.effective_ca_attendance_weight}%)',
                 f'Assignment/Presentation\n({course.effective_ca_assignment_weight}%)', '', '', '',
-                f'Mid-Term Exam\n({course.effective_ca_midterm_weight}%)',
+                f'Mid-Term\nExam\n({course.effective_ca_midterm_weight}%)',
                 ''
             ]
             header_row_3 = [
@@ -6759,8 +6735,22 @@ def export_ca_marks_pdf(request):
                     row = [student.id, student.name, '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
             table_data.append(row)
         
-        # Create table
-        table = Table(table_data)
+        # Create table with full width to align with header and footer
+        # Calculate column widths based on available width
+        num_cols = len(table_data[0]) if table_data else 0
+        if num_cols > 0:
+            # Allocate more width to Student ID and Name columns
+            student_id_width = 80  # Fixed width for Student ID
+            name_width = 150  # Wider width for Name to prevent cutoff
+            # Remaining width for mark columns
+            remaining_width = available_width - student_id_width - name_width
+            mark_cols = num_cols - 2  # Exclude Student ID and Name
+            mark_col_width = remaining_width / mark_cols if mark_cols > 0 else 0
+            # Build column widths array
+            col_widths = [student_id_width, name_width] + [mark_col_width] * mark_cols
+            table = Table(table_data, colWidths=col_widths)
+        else:
+            table = Table(table_data)
         
         # Determine header row count
         if course.course_type == 'PROJECT':
@@ -6818,7 +6808,7 @@ def export_ca_marks_pdf(request):
         elements.append(table)
         
         # Add footer with signatures
-        elements.append(Spacer(1, 24))
+        elements.append(Spacer(1, 40))  # Increased from 24 to 40 for more space above signature
         signature_style = ParagraphStyle(
             'SignatureStyle',
             fontName='Helvetica',
@@ -7148,30 +7138,6 @@ def export_blank_ca_marks_pdf(request):
         elements.append(two_col_table)
         elements.append(Spacer(1, 4))
         
-        styles = getSampleStyleSheet()
-        title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
-            fontSize=16,
-            textColor=colors.HexColor('#c41e3a'),
-            spaceAfter=12,
-            alignment=TA_CENTER
-        )
-        
-        # Title
-        title = Paragraph(f"Blank CA Marks Sheet - {semester.name}", title_style)
-        elements.append(title)
-        elements.append(Spacer(1, 12))
-        
-        # Course info
-        course_info = Paragraph(
-            f"<b>Course:</b> {course.code} - {course.name}<br/>"
-            f"<b>Course Type:</b> {'Lab Course' if course.is_lab else 'Theory Course'}",
-            styles['Normal']
-        )
-        elements.append(course_info)
-        elements.append(Spacer(1, 12))
-        
         # Build table data with multi-row headers (same structure as regular export)
         table_data = []
         
@@ -7203,7 +7169,7 @@ def export_blank_ca_marks_pdf(request):
                 '', '',
                 f'Attendance\n({course.effective_lab_ca_attendance_weight}%)',
                 f'Assignment/Lab Report\n({course.effective_lab_ca_assignment_weight}%)', '', '', '',
-                f'Exp./Lab Project\n({course.effective_lab_ca_practical_weight}%)',
+                f'Experiment/\nLab Project\n({course.effective_lab_ca_practical_weight}%)',
                 ''
             ]
             header_row_3 = [
@@ -7226,7 +7192,7 @@ def export_blank_ca_marks_pdf(request):
                 '', '',
                 f'Attendance\n({course.effective_ca_attendance_weight}%)',
                 f'Assignment/Presentation\n({course.effective_ca_assignment_weight}%)', '', '', '',
-                f'Mid-Term Exam\n({course.effective_ca_midterm_weight}%)',
+                f'Mid-Term\nExam\n({course.effective_ca_midterm_weight}%)',
                 ''
             ]
             header_row_3 = [
@@ -7249,8 +7215,22 @@ def export_blank_ca_marks_pdf(request):
                 row = [student.id, student.name, '', '', '', '', '', '', '']
             table_data.append(row)
         
-        # Create table
-        table = Table(table_data)
+        # Create table with full width to align with header and footer
+        # Calculate column widths based on available width
+        num_cols = len(table_data[0]) if table_data else 0
+        if num_cols > 0:
+            # Allocate more width to Student ID and Name columns
+            student_id_width = 80  # Fixed width for Student ID
+            name_width = 150  # Wider width for Name to prevent cutoff
+            # Remaining width for mark columns
+            remaining_width = available_width - student_id_width - name_width
+            mark_cols = num_cols - 2  # Exclude Student ID and Name
+            mark_col_width = remaining_width / mark_cols if mark_cols > 0 else 0
+            # Build column widths array
+            col_widths = [student_id_width, name_width] + [mark_col_width] * mark_cols
+            table = Table(table_data, colWidths=col_widths)
+        else:
+            table = Table(table_data)
         
         # Determine header row count
         if course.course_type == 'PROJECT':
@@ -7301,7 +7281,7 @@ def export_blank_ca_marks_pdf(request):
         elements.append(table)
         
         # Add footer with signatures (same as regular export)
-        elements.append(Spacer(1, 24))
+        elements.append(Spacer(1, 40))  # Increased from 24 to 40 for more space above signature
         signature_style = ParagraphStyle(
             'SignatureStyle',
             fontName='Helvetica',

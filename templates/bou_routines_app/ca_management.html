@@ -908,11 +908,13 @@
                                     <i class="fas fa-table"></i> CA Marks
                                 </button>
                             </li>
+                            {% if show_final_exam_tab %}
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link" id="final-exam-tab" data-bs-toggle="tab" data-bs-target="#final-exam" type="button" role="tab" aria-controls="final-exam" aria-selected="false">
                                     <i class="fas fa-file-alt"></i> Semester Final Marks
                                 </button>
                             </li>
+                            {% endif %}
                         </ul>
 
                         <div class="tab-content" id="marksTabsContent">
@@ -1198,6 +1200,7 @@
                             </div>
 
                             <!-- Final Exam Tab -->
+                            {% if show_final_exam_tab %}
                             <div class="tab-pane fade" id="final-exam" role="tabpanel" aria-labelledby="final-exam-tab">
                                 <div class="final-exam-section">
                                     <div class="table-header d-flex justify-content-between align-items-center">
@@ -1529,6 +1532,7 @@
                                     </div>
                                 </div>
                             </div>
+                            {% endif %}
                         </div>
                     {% else %}
                         <div class="info-message">

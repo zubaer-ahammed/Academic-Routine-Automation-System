@@ -9340,6 +9340,37 @@ def ca_management(request):
     context['teacher2_evaluator'] = teacher2_evaluator_obj
     context['teacher3_evaluator'] = teacher3_evaluator_obj
     
+    # Check if current teacher is assigned as an evaluator for this course/semester
+    # Admin users can always see the tab
+    show_final_exam_tab = is_admin
+    
+    if not show_final_exam_tab and teacher and selected_semester and selected_course:
+        # Check if teacher is assigned as one of the evaluators
+        # First check manually assigned evaluators in FinalExamMark
+        sample_mark = FinalExamMark.objects.filter(
+            course=selected_course,
+            semester=selected_semester
+        ).first()
+        
+        if sample_mark:
+            # Check if teacher is assigned as any evaluator
+            if (sample_mark.teacher1_evaluator == teacher or 
+                sample_mark.teacher2_evaluator == teacher or 
+                sample_mark.teacher3_evaluator == teacher):
+                show_final_exam_tab = True
+        
+        # If not manually assigned, check default assignment from SemesterCourse
+        # Use the same logic as above to determine evaluators
+        if not show_final_exam_tab:
+            # Check if teacher matches teacher1_evaluator (from DRC SemesterCourse)
+            if teacher1_evaluator_obj and teacher1_evaluator_obj == teacher:
+                show_final_exam_tab = True
+            # Check if teacher matches teacher2_evaluator (from DUET SemesterCourse)
+            elif teacher2_evaluator_obj and teacher2_evaluator_obj == teacher:
+                show_final_exam_tab = True
+    
+    context['show_final_exam_tab'] = show_final_exam_tab
+    
     # Get all teachers for admin to select from (only for admins)
     if is_admin:
         all_teachers = Teacher.objects.all().order_by('name')
@@ -9661,6 +9692,18 @@ def assign_evaluator(request):
         # Get all students enrolled in this semester
         students = Student.objects.filter(semesters=semester)
         
+        # Get teacher from user for marked_by field (admin can use any teacher, but we need one)
+        # For admin users, use the assigned evaluator as marked_by, or get first available teacher
+        marked_by_teacher = teacher  # Use the assigned evaluator as marked_by
+        if not marked_by_teacher:
+            # Fallback: get teacher from user if available
+            marked_by_teacher = get_teacher_from_user(request.user)
+            if not marked_by_teacher:
+                # Last resort: get first teacher from database
+                marked_by_teacher = Teacher.objects.first()
+                if not marked_by_teacher:
+                    return JsonResponse({'error': 'No teacher found in system'}, status=400)
+        
         # Update or create FinalExamMark records for all students
         updated_count = 0
         for student in students:
@@ -9668,7 +9711,7 @@ def assign_evaluator(request):
                 student=student,
                 course=course,
                 semester=semester,
-                defaults={}
+                defaults={'marked_by': marked_by_teacher}
             )
             
             # Assign the evaluator based on evaluator_number
@@ -9678,6 +9721,10 @@ def assign_evaluator(request):
                 final_mark.teacher2_evaluator = teacher
             elif evaluator_number == 3:
                 final_mark.teacher3_evaluator = teacher
+            
+            # Ensure marked_by is set (in case record already existed without it)
+            if not final_mark.marked_by:
+                final_mark.marked_by = marked_by_teacher
             
             final_mark.save()
             updated_count += 1

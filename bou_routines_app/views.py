@@ -226,6 +226,31 @@ def generate_routine(request):
             
             if existing_routines.exists():
                 for routine in existing_routines:
+                    # Get teacher from SemesterCourse for the selected centre (same logic as PDF export)
+                    teacher_name = 'N/A'
+                    if routine.course.code == 'CSE4246':
+                        teacher_name = 'Supervisor'
+                    else:
+                        # Get SemesterCourse for this course, semester, and centre
+                        semester_course = None
+                        if selected_centre:
+                            semester_course = SemesterCourse.objects.filter(
+                                semester=selected_semester,
+                                course=routine.course,
+                                centre=selected_centre
+                            ).select_related('teacher').first()
+                        
+                        # Fallback if centre not provided or not found
+                        if not semester_course:
+                            semester_course = SemesterCourse.objects.filter(
+                                semester=selected_semester,
+                                course=routine.course
+                            ).select_related('teacher').first()
+                        
+                        if semester_course and semester_course.teacher:
+                            teacher = semester_course.teacher
+                            teacher_name = teacher.short_name if teacher.short_name else teacher.name
+                    
                     generated_routines.append({
                         'id': routine.id,
                         'course_id': routine.course.id,
@@ -233,7 +258,7 @@ def generate_routine(request):
                         'day': routine.day,
                         'course_code': routine.course.code,
                         'course_name': routine.course.name,
-                        'teacher': routine.teacher.name if routine.teacher else 'N/A',
+                        'teacher': teacher_name,
                         'start_time': routine.start_time.strftime('%H:%M'),
                         'end_time': routine.end_time.strftime('%H:%M')
                     })

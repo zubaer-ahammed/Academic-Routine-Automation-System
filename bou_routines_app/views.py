@@ -4774,6 +4774,10 @@ def attendance_calendar(request):
         except (Semester.DoesNotExist, Course.DoesNotExist):
             messages.error(request, "Invalid semester or course selected.")
     
+    # Add selected_centre_id to context if not already present
+    if 'selected_centre_id' not in context:
+        context['selected_centre_id'] = selected_centre_id
+    
     return render(request, 'bou_routines_app/attendance_calendar.html', context)
 
 @login_required
@@ -5367,9 +5371,17 @@ def export_attendance_pdf(request):
         
         # Initialize centre_name
         centre_name = ''
-        first_sc = SemesterCourse.objects.filter(semester=semester).select_related('centre').first()
-        if first_sc and first_sc.centre:
-            centre_name = first_sc.centre.name
+        centre_id = request.GET.get('centre')
+        if centre_id:
+            try:
+                centre = Centre.objects.get(id=centre_id)
+                centre_name = centre.name
+            except Centre.DoesNotExist:
+                pass
+        if not centre_name:
+            first_sc = SemesterCourse.objects.filter(semester=semester).select_related('centre').first()
+            if first_sc and first_sc.centre:
+                centre_name = first_sc.centre.name
         
         # Build left column (program/session/term/commencement/study center)
         header_style = ParagraphStyle(
@@ -5423,9 +5435,37 @@ def export_attendance_pdf(request):
         left_content.append(Spacer(1, 2))
         course_name_display = f"{course.code} - {course.name}" if course else "Course"
         left_content.append(Paragraph(f'Attendance Report - {course_name_display}', header_style_bold))
-        commencement = semester.start_date.strftime('%d %B %Y') if semester.start_date else ''
-        if commencement:
-            left_content.append(Paragraph(f'<b>Date of Commencement:</b> {commencement}', header_style_normal))
+        # Get teacher name from SemesterCourse
+        teacher_name = None
+        # Try to get centre_id from request first
+        centre_id = request.GET.get('centre')
+        if centre_id:
+            try:
+                centre = Centre.objects.get(id=centre_id)
+                semester_course = SemesterCourse.objects.filter(
+                    semester=semester,
+                    course=course,
+                    centre=centre
+                ).select_related('teacher').first()
+                if semester_course and semester_course.teacher:
+                    teacher_name = semester_course.teacher.name
+            except Centre.DoesNotExist:
+                pass
+        # Fallback: Get centre from students if not already set
+        if not teacher_name and not centre_name and students.exists():
+            first_student = students.first()
+            if first_student.centre:
+                centre = first_student.centre
+                semester_course = SemesterCourse.objects.filter(
+                    semester=semester,
+                    course=course,
+                    centre=centre
+                ).select_related('teacher').first()
+                if semester_course and semester_course.teacher:
+                    teacher_name = semester_course.teacher.name
+        # Only show teacher if found
+        if teacher_name:
+            left_content.append(Paragraph(f'<b>Teacher:</b> {teacher_name}', header_style_normal))
         if centre_name:
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
         
@@ -5911,9 +5951,37 @@ def export_blank_attendance_pdf(request):
         left_content.append(Spacer(1, 2))
         course_name_display = f"{course.code} - {course.name}" if course else "Course"
         left_content.append(Paragraph(f'Blank Attendance Sheet - {course_name_display}', header_style_bold))
-        commencement = semester.start_date.strftime('%d %B %Y') if semester.start_date else ''
-        if commencement:
-            left_content.append(Paragraph(f'<b>Date of Commencement:</b> {commencement}', header_style_normal))
+        # Get teacher name from SemesterCourse
+        teacher_name = None
+        # Try to get centre_id from request first
+        centre_id = request.GET.get('centre')
+        if centre_id:
+            try:
+                centre = Centre.objects.get(id=centre_id)
+                semester_course = SemesterCourse.objects.filter(
+                    semester=semester,
+                    course=course,
+                    centre=centre
+                ).select_related('teacher').first()
+                if semester_course and semester_course.teacher:
+                    teacher_name = semester_course.teacher.name
+            except Centre.DoesNotExist:
+                pass
+        # Fallback: Get centre from students if not already set
+        if not teacher_name and not centre_name and students.exists():
+            first_student = students.first()
+            if first_student.centre:
+                centre = first_student.centre
+                semester_course = SemesterCourse.objects.filter(
+                    semester=semester,
+                    course=course,
+                    centre=centre
+                ).select_related('teacher').first()
+                if semester_course and semester_course.teacher:
+                    teacher_name = semester_course.teacher.name
+        # Only show teacher if found
+        if teacher_name:
+            left_content.append(Paragraph(f'<b>Teacher:</b> {teacher_name}', header_style_normal))
         if centre_name:
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
         
@@ -6488,13 +6556,27 @@ def export_ca_marks_pdf(request):
             left_content.append(Paragraph(combined, header_style_small))
         left_content.append(Spacer(1, 2))
         left_content.append(Paragraph('CA Marks Report', header_style_bold))
-        commencement = semester.start_date.strftime('%d %B %Y') if semester.start_date else ''
+        # Get teacher name from SemesterCourse
+        teacher_name = None
+        if centre_id:
+            try:
+                centre = Centre.objects.get(id=centre_id)
+                semester_course = SemesterCourse.objects.filter(
+                    semester=semester,
+                    course=course,
+                    centre=centre
+                ).select_related('teacher').first()
+                if semester_course and semester_course.teacher:
+                    teacher_name = semester_course.teacher.name
+            except Centre.DoesNotExist:
+                pass
+        # Only show teacher if found
+        if teacher_name:
+            left_content.append(Paragraph(f'<b>Teacher:</b> {teacher_name}', header_style_normal))
         if not centre_name:
             first_sc = SemesterCourse.objects.filter(semester=semester).select_related('centre').first()
             if first_sc and first_sc.centre:
                 centre_name = first_sc.centre.name
-        if commencement:
-            left_content.append(Paragraph(f'<b>Date of Commencement:</b> {commencement}', header_style_normal))
         if centre_name:
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
         
@@ -7007,13 +7089,27 @@ def export_blank_ca_marks_pdf(request):
         left_content.append(Spacer(1, 2))
         course_name_display = f"{course.code} - {course.name}" if course else "Course"
         left_content.append(Paragraph(f'Blank CA Marks Sheet - {course_name_display}', header_style_bold))
-        commencement = semester.start_date.strftime('%d %B %Y') if semester.start_date else ''
+        # Get teacher name from SemesterCourse
+        teacher_name = None
+        if centre_id:
+            try:
+                centre = Centre.objects.get(id=centre_id)
+                semester_course = SemesterCourse.objects.filter(
+                    semester=semester,
+                    course=course,
+                    centre=centre
+                ).select_related('teacher').first()
+                if semester_course and semester_course.teacher:
+                    teacher_name = semester_course.teacher.name
+            except Centre.DoesNotExist:
+                pass
+        # Only show teacher if found
+        if teacher_name:
+            left_content.append(Paragraph(f'<b>Teacher:</b> {teacher_name}', header_style_normal))
         if not centre_name:
             first_sc = SemesterCourse.objects.filter(semester=semester).select_related('centre').first()
             if first_sc and first_sc.centre:
                 centre_name = first_sc.centre.name
-        if commencement:
-            left_content.append(Paragraph(f'<b>Date of Commencement:</b> {commencement}', header_style_normal))
         if centre_name:
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
         
@@ -7646,9 +7742,23 @@ def export_final_exam_pdf(request):
             left_content.append(Paragraph(combined, header_style_small))
         left_content.append(Spacer(1, 2))
         left_content.append(Paragraph('Semester Final Marks Report', header_style_bold))
-        commencement = semester.start_date.strftime('%d %B %Y') if semester.start_date else ''
-        if commencement:
-            left_content.append(Paragraph(f'<b>Date of Commencement:</b> {commencement}', header_style_normal))
+        # Get teacher name from SemesterCourse
+        teacher_name = None
+        if centre_id:
+            try:
+                centre = Centre.objects.get(id=centre_id)
+                semester_course = SemesterCourse.objects.filter(
+                    semester=semester,
+                    course=course,
+                    centre=centre
+                ).select_related('teacher').first()
+                if semester_course and semester_course.teacher:
+                    teacher_name = semester_course.teacher.name
+            except Centre.DoesNotExist:
+                pass
+        # Only show teacher if found
+        if teacher_name:
+            left_content.append(Paragraph(f'<b>Teacher:</b> {teacher_name}', header_style_normal))
         if centre_name:
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
         
@@ -8094,13 +8204,27 @@ def export_blank_final_exam_pdf(request):
         left_content.append(Spacer(1, 2))
         course_name_display = f"{course.code} - {course.name}" if course else "Course"
         left_content.append(Paragraph(f'Blank Final Exam Marks Sheet - {course_name_display}', header_style_bold))
-        commencement = semester.start_date.strftime('%d %B %Y') if semester.start_date else ''
+        # Get teacher name from SemesterCourse
+        teacher_name = None
+        if centre_id:
+            try:
+                centre = Centre.objects.get(id=centre_id)
+                semester_course = SemesterCourse.objects.filter(
+                    semester=semester,
+                    course=course,
+                    centre=centre
+                ).select_related('teacher').first()
+                if semester_course and semester_course.teacher:
+                    teacher_name = semester_course.teacher.name
+            except Centre.DoesNotExist:
+                pass
+        # Only show teacher if found
+        if teacher_name:
+            left_content.append(Paragraph(f'<b>Teacher:</b> {teacher_name}', header_style_normal))
         if not centre_name:
             first_sc = SemesterCourse.objects.filter(semester=semester).select_related('centre').first()
             if first_sc and first_sc.centre:
                 centre_name = first_sc.centre.name
-        if commencement:
-            left_content.append(Paragraph(f'<b>Date of Commencement:</b> {commencement}', header_style_normal))
         if centre_name:
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
         

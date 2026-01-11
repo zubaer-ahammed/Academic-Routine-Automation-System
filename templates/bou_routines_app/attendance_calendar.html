@@ -1498,13 +1498,13 @@
                                     </button>
                                     <ul class="dropdown-menu" aria-labelledby="exportDropdown">
                                         <li>
-                                            <a class="dropdown-item" href="{% url 'export-attendance-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}">
+                                            <a class="dropdown-item" href="{% url 'export-attendance-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}">
                                                 <i class="fas fa-file-pdf text-danger"></i> PDF
                                             </a>
                                         </li>
                                         {% if user.is_superuser or user.is_staff %}
                                         <li>
-                                            <a class="dropdown-item" href="{% url 'export-blank-attendance-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}">
+                                            <a class="dropdown-item" href="{% url 'export-blank-attendance-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}">
                                                 <i class="fas fa-file-pdf text-danger"></i> Blank PDF
                                             </a>
                                         </li>

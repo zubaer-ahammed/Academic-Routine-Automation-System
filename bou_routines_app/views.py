@@ -5950,7 +5950,7 @@ def export_blank_attendance_pdf(request):
             left_content.append(Paragraph(combined, header_style_small))
         left_content.append(Spacer(1, 2))
         course_name_display = f"{course.code} - {course.name}" if course else "Course"
-        left_content.append(Paragraph(f'Blank Attendance Sheet - {course_name_display}', header_style_bold))
+        left_content.append(Paragraph(f'Attendance Sheet - {course_name_display}', header_style_bold))
         # Get teacher name from SemesterCourse
         teacher_name = None
         # Try to get centre_id from request first
@@ -7088,7 +7088,7 @@ def export_blank_ca_marks_pdf(request):
             left_content.append(Paragraph(combined, header_style_small))
         left_content.append(Spacer(1, 2))
         course_name_display = f"{course.code} - {course.name}" if course else "Course"
-        left_content.append(Paragraph(f'Blank CA Marks Sheet - {course_name_display}', header_style_bold))
+        left_content.append(Paragraph(f'CA Marks Sheet - {course_name_display}', header_style_bold))
         # Get teacher name from SemesterCourse
         teacher_name = None
         if centre_id:
@@ -7741,24 +7741,57 @@ def export_final_exam_pdf(request):
             combined = f'{term} Term {semester_full_name}'.strip()
             left_content.append(Paragraph(combined, header_style_small))
         left_content.append(Spacer(1, 2))
-        left_content.append(Paragraph('Semester Final Marks Report', header_style_bold))
-        # Get teacher name from SemesterCourse
+        course_name_display = f"{course.code} - {course.name}" if course else "Course"
+        left_content.append(Paragraph(f'Semester Final Marks Report - {course_name_display}', header_style_bold))
+        # Get evaluator name based on teacher_role
+        # First check if evaluators are manually assigned in existing marks
+        # Then fall back to SemesterCourse for automatic assignment
         teacher_name = None
-        if centre_id:
-            try:
-                centre = Centre.objects.get(id=centre_id)
-                semester_course = SemesterCourse.objects.filter(
+        sample_mark = FinalExamMark.objects.filter(
+            course=course,
+            semester=semester
+        ).first()
+        
+        if sample_mark:
+            # Check for manually assigned evaluators first
+            if teacher_role == 'teacher1' and sample_mark.teacher1_evaluator:
+                teacher_name = sample_mark.teacher1_evaluator.name
+            elif teacher_role == 'teacher2' and sample_mark.teacher2_evaluator:
+                teacher_name = sample_mark.teacher2_evaluator.name
+            elif teacher_role == 'teacher3' and sample_mark.teacher3_evaluator:
+                teacher_name = sample_mark.teacher3_evaluator.name
+        
+        # If not manually assigned, get from SemesterCourse
+        if not teacher_name:
+            drc_centre = Centre.objects.filter(code='DRC').first()
+            duet_centre = Centre.objects.filter(code='DUET').first()
+            
+            if teacher_role == 'teacher1' and drc_centre:
+                # Teacher 1 (First Evaluator) from DRC centre
+                drc_semester_course = SemesterCourse.objects.filter(
                     semester=semester,
                     course=course,
-                    centre=centre
+                    centre=drc_centre
                 ).select_related('teacher').first()
-                if semester_course and semester_course.teacher:
-                    teacher_name = semester_course.teacher.name
-            except Centre.DoesNotExist:
-                pass
+                if drc_semester_course and drc_semester_course.teacher:
+                    teacher_name = drc_semester_course.teacher.name
+            elif teacher_role == 'teacher2' and duet_centre:
+                # Teacher 2 (Second Evaluator) from DUET centre
+                duet_semester_course = SemesterCourse.objects.filter(
+                    semester=semester,
+                    course=course,
+                    centre=duet_centre
+                ).select_related('teacher').first()
+                if duet_semester_course and duet_semester_course.teacher:
+                    teacher_name = duet_semester_course.teacher.name
+            elif teacher_role == 'teacher3':
+                # Teacher 3 can be manually selected, try to get from existing marks first
+                if sample_mark and sample_mark.teacher3_evaluator:
+                    teacher_name = sample_mark.teacher3_evaluator.name
+        
         # Only show teacher if found
         if teacher_name:
-            left_content.append(Paragraph(f'<b>Teacher:</b> {teacher_name}', header_style_normal))
+            left_content.append(Paragraph(f'<b>Evaluator:</b> {teacher_name}', header_style_normal))
         if centre_name:
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
         
@@ -7893,29 +7926,15 @@ def export_final_exam_pdf(request):
             alignment=TA_CENTER
         )
         
-        # Title
-        title = Paragraph(f"Final Exam Marks Report - {semester.name}", title_style)
-        elements.append(title)
-        elements.append(Spacer(1, 12))
-        
-        # Course info
-        course_info = Paragraph(
-            f"<b>Course:</b> {course.code} - {course.name}<br/>"
-            f"<b>Course Type:</b> {'Lab Course' if course.is_lab else 'Theory Course'}<br/>"
-            f"<b>Evaluator:</b> {teacher_role.replace('teacher', 'Teacher ').title()}",
-            styles['Normal']
-        )
-        elements.append(course_info)
-        elements.append(Spacer(1, 12))
         
         # Build table data
         table_data = []
         
         # Header row based on course type
         if course.is_lab:
-            header = ['Student ID', 'Name', 'Lab Final Exam Mark', 'Total', 'Notes']
+            header = ['Student ID', 'Name', 'Lab Final Exam Mark', 'Total']
         else:
-            header = ['Student ID', 'Name', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Total', 'Notes']
+            header = ['Student ID', 'Name', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Total']
         table_data.append(header)
         
         # Data rows
@@ -7927,8 +7946,7 @@ def export_final_exam_pdf(request):
                         student.id,
                         student.name,
                         f"{mark.lab_final_exam_mark:.2f}" if mark.lab_final_exam_mark else '0.00',
-                        f"{mark.calculate_final_total():.2f}",
-                        mark.notes or ''
+                        f"{mark.calculate_final_total():.2f}"
                     ]
                 else:
                     # For theory courses, show marks based on teacher role
@@ -7976,18 +7994,28 @@ def export_final_exam_pdf(request):
                         f"{q5:.2f}",
                         f"{q6:.2f}",
                         f"{q7:.2f}",
-                        f"{mark.calculate_final_total():.2f}",
-                        mark.notes or ''
+                        f"{mark.calculate_final_total():.2f}"
                     ]
             else:
                 if course.is_lab:
-                    row = [student.id, student.name, '0.00', '0.00', '']
+                    row = [student.id, student.name, '0.00', '0.00']
                 else:
-                    row = [student.id, student.name, '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '']
+                    row = [student.id, student.name, '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
             table_data.append(row)
         
-        # Create table
-        table = Table(table_data)
+        # Calculate column widths to match header/footer width
+        num_cols = len(header)
+        if course.is_lab:
+            # Lab course: Student ID, Name, Lab Final Exam Mark, Total
+            # Fixed widths: 80 + 150 + 120 = 350
+            col_widths = [80, 150, 120, available_width - 350]
+        else:
+            # Theory course: Student ID, Name, Q1-Q7, Total
+            # Fixed widths: 80 + 150 + (60 * 7) = 650
+            col_widths = [80, 150] + [60] * 7 + [available_width - 650]
+        
+        # Create table with explicit column widths
+        table = Table(table_data, colWidths=col_widths)
         table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -8004,7 +8032,7 @@ def export_final_exam_pdf(request):
         elements.append(table)
         
         # Add footer with signatures
-        elements.append(Spacer(1, 24))
+        elements.append(Spacer(1, 40))
         signature_style = ParagraphStyle(
             'SignatureStyle',
             fontName='Helvetica',
@@ -8203,24 +8231,56 @@ def export_blank_final_exam_pdf(request):
             left_content.append(Paragraph(combined, header_style_small))
         left_content.append(Spacer(1, 2))
         course_name_display = f"{course.code} - {course.name}" if course else "Course"
-        left_content.append(Paragraph(f'Blank Final Exam Marks Sheet - {course_name_display}', header_style_bold))
-        # Get teacher name from SemesterCourse
+        left_content.append(Paragraph(f'Final Exam Marks Sheet - {course_name_display}', header_style_bold))
+        # Get evaluator name based on teacher_role
+        # First check if evaluators are manually assigned in existing marks
+        # Then fall back to SemesterCourse for automatic assignment
         teacher_name = None
-        if centre_id:
-            try:
-                centre = Centre.objects.get(id=centre_id)
-                semester_course = SemesterCourse.objects.filter(
+        sample_mark = FinalExamMark.objects.filter(
+            course=course,
+            semester=semester
+        ).first()
+        
+        if sample_mark:
+            # Check for manually assigned evaluators first
+            if teacher_role == 'teacher1' and sample_mark.teacher1_evaluator:
+                teacher_name = sample_mark.teacher1_evaluator.name
+            elif teacher_role == 'teacher2' and sample_mark.teacher2_evaluator:
+                teacher_name = sample_mark.teacher2_evaluator.name
+            elif teacher_role == 'teacher3' and sample_mark.teacher3_evaluator:
+                teacher_name = sample_mark.teacher3_evaluator.name
+        
+        # If not manually assigned, get from SemesterCourse
+        if not teacher_name:
+            drc_centre = Centre.objects.filter(code='DRC').first()
+            duet_centre = Centre.objects.filter(code='DUET').first()
+            
+            if teacher_role == 'teacher1' and drc_centre:
+                # Teacher 1 (First Evaluator) from DRC centre
+                drc_semester_course = SemesterCourse.objects.filter(
                     semester=semester,
                     course=course,
-                    centre=centre
+                    centre=drc_centre
                 ).select_related('teacher').first()
-                if semester_course and semester_course.teacher:
-                    teacher_name = semester_course.teacher.name
-            except Centre.DoesNotExist:
-                pass
+                if drc_semester_course and drc_semester_course.teacher:
+                    teacher_name = drc_semester_course.teacher.name
+            elif teacher_role == 'teacher2' and duet_centre:
+                # Teacher 2 (Second Evaluator) from DUET centre
+                duet_semester_course = SemesterCourse.objects.filter(
+                    semester=semester,
+                    course=course,
+                    centre=duet_centre
+                ).select_related('teacher').first()
+                if duet_semester_course and duet_semester_course.teacher:
+                    teacher_name = duet_semester_course.teacher.name
+            elif teacher_role == 'teacher3':
+                # Teacher 3 can be manually selected, try to get from existing marks first
+                if sample_mark and sample_mark.teacher3_evaluator:
+                    teacher_name = sample_mark.teacher3_evaluator.name
+        
         # Only show teacher if found
         if teacher_name:
-            left_content.append(Paragraph(f'<b>Teacher:</b> {teacher_name}', header_style_normal))
+            left_content.append(Paragraph(f'<b>Evaluator:</b> {teacher_name}', header_style_normal))
         if not centre_name:
             first_sc = SemesterCourse.objects.filter(semester=semester).select_related('centre').first()
             if first_sc and first_sc.centre:
@@ -8359,41 +8419,38 @@ def export_blank_final_exam_pdf(request):
             alignment=TA_CENTER
         )
         
-        # Title
-        title = Paragraph(f"Blank Final Exam Marks Sheet - {semester.name}", title_style)
-        elements.append(title)
-        elements.append(Spacer(1, 12))
-        
-        # Course info
-        course_info = Paragraph(
-            f"<b>Course:</b> {course.code} - {course.name}<br/>"
-            f"<b>Course Type:</b> {'Lab Course' if course.is_lab else 'Theory Course'}<br/>"
-            f"<b>Evaluator:</b> {teacher_role.replace('teacher', 'Teacher ').title()}",
-            styles['Normal']
-        )
-        elements.append(course_info)
-        elements.append(Spacer(1, 12))
         
         # Build table data
         table_data = []
         
         # Header row based on course type (same as regular export)
         if course.is_lab:
-            header = ['Student ID', 'Name', 'Lab Final Exam Mark', 'Total', 'Notes']
+            header = ['Student ID', 'Name', 'Lab Final Exam Mark', 'Total']
         else:
-            header = ['Student ID', 'Name', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Total', 'Notes']
+            header = ['Student ID', 'Name', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Total']
         table_data.append(header)
         
         # Data rows - only Student ID and Name filled, all other cells blank
         for student in students:
             if course.is_lab:
-                row = [student.id, student.name, '', '', '']
+                row = [student.id, student.name, '', '']
             else:
-                row = [student.id, student.name, '', '', '', '', '', '', '', '', '']
+                row = [student.id, student.name, '', '', '', '', '', '', '', '']
             table_data.append(row)
         
-        # Create table
-        table = Table(table_data)
+        # Calculate column widths to match header/footer width
+        num_cols = len(header)
+        if course.is_lab:
+            # Lab course: Student ID, Name, Lab Final Exam Mark, Total
+            # Fixed widths: 80 + 150 + 120 = 350
+            col_widths = [80, 150, 120, available_width - 350]
+        else:
+            # Theory course: Student ID, Name, Q1-Q7, Total
+            # Fixed widths: 80 + 150 + (60 * 7) = 650
+            col_widths = [80, 150] + [60] * 7 + [available_width - 650]
+        
+        # Create table with explicit column widths
+        table = Table(table_data, colWidths=col_widths)
         table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -8410,7 +8467,7 @@ def export_blank_final_exam_pdf(request):
         elements.append(table)
         
         # Add footer with signatures (same as regular export)
-        elements.append(Spacer(1, 24))
+        elements.append(Spacer(1, 40))
         signature_style = ParagraphStyle(
             'SignatureStyle',
             fontName='Helvetica',

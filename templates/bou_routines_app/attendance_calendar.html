@@ -13,11 +13,11 @@
 
 {% block extra_css %}
 <style>
-.container-box-bou {
-    background: white;
-    padding: 30px;
-    border-radius: 10px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    .container-box-bou {
+        background: white;
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     margin-top: 2rem;
     margin-bottom: 2rem;
     max-width: 96%;
@@ -1289,7 +1289,7 @@
         background: transparent;
         padding: 10px 20px;
     }
-    
+
     .header-buttons .btn-outline-primary:hover {
         background: #007bff;
         color: white;
@@ -1302,9 +1302,9 @@
             flex-direction: column;
             width: 100%;
             gap: 10px;
-        }
-        
-        .header-buttons .btn {
+    }
+
+    .header-buttons .btn {
             min-width: 100%;
             width: 100%;
             font-size: 14px;
@@ -1505,7 +1505,7 @@
                                         <li>
                                             <a class="dropdown-item" href="{% url 'export-attendance-excel' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}">
                                                 <i class="fas fa-file-excel text-success"></i> Excel
-                                            </a>
+                                </a>
                                         </li>
                                     </ul>
                                 </div>
@@ -1705,25 +1705,25 @@
         url += `&t=${Date.now()}`;
         
         fetch(url)
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    semesterSelect.innerHTML = '<option value="">Error loading semesters</option>';
-                    return;
-                }
-                
-                // Debug: Log the response data
-                console.log('Semesters data:', data.semesters);
-                
-                // Clear and populate semester options
-                semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
-                data.semesters.forEach(semester => {
-                    const option = document.createElement('option');
-                    option.value = semester.id;
-                    console.log(`Semester: id=${semester.id}, name=${semester.name}, full_name=${semester.semester_full_name}`);
-                    option.textContent = semester.name; // Use semester name (e.g., Y1S1) instead of full name
-                    semesterSelect.appendChild(option);
-                });
+               .then(response => response.json())
+               .then(data => {
+                   if (data.error) {
+                       semesterSelect.innerHTML = '<option value="">Error loading semesters</option>';
+                       return;
+                   }
+                   
+                   // Debug: Log the response data
+                   console.log('Semesters data:', data.semesters);
+                   
+                   // Clear and populate semester options
+                   semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
+                   data.semesters.forEach(semester => {
+                       const option = document.createElement('option');
+                       option.value = semester.id;
+                       console.log(`Semester: id=${semester.id}, name=${semester.name}, full_name=${semester.semester_full_name}`);
+                       option.textContent = semester.name; // Use semester name (e.g., Y1S1) instead of full name
+                       semesterSelect.appendChild(option);
+                   });
         })
         .catch(error => {
             console.error('Error loading semesters:', error);

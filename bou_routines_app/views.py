@@ -10,7 +10,7 @@ import calendar
 import xlsxwriter
 import re
 import math
-from reportlab.lib.pagesizes import landscape, A4
+from reportlab.lib.pagesizes import landscape, A4, portrait
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, KeepTogether
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -5559,7 +5559,18 @@ def export_ca_marks_pdf(request):
         
         # Create PDF
         buffer = io.BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4, landscape=True)
+        # Add left and right margins to lab courses to match theory course spacing
+        # Theory course uses default margins (~72 points = 1 inch), so we set explicit margins for lab
+        if course.is_lab:
+            doc = SimpleDocTemplate(
+                buffer,
+                pagesize=A4,
+                landscape=True,
+                leftMargin=72,   # 1 inch - match theory course default
+                rightMargin=72,  # 1 inch - match theory course default
+            )
+        else:
+            doc = SimpleDocTemplate(buffer, pagesize=A4, landscape=True)
         elements = []
         
         styles = getSampleStyleSheet()
@@ -5586,25 +5597,97 @@ def export_ca_marks_pdf(request):
         elements.append(course_info)
         elements.append(Spacer(1, 12))
         
-        # Build table data
+        # Build table data with multi-row headers matching the marks page
         table_data = []
         
-        # Header row based on course type
-        if course.is_lab:
-            header = ['Student ID', 'Name', 'Attendance', 'Lab Assignment', 'Lab Practical', 'Total CA Mark']
+        # Get effective weights for display
+        if course.course_type == 'PROJECT':
+            # Project course headers (2 rows)
+            total_ca = course.effective_project_supervisor_weight + course.effective_project_evaluation_weight + course.effective_project_presentation_weight
+            header_row_1 = [
+                'Student ID', 'Name',
+                f'Project Work CA (Total: {total_ca}%)', '', '',
+                'Total'
+            ]
+            header_row_2 = [
+                '', '',
+                f'Supervisor\n({course.effective_project_supervisor_weight}%)',
+                f'Evaluation\n({course.effective_project_evaluation_weight}%)',
+                f'Presentation\n({course.effective_project_presentation_weight}%)',
+                ''
+            ]
+            table_data.append(header_row_1)
+            table_data.append(header_row_2)
+        elif course.is_lab:
+            # Lab course headers (3 rows)
+            total_ca = course.effective_lab_ca_attendance_weight + course.effective_lab_ca_assignment_weight + course.effective_lab_ca_practical_weight
+            header_row_1 = [
+                'Student ID', 'Name',
+                f'Lab Course CA (Total: {total_ca}%)', '', '', '', '',
+                '', 'Total'
+            ]
+            header_row_2 = [
+                '', '',
+                f'Attendance\n({course.effective_lab_ca_attendance_weight}%)',
+                f'Assignment/Lab Report\n({course.effective_lab_ca_assignment_weight}%)', '', '', '',
+                f'Exp./Lab Project\n({course.effective_lab_ca_practical_weight}%)',
+                ''
+            ]
+            header_row_3 = [
+                '', '',
+                '',
+                'First', 'Second', 'Third', 'Average',
+                '', ''
+            ]
+            table_data.append(header_row_1)
+            table_data.append(header_row_2)
+            table_data.append(header_row_3)
         else:
-            header = ['Student ID', 'Name', 'Attendance', 'Assignment/Presentation', 'Mid-Term Exam', 'Total CA Mark']
-        table_data.append(header)
+            # Theory course headers (3 rows)
+            total_ca = course.effective_ca_attendance_weight + course.effective_ca_assignment_weight + course.effective_ca_midterm_weight
+            header_row_1 = [
+                'Student ID', 'Name',
+                f'Theory Course CA (Total: {total_ca}%)', '', '', '', '',
+                '', 'Total'
+            ]
+            header_row_2 = [
+                '', '',
+                f'Attendance\n({course.effective_ca_attendance_weight}%)',
+                f'Assignment/Presentation\n({course.effective_ca_assignment_weight}%)', '', '', '',
+                f'Mid-Term Exam\n({course.effective_ca_midterm_weight}%)',
+                ''
+            ]
+            header_row_3 = [
+                '', '',
+                '',
+                'First', 'Second', 'Third', 'Average',
+                '', ''
+            ]
+            table_data.append(header_row_1)
+            table_data.append(header_row_2)
+            table_data.append(header_row_3)
         
         # Data rows
         for student in students:
             mark = ca_marks.get(student.id)
             if mark:
-                if course.is_lab:
+                if course.course_type == 'PROJECT':
+                    row = [
+                        student.id,
+                        student.name,
+                        f"{mark.project_supervisor_mark:.2f}",
+                        f"{mark.project_evaluation_mark:.2f}",
+                        f"{mark.project_presentation_mark:.2f}",
+                        f"{mark.calculate_total_ca_mark():.2f}"
+                    ]
+                elif course.is_lab:
                     row = [
                         student.id,
                         student.name,
                         f"{mark.attendance_mark:.2f}",
+                        f"{mark.first_lab_assignment_mark:.2f}",
+                        f"{mark.second_lab_assignment_mark:.2f}",
+                        f"{mark.third_lab_assignment_mark:.2f}",
                         f"{mark.lab_assignment_mark:.2f}",
                         f"{mark.lab_practical_mark:.2f}",
                         f"{mark.calculate_total_ca_mark():.2f}"
@@ -5614,28 +5697,77 @@ def export_ca_marks_pdf(request):
                         student.id,
                         student.name,
                         f"{mark.attendance_mark:.2f}",
+                        f"{mark.first_assignment_mark:.2f}",
+                        f"{mark.second_assignment_mark:.2f}",
+                        f"{mark.third_assignment_mark:.2f}",
                         f"{mark.assignment_mark:.2f}",
                         f"{mark.midterm_mark:.2f}",
                         f"{mark.calculate_total_ca_mark():.2f}"
                     ]
             else:
-                row = [student.id, student.name, '0.00', '0.00', '0.00', '0.00']
+                if course.course_type == 'PROJECT':
+                    row = [student.id, student.name, '0.00', '0.00', '0.00', '0.00']
+                elif course.is_lab:
+                    row = [student.id, student.name, '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
+                else:
+                    row = [student.id, student.name, '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
             table_data.append(row)
         
         # Create table
         table = Table(table_data)
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        
+        # Determine header row count
+        if course.course_type == 'PROJECT':
+            header_rows = 2
+        else:
+            header_rows = 3
+        
+        # Build style with merged cells for headers
+        style_commands = [
+            # Header styling
+            ('BACKGROUND', (0, 0), (-1, header_rows - 1), colors.HexColor('#2c3e50')),
+            ('TEXTCOLOR', (0, 0), (-1, header_rows - 1), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('FONTNAME', (0, 0), (-1, header_rows - 1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, header_rows - 1), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, header_rows - 1), 8),
+            ('TOPPADDING', (0, 0), (-1, header_rows - 1), 8),
+            # Grid
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('FONTSIZE', (0, 1), (-1, -1), 8),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
-        ]))
+            # Data rows styling
+            ('FONTSIZE', (0, header_rows), (-1, -1), 8),
+            ('ROWBACKGROUNDS', (0, header_rows), (-1, -1), [colors.white, colors.lightgrey]),
+        ]
+        
+        # Add cell spans for headers
+        if course.course_type == 'PROJECT':
+            # Student ID and Name span 2 rows
+            style_commands.append(('SPAN', (0, 0), (0, 1)))  # Student ID
+            style_commands.append(('SPAN', (1, 0), (1, 1)))  # Name
+            style_commands.append(('SPAN', (2, 0), (4, 0)))  # Project Work CA header (spans columns 2-4)
+            style_commands.append(('SPAN', (5, 0), (5, 1)))  # Total CA Mark
+        elif course.is_lab:
+            # Student ID and Name span 3 rows
+            style_commands.append(('SPAN', (0, 0), (0, 2)))  # Student ID
+            style_commands.append(('SPAN', (1, 0), (1, 2)))  # Name
+            style_commands.append(('SPAN', (2, 0), (7, 0)))  # Lab Course CA header (spans columns 2-7)
+            style_commands.append(('SPAN', (2, 1), (2, 2)))  # Attendance (spans rows 1-2)
+            style_commands.append(('SPAN', (3, 1), (6, 1)))  # Assignment/Lab Report (spans columns 3-6, row 1)
+            style_commands.append(('SPAN', (7, 1), (7, 2)))  # Experiment/Lab Project (spans rows 1-2)
+            style_commands.append(('SPAN', (8, 0), (8, 2)))  # Total (spans rows 0-2, column 8)
+        else:
+            # Theory course
+            # Student ID and Name span 3 rows
+            style_commands.append(('SPAN', (0, 0), (0, 2)))  # Student ID
+            style_commands.append(('SPAN', (1, 0), (1, 2)))  # Name
+            style_commands.append(('SPAN', (2, 0), (7, 0)))  # Theory Course CA header (spans columns 2-7)
+            style_commands.append(('SPAN', (2, 1), (2, 2)))  # Attendance (spans rows 1-2)
+            style_commands.append(('SPAN', (3, 1), (6, 1)))  # Assignment/Presentation (spans columns 3-6, row 1)
+            style_commands.append(('SPAN', (7, 1), (7, 2)))  # Mid-Term Exam (spans rows 1-2)
+            style_commands.append(('SPAN', (8, 0), (8, 2)))  # Total (spans rows 0-2, column 8)
+        
+        table.setStyle(TableStyle(style_commands))
         
         elements.append(table)
         

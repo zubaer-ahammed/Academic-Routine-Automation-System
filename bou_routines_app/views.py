@@ -4361,14 +4361,19 @@ def attendance_calendar(request):
             selected_curriculum = None
             selected_curriculum_id = None
     
-    # If no curriculum selected, use the Old Curriculum by default
+    # If no curriculum selected, use the New Curriculum by default
     if not selected_curriculum and curricula.exists():
         try:
-            selected_curriculum = Curriculum.objects.get(code='OLD')
+            selected_curriculum = Curriculum.objects.get(code='NEW')
             selected_curriculum_id = selected_curriculum.id
         except Curriculum.DoesNotExist:
-            selected_curriculum = curricula.first()
-            selected_curriculum_id = selected_curriculum.id if selected_curriculum else None
+            # Fallback: try NEW2024 if NEW doesn't exist
+            try:
+                selected_curriculum = Curriculum.objects.get(code='NEW2024')
+                selected_curriculum_id = selected_curriculum.id
+            except Curriculum.DoesNotExist:
+                selected_curriculum = curricula.first()
+                selected_curriculum_id = selected_curriculum.id if selected_curriculum else None
     
     # Get selected centre from request
     selected_centre_id = request.GET.get('centre') or request.POST.get('centre')
@@ -6245,14 +6250,19 @@ def ca_management(request):
             selected_curriculum = None
             selected_curriculum_id = None
     
-    # If no curriculum selected, use the Old Curriculum by default
+    # If no curriculum selected, use the New Curriculum by default
     if not selected_curriculum and curricula.exists():
         try:
-            selected_curriculum = Curriculum.objects.get(code='OLD')
+            selected_curriculum = Curriculum.objects.get(code='NEW')
             selected_curriculum_id = selected_curriculum.id
         except Curriculum.DoesNotExist:
-            selected_curriculum = curricula.first()
-            selected_curriculum_id = selected_curriculum.id if selected_curriculum else None
+            # Fallback: try NEW2024 if NEW doesn't exist
+            try:
+                selected_curriculum = Curriculum.objects.get(code='NEW2024')
+                selected_curriculum_id = selected_curriculum.id
+            except Curriculum.DoesNotExist:
+                selected_curriculum = curricula.first()
+                selected_curriculum_id = selected_curriculum.id if selected_curriculum else None
     
     # Get selected centre from request
     selected_centre_id = request.GET.get('centre') or request.POST.get('centre')

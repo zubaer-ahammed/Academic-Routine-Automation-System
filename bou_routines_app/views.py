@@ -5420,7 +5420,8 @@ def export_attendance_pdf(request):
             combined = f'{term} Term {semester_full_name}'.strip()
             left_content.append(Paragraph(combined, header_style_small))
         left_content.append(Spacer(1, 2))
-        left_content.append(Paragraph('Attendance Report', header_style_bold))
+        course_name_display = f"{course.code} - {course.name}" if course else "Course"
+        left_content.append(Paragraph(f'Attendance Report - {course_name_display}', header_style_bold))
         commencement = semester.start_date.strftime('%d %B %Y') if semester.start_date else ''
         if commencement:
             left_content.append(Paragraph(f'<b>Date of Commencement:</b> {commencement}', header_style_normal))

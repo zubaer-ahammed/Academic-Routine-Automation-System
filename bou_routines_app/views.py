@@ -6892,6 +6892,489 @@ def export_ca_marks_pdf(request):
         return HttpResponse(f"Error generating PDF: {str(e)}", status=500)
 
 @login_required
+def export_blank_ca_marks_pdf(request):
+    """Export blank CA marks sheet to PDF (only Student ID and Name filled, all other columns blank)"""
+    try:
+        # Check permissions - only admin/superuser can download blank sheets
+        if not (request.user.is_superuser or request.user.is_staff):
+            messages.error(request, "You don't have permission to export blank CA marks sheets.")
+            return redirect('ca-management')
+        
+        semester_id = request.GET.get('semester')
+        course_id = request.GET.get('course')
+        centre_id = request.GET.get('centre')
+        
+        if not semester_id or not course_id:
+            messages.error(request, "Please select a semester and course.")
+            return redirect('ca-management')
+        
+        semester = Semester.objects.get(id=semester_id)
+        course = Course.objects.get(id=course_id)
+        
+        # Get students with custom sorting
+        students = Student.objects.filter(semesters=semester).extra(
+            select={
+                'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
+                'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
+            }
+        ).order_by('-first_two_digits', 'last_three_digits')
+        
+        # Create PDF
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=landscape(A4),
+            rightMargin=54,
+            leftMargin=54,
+            topMargin=34,
+            bottomMargin=34
+        )
+        
+        # Get page width and calculate available width
+        page_width, page_height = landscape(A4)
+        available_width = page_width - doc.leftMargin - doc.rightMargin
+        
+        elements = []
+        
+        # --- HEADER IMAGE SECTION ---
+        header_img_path = 'bou_routines_app/static/pdf_routine_top.png'
+        try:
+            padding_for_image = 2
+            img_obj = Image(header_img_path, width=available_width - (2 * padding_for_image), height=45)
+            header_img_table = Table([[img_obj]], colWidths=[available_width])
+            header_img_table.setStyle(TableStyle([
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('LEFTPADDING', (0,0), (-1, -1), padding_for_image),
+                ('RIGHTPADDING', (0,0), (-1, -1), padding_for_image),
+                ('TOPPADDING', (0,0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0,0), (-1, -1), 0),
+            ]))
+            elements.append(header_img_table)
+        except Exception as e:
+            print(f"Error loading header image: {e}")
+            pass
+        elements.append(Spacer(1, -4))
+        
+        # Initialize centre_name
+        centre_name = ''
+        if centre_id:
+            try:
+                centre = Centre.objects.get(id=centre_id)
+                centre_name = centre.name
+            except Centre.DoesNotExist:
+                pass
+        
+        # Build header (same as regular export)
+        header_style = ParagraphStyle(
+            'HeaderStyle',
+            fontName='Helvetica-Bold',
+            fontSize=15,
+            alignment=1,
+            leading=18,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+        header_style_small = ParagraphStyle(
+            'HeaderStyleSmall',
+            fontName='Helvetica-Bold',
+            fontSize=11,
+            alignment=1,
+            leading=14,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+        header_style_normal = ParagraphStyle(
+            'HeaderStyleNormal',
+            fontName='Helvetica',
+            fontSize=10,
+            alignment=1,
+            leading=11,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+        header_style_bold = ParagraphStyle(
+            'HeaderStyleBold',
+            fontName='Helvetica-Bold',
+            fontSize=12,
+            alignment=1,
+            leading=15,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+        
+        left_content = []
+        program_name = 'B. Sc in Computer Science and Engineering Program'
+        left_content.append(Paragraph(program_name, header_style))
+        session = semester.session or ''
+        if session:
+            left_content.append(Paragraph(f'{session} Session', header_style_small))
+        term = semester.term or ''
+        semester_full_name = semester.semester_full_name or ''
+        if term or semester_full_name:
+            combined = f'{term} Term {semester_full_name}'.strip()
+            left_content.append(Paragraph(combined, header_style_small))
+        left_content.append(Spacer(1, 2))
+        course_name_display = f"{course.code} - {course.name}" if course else "Course"
+        left_content.append(Paragraph(f'Blank CA Marks Sheet - {course_name_display}', header_style_bold))
+        commencement = semester.start_date.strftime('%d %B %Y') if semester.start_date else ''
+        if not centre_name:
+            first_sc = SemesterCourse.objects.filter(semester=semester).select_related('centre').first()
+            if first_sc and first_sc.centre:
+                centre_name = first_sc.centre.name
+        if commencement:
+            left_content.append(Paragraph(f'<b>Date of Commencement:</b> {commencement}', header_style_normal))
+        if centre_name:
+            left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
+        
+        # Build right column (contact person box) - same as regular export
+        coordinator = semester.program_coordinator
+        contact_info_lines = []
+        
+        if coordinator:
+            contact_label = Paragraph(
+                'Contact Person',
+                ParagraphStyle(
+                    'ContactLabel',
+                    fontName='Helvetica-Bold',
+                    fontSize=11,
+                    alignment=0,
+                    textColor=colors.white,
+                    spaceAfter=0,
+                    spaceBefore=0,
+                    leading=14,
+                )
+            )
+            contact_label_table = Table(
+                [[contact_label]],
+                colWidths=[190],
+                hAlign='RIGHT',
+                style=TableStyle([
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+                    ('TOPPADDING', (0,0), (-1,-1), -3),
+                    ('LEFTPADDING', (0,0), (-1,-1), 0),
+                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                ])
+            )
+            if coordinator.teacher:
+                contact_info_lines.append(coordinator.teacher.name)
+            if coordinator.designation:
+                contact_info_lines.append(coordinator.designation)
+            if coordinator.secondary_designation:
+                contact_info_lines.append(coordinator.secondary_designation)
+        contact_info_lines.append('Bangladesh Open University')
+        if coordinator and coordinator.phone:
+            contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
+        if coordinator and coordinator.email:
+            contact_info_lines.append(f'email:{coordinator.email}')
+        else:
+            contact_info_lines.append('Bangladesh Open University')
+            contact_label = Paragraph(
+                'Contact Person',
+                ParagraphStyle(
+                    'ContactLabel',
+                    fontName='Helvetica-Bold',
+                    fontSize=11,
+                    alignment=0,
+                    textColor=colors.white,
+                    spaceAfter=0,
+                    spaceBefore=0,
+                    leading=14,
+                )
+            )
+            contact_label_table = Table(
+                [[contact_label]],
+                colWidths=[190],
+                hAlign='RIGHT',
+                style=TableStyle([
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+                    ('TOPPADDING', (0,0), (-1,-1), -3),
+                    ('LEFTPADDING', (0,0), (-1,-1), 0),
+                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                ])
+            )
+        
+        contact_info_para = Paragraph(
+            '<br/>'.join(contact_info_lines),
+            ParagraphStyle(
+                'ContactBox',
+                fontName='Helvetica',
+                fontSize=10,
+                alignment=0,
+                textColor=colors.black,
+                leftIndent=2,
+                leading=10,
+                spaceBefore=0,
+                spaceAfter=0,
+            )
+        )
+        contact_table = Table(
+            [[contact_label_table], [contact_info_para]],
+            colWidths=[190],
+            hAlign='RIGHT',
+        )
+        contact_table.setStyle(TableStyle([
+            ('BOX', (0, 0), (-1, -1), 1, colors.black),
+            ('ROUNDED', (0, 0), (-1, -1), 6),
+            ('BACKGROUND', (0, 0), (0, 0), colors.HexColor('#2c3e50')),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (0, 0), 6),
+            ('BOTTOMPADDING', (0, 0), (0, 0), 4),
+            ('TOPPADDING', (0, 1), (0, 1), 4),
+            ('BOTTOMPADDING', (0, 1), (0, 1), 6),
+        ]))
+        
+        left_box_table = Table(
+            [[left_content]],
+            colWidths=[available_width-190],
+            hAlign='LEFT',
+            style=TableStyle([
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ])
+        )
+        two_col_table = Table(
+            [[left_box_table, contact_table]],
+            colWidths=[available_width-190, 190],
+            hAlign='LEFT'
+        )
+        two_col_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (0, 0), 'MIDDLE'),
+            ('VALIGN', (1, 0), (1, 0), 'MIDDLE'),
+            ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ]))
+        elements.append(Spacer(1, 4))
+        elements.append(two_col_table)
+        elements.append(Spacer(1, 4))
+        
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=16,
+            textColor=colors.HexColor('#c41e3a'),
+            spaceAfter=12,
+            alignment=TA_CENTER
+        )
+        
+        # Title
+        title = Paragraph(f"Blank CA Marks Sheet - {semester.name}", title_style)
+        elements.append(title)
+        elements.append(Spacer(1, 12))
+        
+        # Course info
+        course_info = Paragraph(
+            f"<b>Course:</b> {course.code} - {course.name}<br/>"
+            f"<b>Course Type:</b> {'Lab Course' if course.is_lab else 'Theory Course'}",
+            styles['Normal']
+        )
+        elements.append(course_info)
+        elements.append(Spacer(1, 12))
+        
+        # Build table data with multi-row headers (same structure as regular export)
+        table_data = []
+        
+        # Get effective weights for display
+        if course.course_type == 'PROJECT':
+            total_ca = course.effective_project_supervisor_weight + course.effective_project_evaluation_weight + course.effective_project_presentation_weight
+            header_row_1 = [
+                'Student ID', 'Name',
+                f'Project Work CA (Total: {total_ca}%)', '', '',
+                'Total'
+            ]
+            header_row_2 = [
+                '', '',
+                f'Supervisor\n({course.effective_project_supervisor_weight}%)',
+                f'Evaluation\n({course.effective_project_evaluation_weight}%)',
+                f'Presentation\n({course.effective_project_presentation_weight}%)',
+                ''
+            ]
+            table_data.append(header_row_1)
+            table_data.append(header_row_2)
+        elif course.is_lab:
+            total_ca = course.effective_lab_ca_attendance_weight + course.effective_lab_ca_assignment_weight + course.effective_lab_ca_practical_weight
+            header_row_1 = [
+                'Student ID', 'Name',
+                f'Lab Course CA (Total: {total_ca}%)', '', '', '', '',
+                '', 'Total'
+            ]
+            header_row_2 = [
+                '', '',
+                f'Attendance\n({course.effective_lab_ca_attendance_weight}%)',
+                f'Assignment/Lab Report\n({course.effective_lab_ca_assignment_weight}%)', '', '', '',
+                f'Exp./Lab Project\n({course.effective_lab_ca_practical_weight}%)',
+                ''
+            ]
+            header_row_3 = [
+                '', '',
+                '',
+                'First', 'Second', 'Third', 'Average',
+                '', ''
+            ]
+            table_data.append(header_row_1)
+            table_data.append(header_row_2)
+            table_data.append(header_row_3)
+        else:
+            total_ca = course.effective_ca_attendance_weight + course.effective_ca_assignment_weight + course.effective_ca_midterm_weight
+            header_row_1 = [
+                'Student ID', 'Name',
+                f'Theory Course CA (Total: {total_ca}%)', '', '', '', '',
+                '', 'Total'
+            ]
+            header_row_2 = [
+                '', '',
+                f'Attendance\n({course.effective_ca_attendance_weight}%)',
+                f'Assignment/Presentation\n({course.effective_ca_assignment_weight}%)', '', '', '',
+                f'Mid-Term Exam\n({course.effective_ca_midterm_weight}%)',
+                ''
+            ]
+            header_row_3 = [
+                '', '',
+                '',
+                'First', 'Second', 'Third', 'Average',
+                '', ''
+            ]
+            table_data.append(header_row_1)
+            table_data.append(header_row_2)
+            table_data.append(header_row_3)
+        
+        # Data rows - only Student ID and Name filled, all other cells blank
+        for student in students:
+            if course.course_type == 'PROJECT':
+                row = [student.id, student.name, '', '', '', '']
+            elif course.is_lab:
+                row = [student.id, student.name, '', '', '', '', '', '', '']
+            else:
+                row = [student.id, student.name, '', '', '', '', '', '', '']
+            table_data.append(row)
+        
+        # Create table
+        table = Table(table_data)
+        
+        # Determine header row count
+        if course.course_type == 'PROJECT':
+            header_rows = 2
+        else:
+            header_rows = 3
+        
+        # Build style with merged cells for headers (same as regular export)
+        style_commands = [
+            ('BACKGROUND', (0, 0), (-1, header_rows - 1), colors.HexColor('#2c3e50')),
+            ('TEXTCOLOR', (0, 0), (-1, header_rows - 1), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('FONTNAME', (0, 0), (-1, header_rows - 1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, header_rows - 1), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, header_rows - 1), 8),
+            ('TOPPADDING', (0, 0), (-1, header_rows - 1), 8),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('FONTSIZE', (0, header_rows), (-1, -1), 8),
+            ('ROWBACKGROUNDS', (0, header_rows), (-1, -1), [colors.white, colors.lightgrey]),
+        ]
+        
+        # Add cell spans for headers (same as regular export)
+        if course.course_type == 'PROJECT':
+            style_commands.append(('SPAN', (0, 0), (0, 1)))  # Student ID
+            style_commands.append(('SPAN', (1, 0), (1, 1)))  # Name
+            style_commands.append(('SPAN', (2, 0), (4, 0)))  # Project Work CA header
+            style_commands.append(('SPAN', (5, 0), (5, 1)))  # Total
+        elif course.is_lab:
+            style_commands.append(('SPAN', (0, 0), (0, 2)))  # Student ID
+            style_commands.append(('SPAN', (1, 0), (1, 2)))  # Name
+            style_commands.append(('SPAN', (2, 0), (7, 0)))  # Lab Course CA header
+            style_commands.append(('SPAN', (2, 1), (2, 2)))  # Attendance
+            style_commands.append(('SPAN', (3, 1), (6, 1)))  # Assignment/Lab Report
+            style_commands.append(('SPAN', (7, 1), (7, 2)))  # Experiment/Lab Project
+            style_commands.append(('SPAN', (8, 0), (8, 2)))  # Total
+        else:
+            style_commands.append(('SPAN', (0, 0), (0, 2)))  # Student ID
+            style_commands.append(('SPAN', (1, 0), (1, 2)))  # Name
+            style_commands.append(('SPAN', (2, 0), (7, 0)))  # Theory Course CA header
+            style_commands.append(('SPAN', (2, 1), (2, 2)))  # Attendance
+            style_commands.append(('SPAN', (3, 1), (6, 1)))  # Assignment/Presentation
+            style_commands.append(('SPAN', (7, 1), (7, 2)))  # Mid-Term Exam
+            style_commands.append(('SPAN', (8, 0), (8, 2)))  # Total
+        
+        table.setStyle(TableStyle(style_commands))
+        
+        elements.append(table)
+        
+        # Add footer with signatures (same as regular export)
+        elements.append(Spacer(1, 24))
+        signature_style = ParagraphStyle(
+            'SignatureStyle',
+            fontName='Helvetica',
+            fontSize=10,
+            alignment=TA_RIGHT,
+            leading=6,
+            spaceBefore=0,
+            spaceAfter=0,
+        )
+        signature_style_left = ParagraphStyle(
+            'SignatureStyleLeft',
+            fontName='Helvetica',
+            fontSize=10,
+            alignment=0,
+            leading=6,
+            spaceBefore=0,
+            spaceAfter=0,
+        )
+        dean_line = Paragraph("Dean", signature_style)
+        school_line = Paragraph("School of Science and Technology", signature_style)
+        bou_line = Paragraph("Bangladesh Open University", signature_style)
+        coordinator_line = Paragraph("Program Co-ordinator", signature_style_left)
+        school_line_left = Paragraph("School of Science and Technology", signature_style_left)
+        bou_line_left = Paragraph("Bangladesh Open University", signature_style_left)
+        signature_data = [
+            [dean_line],
+            [school_line],
+            [bou_line]
+        ]
+        signature_data_left = [
+            [coordinator_line],
+            [school_line_left],
+            [bou_line_left]
+        ]
+        signature_table_width = 250
+        signature_table = Table(signature_data, colWidths=[signature_table_width])
+        signature_table.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'RIGHT'),
+            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
+            ('TOPPADDING', (0,0), (0,0), 4),
+        ]))
+        signature_table_left = Table(signature_data_left, colWidths=[signature_table_width])
+        signature_table_left.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
+            ('TOPPADDING', (0,0), (0,0), 4),
+        ]))
+        wrapper_col_widths = [available_width - signature_table_width * 2, signature_table_width, signature_table_width]
+        signature_wrapper_table = Table([[signature_table_left, '', signature_table]], colWidths=wrapper_col_widths)
+        signature_wrapper_table.setStyle(TableStyle([
+            ('ALIGN', (0,0), (0,0), 'LEFT'),
+            ('ALIGN', (2,0), (2,0), 'RIGHT'),
+            ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
+            ('LEFTPADDING', (0,0), (-1,-1), 0),
+            ('RIGHTPADDING', (0,0), (-1,-1), 0),
+            ('TOPPADDING', (0,0), (-1,-1), 0),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+        ]))
+        elements.append(signature_wrapper_table)
+        
+        # Build PDF
+        doc.build(elements)
+        buffer.seek(0)
+        
+        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        filename = f"Blank_CA_Marks_{course.code}_{semester.name}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+        
+    except Exception as e:
+        return HttpResponse(f"Error generating PDF: {str(e)}", status=500)
+
+@login_required
 def export_ca_marks_excel(request):
     """Export CA marks to Excel"""
     try:
@@ -7498,6 +7981,398 @@ def export_final_exam_pdf(request):
         
         response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
         filename = f"Final_Exam_Marks_{course.code}_{semester.name}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+        
+    except Exception as e:
+        return HttpResponse(f"Error generating PDF: {str(e)}", status=500)
+
+@login_required
+def export_blank_final_exam_pdf(request):
+    """Export blank Final Exam marks sheet to PDF (only Student ID and Name filled, all other columns blank)"""
+    try:
+        # Check permissions - only admin/superuser can download blank sheets
+        if not (request.user.is_superuser or request.user.is_staff):
+            messages.error(request, "You don't have permission to export blank Final Exam marks sheets.")
+            return redirect('ca-management')
+        
+        semester_id = request.GET.get('semester')
+        course_id = request.GET.get('course')
+        centre_id = request.GET.get('centre')
+        teacher_role = request.GET.get('teacher_role', 'teacher1')
+        
+        if not semester_id or not course_id:
+            messages.error(request, "Please select a semester and course.")
+            return redirect('ca-management')
+        
+        semester = Semester.objects.get(id=semester_id)
+        course = Course.objects.get(id=course_id)
+        
+        # Get students with custom sorting
+        students = Student.objects.filter(semesters=semester).extra(
+            select={
+                'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
+                'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
+            }
+        ).order_by('-first_two_digits', 'last_three_digits')
+        
+        # Create PDF
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=landscape(A4),
+            rightMargin=54,
+            leftMargin=54,
+            topMargin=34,
+            bottomMargin=34
+        )
+        
+        # Get page width and calculate available width
+        page_width, page_height = landscape(A4)
+        available_width = page_width - doc.leftMargin - doc.rightMargin
+        
+        elements = []
+        
+        # --- HEADER IMAGE SECTION ---
+        header_img_path = 'bou_routines_app/static/pdf_routine_top.png'
+        try:
+            padding_for_image = 2
+            img_obj = Image(header_img_path, width=available_width - (2 * padding_for_image), height=45)
+            header_img_table = Table([[img_obj]], colWidths=[available_width])
+            header_img_table.setStyle(TableStyle([
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('LEFTPADDING', (0,0), (-1, -1), padding_for_image),
+                ('RIGHTPADDING', (0,0), (-1, -1), padding_for_image),
+                ('TOPPADDING', (0,0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0,0), (-1, -1), 0),
+            ]))
+            elements.append(header_img_table)
+        except Exception as e:
+            print(f"Error loading header image: {e}")
+            pass
+        elements.append(Spacer(1, -4))
+        
+        # Initialize centre_name
+        centre_name = ''
+        if centre_id:
+            try:
+                centre = Centre.objects.get(id=centre_id)
+                centre_name = centre.name
+            except Centre.DoesNotExist:
+                pass
+        
+        # Build header (same as regular export)
+        header_style = ParagraphStyle(
+            'HeaderStyle',
+            fontName='Helvetica-Bold',
+            fontSize=15,
+            alignment=1,
+            leading=18,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+        header_style_small = ParagraphStyle(
+            'HeaderStyleSmall',
+            fontName='Helvetica-Bold',
+            fontSize=11,
+            alignment=1,
+            leading=14,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+        header_style_normal = ParagraphStyle(
+            'HeaderStyleNormal',
+            fontName='Helvetica',
+            fontSize=10,
+            alignment=1,
+            leading=11,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+        header_style_bold = ParagraphStyle(
+            'HeaderStyleBold',
+            fontName='Helvetica-Bold',
+            fontSize=12,
+            alignment=1,
+            leading=15,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+        
+        left_content = []
+        program_name = 'B. Sc in Computer Science and Engineering Program'
+        left_content.append(Paragraph(program_name, header_style))
+        session = semester.session or ''
+        if session:
+            left_content.append(Paragraph(f'{session} Session', header_style_small))
+        term = semester.term or ''
+        semester_full_name = semester.semester_full_name or ''
+        if term or semester_full_name:
+            combined = f'{term} Term {semester_full_name}'.strip()
+            left_content.append(Paragraph(combined, header_style_small))
+        left_content.append(Spacer(1, 2))
+        course_name_display = f"{course.code} - {course.name}" if course else "Course"
+        left_content.append(Paragraph(f'Blank Final Exam Marks Sheet - {course_name_display}', header_style_bold))
+        commencement = semester.start_date.strftime('%d %B %Y') if semester.start_date else ''
+        if not centre_name:
+            first_sc = SemesterCourse.objects.filter(semester=semester).select_related('centre').first()
+            if first_sc and first_sc.centre:
+                centre_name = first_sc.centre.name
+        if commencement:
+            left_content.append(Paragraph(f'<b>Date of Commencement:</b> {commencement}', header_style_normal))
+        if centre_name:
+            left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
+        
+        # Build right column (contact person box) - same as regular export
+        coordinator = semester.program_coordinator
+        contact_info_lines = []
+        
+        if coordinator:
+            contact_label = Paragraph(
+                'Contact Person',
+                ParagraphStyle(
+                    'ContactLabel',
+                    fontName='Helvetica-Bold',
+                    fontSize=11,
+                    alignment=0,
+                    textColor=colors.white,
+                    spaceAfter=0,
+                    spaceBefore=0,
+                    leading=14,
+                )
+            )
+            contact_label_table = Table(
+                [[contact_label]],
+                colWidths=[190],
+                hAlign='RIGHT',
+                style=TableStyle([
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+                    ('TOPPADDING', (0,0), (-1,-1), -3),
+                    ('LEFTPADDING', (0,0), (-1,-1), 0),
+                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                ])
+            )
+            if coordinator.teacher:
+                contact_info_lines.append(coordinator.teacher.name)
+            if coordinator.designation:
+                contact_info_lines.append(coordinator.designation)
+            if coordinator.secondary_designation:
+                contact_info_lines.append(coordinator.secondary_designation)
+        contact_info_lines.append('Bangladesh Open University')
+        if coordinator and coordinator.phone:
+            contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
+        if coordinator and coordinator.email:
+            contact_info_lines.append(f'email:{coordinator.email}')
+        else:
+            contact_info_lines.append('Bangladesh Open University')
+            contact_label = Paragraph(
+                'Contact Person',
+                ParagraphStyle(
+                    'ContactLabel',
+                    fontName='Helvetica-Bold',
+                    fontSize=11,
+                    alignment=0,
+                    textColor=colors.white,
+                    spaceAfter=0,
+                    spaceBefore=0,
+                    leading=14,
+                )
+            )
+            contact_label_table = Table(
+                [[contact_label]],
+                colWidths=[190],
+                hAlign='RIGHT',
+                style=TableStyle([
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+                    ('TOPPADDING', (0,0), (-1,-1), -3),
+                    ('LEFTPADDING', (0,0), (-1,-1), 0),
+                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                ])
+            )
+        
+        contact_info_para = Paragraph(
+            '<br/>'.join(contact_info_lines),
+            ParagraphStyle(
+                'ContactBox',
+                fontName='Helvetica',
+                fontSize=10,
+                alignment=0,
+                textColor=colors.black,
+                leftIndent=2,
+                leading=10,
+                spaceBefore=0,
+                spaceAfter=0,
+            )
+        )
+        contact_table = Table(
+            [[contact_label_table], [contact_info_para]],
+            colWidths=[190],
+            hAlign='RIGHT',
+        )
+        contact_table.setStyle(TableStyle([
+            ('BOX', (0, 0), (-1, -1), 1, colors.black),
+            ('ROUNDED', (0, 0), (-1, -1), 6),
+            ('BACKGROUND', (0, 0), (0, 0), colors.HexColor('#2c3e50')),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (0, 0), 6),
+            ('BOTTOMPADDING', (0, 0), (0, 0), 4),
+            ('TOPPADDING', (0, 1), (0, 1), 4),
+            ('BOTTOMPADDING', (0, 1), (0, 1), 6),
+        ]))
+        
+        left_box_table = Table(
+            [[left_content]],
+            colWidths=[available_width-190],
+            hAlign='LEFT',
+            style=TableStyle([
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ])
+        )
+        two_col_table = Table(
+            [[left_box_table, contact_table]],
+            colWidths=[available_width-190, 190],
+            hAlign='LEFT'
+        )
+        two_col_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (0, 0), 'MIDDLE'),
+            ('VALIGN', (1, 0), (1, 0), 'MIDDLE'),
+            ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ]))
+        elements.append(Spacer(1, 4))
+        elements.append(two_col_table)
+        elements.append(Spacer(1, 4))
+        
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=16,
+            textColor=colors.HexColor('#c41e3a'),
+            spaceAfter=12,
+            alignment=TA_CENTER
+        )
+        
+        # Title
+        title = Paragraph(f"Blank Final Exam Marks Sheet - {semester.name}", title_style)
+        elements.append(title)
+        elements.append(Spacer(1, 12))
+        
+        # Course info
+        course_info = Paragraph(
+            f"<b>Course:</b> {course.code} - {course.name}<br/>"
+            f"<b>Course Type:</b> {'Lab Course' if course.is_lab else 'Theory Course'}<br/>"
+            f"<b>Evaluator:</b> {teacher_role.replace('teacher', 'Teacher ').title()}",
+            styles['Normal']
+        )
+        elements.append(course_info)
+        elements.append(Spacer(1, 12))
+        
+        # Build table data
+        table_data = []
+        
+        # Header row based on course type (same as regular export)
+        if course.is_lab:
+            header = ['Student ID', 'Name', 'Lab Final Exam Mark', 'Total', 'Notes']
+        else:
+            header = ['Student ID', 'Name', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Total', 'Notes']
+        table_data.append(header)
+        
+        # Data rows - only Student ID and Name filled, all other cells blank
+        for student in students:
+            if course.is_lab:
+                row = [student.id, student.name, '', '', '']
+            else:
+                row = [student.id, student.name, '', '', '', '', '', '', '', '', '']
+            table_data.append(row)
+        
+        # Create table
+        table = Table(table_data)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
+        ]))
+        
+        elements.append(table)
+        
+        # Add footer with signatures (same as regular export)
+        elements.append(Spacer(1, 24))
+        signature_style = ParagraphStyle(
+            'SignatureStyle',
+            fontName='Helvetica',
+            fontSize=10,
+            alignment=TA_RIGHT,
+            leading=6,
+            spaceBefore=0,
+            spaceAfter=0,
+        )
+        signature_style_left = ParagraphStyle(
+            'SignatureStyleLeft',
+            fontName='Helvetica',
+            fontSize=10,
+            alignment=0,
+            leading=6,
+            spaceBefore=0,
+            spaceAfter=0,
+        )
+        dean_line = Paragraph("Dean", signature_style)
+        school_line = Paragraph("School of Science and Technology", signature_style)
+        bou_line = Paragraph("Bangladesh Open University", signature_style)
+        coordinator_line = Paragraph("Program Co-ordinator", signature_style_left)
+        school_line_left = Paragraph("School of Science and Technology", signature_style_left)
+        bou_line_left = Paragraph("Bangladesh Open University", signature_style_left)
+        signature_data = [
+            [dean_line],
+            [school_line],
+            [bou_line]
+        ]
+        signature_data_left = [
+            [coordinator_line],
+            [school_line_left],
+            [bou_line_left]
+        ]
+        signature_table_width = 250
+        signature_table = Table(signature_data, colWidths=[signature_table_width])
+        signature_table.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'RIGHT'),
+            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
+            ('TOPPADDING', (0,0), (0,0), 4),
+        ]))
+        signature_table_left = Table(signature_data_left, colWidths=[signature_table_width])
+        signature_table_left.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
+            ('TOPPADDING', (0,0), (0,0), 4),
+        ]))
+        wrapper_col_widths = [available_width - signature_table_width * 2, signature_table_width, signature_table_width]
+        signature_wrapper_table = Table([[signature_table_left, '', signature_table]], colWidths=wrapper_col_widths)
+        signature_wrapper_table.setStyle(TableStyle([
+            ('ALIGN', (0,0), (0,0), 'LEFT'),
+            ('ALIGN', (2,0), (2,0), 'RIGHT'),
+            ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
+            ('LEFTPADDING', (0,0), (-1,-1), 0),
+            ('RIGHTPADDING', (0,0), (-1,-1), 0),
+            ('TOPPADDING', (0,0), (-1,-1), 0),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+        ]))
+        elements.append(signature_wrapper_table)
+        
+        # Build PDF
+        doc.build(elements)
+        buffer.seek(0)
+        
+        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        filename = f"Blank_Final_Exam_Marks_{course.code}_{semester.name}.pdf"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
         

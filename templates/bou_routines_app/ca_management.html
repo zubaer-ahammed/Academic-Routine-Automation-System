@@ -932,6 +932,13 @@
                                                         <i class="fas fa-file-pdf text-danger"></i> PDF
                                                     </a>
                                                 </li>
+                                                {% if user.is_superuser or user.is_staff %}
+                                                <li>
+                                                    <a class="dropdown-item" href="{% url 'export-blank-ca-marks-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}">
+                                                        <i class="fas fa-file-pdf text-danger"></i> Blank PDF
+                                                    </a>
+                                                </li>
+                                                {% endif %}
                                                 <li>
                                                     <a class="dropdown-item" href="{% url 'export-ca-marks-excel' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}">
                                                         <i class="fas fa-file-excel text-success"></i> Excel
@@ -1206,6 +1213,13 @@
                                                         <i class="fas fa-file-pdf text-danger"></i> PDF
                                                     </a>
                                                 </li>
+                                                {% if user.is_superuser or user.is_staff %}
+                                                <li>
+                                                    <a class="dropdown-item" href="{% url 'export-blank-final-exam-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}{% if teacher_role %}&teacher_role={{ teacher_role }}{% endif %}">
+                                                        <i class="fas fa-file-pdf text-danger"></i> Blank PDF
+                                                    </a>
+                                                </li>
+                                                {% endif %}
                                                 <li>
                                                     <a class="dropdown-item" href="{% url 'export-final-exam-excel' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}{% if teacher_role %}&teacher_role={{ teacher_role }}{% endif %}">
                                                         <i class="fas fa-file-excel text-success"></i> Excel

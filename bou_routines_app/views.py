@@ -162,6 +162,7 @@ def generate_routine(request):
             selected_semester_id = None
     selected_semester = None
     teacher_short_name_newline = True  # Default
+    hide_teacher_name_in_pdf = False  # Default
     
     # If semester is provided but no curriculum, determine curriculum from semester
     # Also determine centre from semester if not already selected
@@ -186,21 +187,25 @@ def generate_routine(request):
     overlap_conflicts = []
     form_rows = []
 
-    # On POST, save the teacher_short_name_newline value to the Semester
+    # On POST, save the teacher_short_name_newline and hide_teacher_name_in_pdf values to the Semester
     if request.method == "POST" and request.POST.get("semester"):
         try:
             selected_semester = Semester.objects.get(id=request.POST.get("semester"))
-            # Save the checkbox value to the Semester
+            # Save the checkbox values to the Semester
             tsn_newline = request.POST.get("teacher_short_name_newline") == "1"
+            hide_teacher = request.POST.get("hide_teacher_name_in_pdf") == "1"
             selected_semester.teacher_short_name_newline = tsn_newline
+            selected_semester.hide_teacher_name_in_pdf = hide_teacher
             selected_semester.save()
             teacher_short_name_newline = tsn_newline
+            hide_teacher_name_in_pdf = hide_teacher
         except Semester.DoesNotExist:
             selected_semester = None
     elif selected_semester_id:
         try:
             selected_semester = Semester.objects.get(id=selected_semester_id)
             teacher_short_name_newline = selected_semester.teacher_short_name_newline
+            hide_teacher_name_in_pdf = selected_semester.hide_teacher_name_in_pdf
             # Note: Semesters no longer have a centre. Centre is selected separately.
             # Re-filter by curriculum (centre filtering happens at SemesterCourse level)
             if selected_curriculum:
@@ -1236,6 +1241,7 @@ def generate_routine(request):
         "selected_semester_id": selected_semester_id,
         "selected_semester": selected_semester,
         "teacher_short_name_newline": teacher_short_name_newline,
+        "hide_teacher_name_in_pdf": hide_teacher_name_in_pdf,
         "curricula": curricula,
         "selected_curriculum": selected_curriculum,
         "selected_curriculum_id": selected_curriculum.id if selected_curriculum else None,
@@ -2305,6 +2311,10 @@ def export_to_pdf(request, semester_id):
 
         # Read the teacher short name display option from GET params
         teacher_short_name_newline = request.GET.get('teacher_short_name_newline', '1') == '1'
+        # Read the hide teacher name option from GET params or from semester
+        hide_teacher_name_in_pdf = request.GET.get('hide_teacher_name_in_pdf', '0') == '1'
+        if not hide_teacher_name_in_pdf:
+            hide_teacher_name_in_pdf = selected_semester.hide_teacher_name_in_pdf
 
         # Create a response for PDF file
         buffer = io.BytesIO()
@@ -2762,7 +2772,18 @@ def export_to_pdf(request, semester_id):
                         else:
                             course_code = r['course_code']
                             teacher_short = r['teacher']
-                            if teacher_short_name_newline:
+                            if hide_teacher_name_in_pdf:
+                                # Hide teacher name - only show course code
+                                cell_content = Paragraph(course_code, ParagraphStyle(
+                                    'CourseContent',
+                                    fontName='Helvetica',
+                                    fontSize=9,
+                                    alignment=TA_CENTER,
+                                    leading=10,
+                                    spaceBefore=0,
+                                    spaceAfter=0,
+                                ))
+                            elif teacher_short_name_newline:
                                 cell_content = Paragraph(f"{course_code}<br/>({teacher_short})", ParagraphStyle(
                                     'CourseContent',
                                     fontName='Helvetica',
@@ -2945,13 +2966,17 @@ def export_to_pdf(request, semester_id):
             'Course Code', 'Title', 'Number of Class', 'Course Teacher'
         ]]
         for sc in semester_courses:
-            effective_teacher = sc.effective_teacher
-            if effective_teacher:
-                teacher_full_name = effective_teacher.name + ' ('+effective_teacher.short_name+')' if effective_teacher.short_name else effective_teacher.name
-                if effective_teacher.name == "N/A":
-                    teacher_full_name = ""
-            else:
+            # Hide teacher name if option is enabled
+            if hide_teacher_name_in_pdf:
                 teacher_full_name = ""
+            else:
+                effective_teacher = sc.effective_teacher
+                if effective_teacher:
+                    teacher_full_name = effective_teacher.name + ' ('+effective_teacher.short_name+')' if effective_teacher.short_name else effective_teacher.name
+                    if effective_teacher.name == "N/A":
+                        teacher_full_name = ""
+                else:
+                    teacher_full_name = ""
             
             if(sc.number_of_classes == 0):
                 sc.number_of_classes = ""

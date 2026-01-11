@@ -360,6 +360,14 @@
                 </label>
             </div>
 
+            <!-- Option to hide teacher's name in PDF -->
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" value="1" id="hideTeacherNameInPdf" name="hide_teacher_name_in_pdf" {% if hide_teacher_name_in_pdf %}checked{% endif %}>
+                <label class="form-check-label" for="hideTeacherNameInPdf">
+                    Hide teacher's name in the PDF
+                </label>
+            </div>
+
             <h5 class="mt-4 mb-3">Course Schedule</h5>
 
             <div id="courseRepeater">
@@ -583,6 +591,7 @@
                     <div class="col-md-6">
                         <form id="pdfExportForm" method="get" action="{% url 'export-to-pdf' selected_semester_id %}" style="display:inline;">
                             <input type="hidden" name="teacher_short_name_newline" id="pdfTeacherShortNameNewline" value="1">
+                            <input type="hidden" name="hide_teacher_name_in_pdf" id="pdfHideTeacherName" value="0">
                             {% if selected_centre_id %}
                             <input type="hidden" name="centre" value="{{ selected_centre_id }}">
                             {% endif %}
@@ -2192,7 +2201,7 @@
             });
         });
 
-        // Ensure the PDF export form submits the correct teacher short name option
+        // Ensure the PDF export form submits the correct teacher short name and hide teacher name options
         var pdfExportForm = document.getElementById('pdfExportForm');
         if (pdfExportForm) {
             pdfExportForm.addEventListener('submit', function(e) {
@@ -2201,14 +2210,24 @@
                 if (teacherShortNameCheckbox && pdfTeacherShortNameInput) {
                     pdfTeacherShortNameInput.value = teacherShortNameCheckbox.checked ? '1' : '0';
                 }
+                var hideTeacherNameCheckbox = document.getElementById('hideTeacherNameInPdf');
+                var pdfHideTeacherNameInput = document.getElementById('pdfHideTeacherName');
+                if (hideTeacherNameCheckbox && pdfHideTeacherNameInput) {
+                    pdfHideTeacherNameInput.value = hideTeacherNameCheckbox.checked ? '1' : '0';
+                }
             });
         }
 
-        // On page load, set the PDF export hidden input to match the checkbox
+        // On page load, set the PDF export hidden inputs to match the checkboxes
         var pdfTeacherShortNameInput = document.getElementById('pdfTeacherShortNameNewline');
         var teacherShortNameCheckbox = document.getElementById('teacherShortNameNewline');
         if (pdfTeacherShortNameInput && teacherShortNameCheckbox) {
             pdfTeacherShortNameInput.value = teacherShortNameCheckbox.checked ? '1' : '0';
+        }
+        var pdfHideTeacherNameInput = document.getElementById('pdfHideTeacherName');
+        var hideTeacherNameCheckbox = document.getElementById('hideTeacherNameInPdf');
+        if (pdfHideTeacherNameInput && hideTeacherNameCheckbox) {
+            pdfHideTeacherNameInput.value = hideTeacherNameCheckbox.checked ? '1' : '0';
         }
     </script>
     <script>

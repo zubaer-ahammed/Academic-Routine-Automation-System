@@ -892,7 +892,11 @@
                         {% else %}
                                             <span class="mr-3"><i class="fas fa-calendar-check text-muted"></i> Attendance: <strong>{{ selected_course.effective_ca_attendance_weight }}%</strong> <small class="text-muted">(Auto)</small></span>
                                             <span class="mr-3"><i class="fas fa-tasks text-muted"></i> Assignment: <strong>{{ selected_course.effective_ca_assignment_weight }}%</strong></span>
-                                            <span><i class="fas fa-file-alt text-muted"></i> Mid-Term: <strong>{{ selected_course.effective_ca_midterm_weight }}%</strong></span>
+                                            {% if selected_semester and selected_semester.curriculum and selected_semester.curriculum.code == 'OLD' %}
+                                                <span><i class="fas fa-file-alt text-muted"></i> Class Test: <strong>{{ selected_course.effective_ca_quiz_weight }}%</strong></span>
+                                            {% else %}
+                                                <span><i class="fas fa-file-alt text-muted"></i> Mid-Term: <strong>{{ selected_course.effective_ca_midterm_weight }}%</strong></span>
+                                            {% endif %}
                                         {% endif %}
                                     </div>
                                 </div>
@@ -967,7 +971,11 @@
                                                 {% elif selected_course.is_lab %}
                                                     <th colspan="6">Lab Course CA (Total: {{ selected_course.effective_lab_ca_attendance_weight|add:selected_course.effective_lab_ca_assignment_weight|add:selected_course.effective_lab_ca_practical_weight }}%)</th>
                                                 {% else %}
-                                                    <th colspan="6">Theory Course CA (Total: {{ selected_course.effective_ca_attendance_weight|add:selected_course.effective_ca_assignment_weight|add:selected_course.effective_ca_midterm_weight }}%)</th>
+                                                    {% if selected_semester and selected_semester.curriculum and selected_semester.curriculum.code == 'OLD' %}
+                                                        <th colspan="8">Theory Course CA (Total: {{ selected_course.effective_ca_attendance_weight|add:selected_course.effective_ca_assignment_weight|add:selected_course.effective_ca_quiz_weight }}%)</th>
+                                                    {% else %}
+                                                        <th colspan="6">Theory Course CA (Total: {{ selected_course.effective_ca_attendance_weight|add:selected_course.effective_ca_assignment_weight|add:selected_course.effective_ca_midterm_weight }}%)</th>
+                                                {% endif %}
                                                 {% endif %}
                                                 <th rowspan="{% if selected_course.course_type == 'PROJECT' %}2{% else %}3{% endif %}">Total CA Mark</th>
                                                 <th rowspan="{% if selected_course.course_type == 'PROJECT' %}2{% else %}3{% endif %}">Notes</th>
@@ -986,7 +994,11 @@
                                                     <th>Experiment/Lab Project<br><small>({{ selected_course.effective_lab_ca_practical_weight }}%)</small></th>
                                                 {% else %}
                                                     <th colspan="4">Assignment/Presentation<br><small>({{ selected_course.effective_ca_assignment_weight }}%)</small></th>
-                                                    <th>Mid-Term Exam<br><small>({{ selected_course.effective_ca_midterm_weight }}%)</small></th>
+                                                    {% if selected_semester and selected_semester.curriculum and selected_semester.curriculum.code == 'OLD' %}
+                                                        <th colspan="3">Class Test<br><small>({{ selected_course.effective_ca_quiz_weight }}%)</small></th>
+                                                    {% else %}
+                                                        <th>Mid-Term Exam<br><small>({{ selected_course.effective_ca_midterm_weight }}%)</small></th>
+                                                    {% endif %}
                                                 {% endif %}
                                             </tr>
                                             {% if selected_course.is_lab %}
@@ -1005,7 +1017,13 @@
                                                 <th>Second</th>
                                                 <th>Third</th>
                                                 <th>Average</th>
+                                                {% if selected_semester and selected_semester.curriculum and selected_semester.curriculum.code == 'OLD' %}
+                                                    <th>First</th>
+                                                    <th>Second</th>
+                                                    <th>Best</th>
+                                                {% else %}
                                                 <th></th>
+                                                {% endif %}
                                             </tr>
                                             {% endif %}
                                             {% endif %}
@@ -1013,8 +1031,8 @@
                                         <tbody>
                                             {% for student in students %}
                                                 <tr>
-                                                    <td class="student-info">{{ student.id }}</td>
-                                                    <td class="student-info">{{ student.name }}</td>
+                                                    <td class="student-id" data-student-id="{{ student.id }}">{{ student.id }}</td>
+                                                    <td class="student-name">{{ student.name }}</td>
                                                     
                                                     {% if selected_course.course_type == 'PROJECT' %}
                                                         <!-- Project Work Marks -->
@@ -1152,17 +1170,58 @@
                                                         <td class="total-mark assignment-average">
                                                             <span class="assignment-average-value">{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}</span>
                                                         </td>
+                                                        {% if selected_semester and selected_semester.curriculum and selected_semester.curriculum.code == 'OLD' %}
+                                                            <!-- Class Tests for Old Curriculum -->
+                                                            <td>
+                                                                <input type="number" 
+                                                                       name="students_data[{{ student.id }}][first_class_test_mark]"
+                                                                       value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.first_class_test_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                       min="0" 
+                                                                       max="{{ selected_course.effective_ca_quiz_weight }}"
+                                                                       step="0.01"
+                                                                       class="mark-input"
+                                                                       placeholder="First Class Test"
+                                                                       oninput="updateClassTestBest(this); validateCAMark(this); calculateStudentTotal(this); autoSaveCAMarks();"
+                                                                       onblur="saveCAMarksImmediately();">
+                                                            </td>
+                                                            <td>
+                                                                <input type="number" 
+                                                                       name="students_data[{{ student.id }}][second_class_test_mark]"
+                                                                       value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.second_class_test_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                       min="0" 
+                                                                       max="{{ selected_course.effective_ca_quiz_weight }}"
+                                                                       step="0.01"
+                                                                       class="mark-input"
+                                                                       placeholder="Second Class Test"
+                                                                       oninput="updateClassTestBest(this); validateCAMark(this); calculateStudentTotal(this); autoSaveCAMarks();"
+                                                                       onblur="saveCAMarksImmediately();">
+                                                            </td>
+                                                            <td class="total-mark class-test-best">
+                                                                <span class="class-test-best-value">
+                                                                    {% for mark_id, ca_mark in ca_marks.items %}
+                                                                        {% if mark_id == student.id %}
+                                                                            {{ ca_mark.class_test_mark|floatformat:2 }}
+                                                                        {% endif %}
+                                                                    {% empty %}
+                                                                        0.00
+                                                                    {% endfor %}
+                                                                </span>
+                                                            </td>
+                                                        {% else %}
+                                                            <!-- Midterm for New Curriculum -->
                                                         <td>
                                                             <input type="number" 
                                                                    name="students_data[{{ student.id }}][midterm_mark]"
                                                                    value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.midterm_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
                                                                    min="0" 
-                                                                   max="{{ selected_course.effective_ca_midterm_weight }}"
+                                                                       max="{{ selected_course.effective_ca_midterm_weight }}"
                                                                    step="0.01"
                                                                    class="mark-input"
-                                                                   placeholder="Mid-Term Exam"
-                                                                   oninput="calculateStudentTotal(this)">
+                                                                       placeholder="Mid-Term Exam"
+                                                                       oninput="validateCAMark(this); calculateStudentTotal(this); autoSaveCAMarks();"
+                                                                       onblur="saveCAMarksImmediately();">
                                                         </td>
+                                                        {% endif %}
                                                     {% endif %}
                                                     {% endif %}
                                                     
@@ -1195,7 +1254,7 @@
                                 <button type="button" class="btn-save-ca" onclick="saveCAMarks()">
                                     <i class="fas fa-save"></i> Save CA Marks
                                 </button>
-                                    </div>
+                            </div>
                                 </div>
                             </div>
 
@@ -1371,8 +1430,8 @@
                                             {% for student in students %}
                                                 {% with final_mark=final_exam_marks|dict_key:student.id %}
                                                 <tr id="final-exam-row-{{ student.id }}" {% if final_mark and final_mark.requires_third_teacher %}class="discrepancy-row"{% endif %}>
-                                                    <td class="student-info">{{ student.id }}</td>
-                                                    <td class="student-info">{{ student.name }}</td>
+                                                    <td class="student-id" data-student-id="{{ student.id }}">{{ student.id }}</td>
+                                                    <td class="student-name">{{ student.name }}</td>
                                                     
                                                     {% if selected_course.is_lab %}
                                                         <!-- Lab Course Final Exam -->
@@ -1817,21 +1876,47 @@ function calculateStudentTotal(inputElement) {
         
         // Calculate average of ONLY the three assignment marks (NOT including attendance)
         const assignmentMark = (firstAssignmentMark + secondAssignmentMark + thirdAssignmentMark) / 3;
-        const midtermMark = parseFloat(row.querySelector('input[name$="[midterm_mark]"]').value) || 0;
-        total += assignmentMark + midtermMark;
+        
+        // Check if it's old curriculum (class tests) or new curriculum (midterm)
+        const isOldCurriculum = {% if selected_semester and selected_semester.curriculum and selected_semester.curriculum.code == 'OLD' %}true{% else %}false{% endif %};
+        let examMark = 0;
+        if (isOldCurriculum) {
+            // Old curriculum: use best of two class tests
+            const firstClassTestInput = row.querySelector('input[name$="[first_class_test_mark]"]');
+            const secondClassTestInput = row.querySelector('input[name$="[second_class_test_mark]"]');
+            
+            // Parse values more carefully - handle empty strings and NaN
+            let firstClassTest = 0;
+            if (firstClassTestInput && firstClassTestInput.value !== '') {
+                const parsed = parseFloat(firstClassTestInput.value);
+                firstClassTest = isNaN(parsed) ? 0 : parsed;
+            }
+            
+            let secondClassTest = 0;
+            if (secondClassTestInput && secondClassTestInput.value !== '') {
+                const parsed = parseFloat(secondClassTestInput.value);
+                secondClassTest = isNaN(parsed) ? 0 : parsed;
+            }
+            
+            examMark = Math.max(firstClassTest, secondClassTest);
+            
+            // Update the "Best" class test display (similar to assignment average)
+            const bestClassTestCell = row.querySelector('.class-test-best-value');
+            if (bestClassTestCell) {
+                bestClassTestCell.textContent = examMark.toFixed(2);
+            }
+        } else {
+            // New curriculum: use midterm
+            const midtermInput = row.querySelector('input[name$="[midterm_mark]"]');
+            examMark = midtermInput ? (parseFloat(midtermInput.value) || 0) : 0;
+        }
+        total += assignmentMark + examMark;
         
         // Update the average assignment mark display
         const averageAssignmentCell = row.querySelector('.assignment-average-value');
-        console.log('Debug - First:', firstAssignmentMark, 'Second:', secondAssignmentMark, 'Third:', thirdAssignmentMark);
-        console.log('Debug - Calculated assignmentMark (average):', assignmentMark);
-        console.log('Debug - Found averageAssignmentCell:', averageAssignmentCell);
         if (averageAssignmentCell) {
-            console.log('Debug - Current average cell value:', averageAssignmentCell.textContent);
             averageAssignmentCell.textContent = assignmentMark.toFixed(2);
-            console.log('Debug - Updated average to:', assignmentMark.toFixed(2));
-        } else {
-            console.log('Debug - Could not find .assignment-average-value');
-            }
+        }
         }
     }
     
@@ -1842,14 +1927,80 @@ function calculateStudentTotal(inputElement) {
     }
 }
 
+// Function to validate CA mark input (enforce max constraints)
+function validateCAMark(inputElement) {
+    const maxValue = parseFloat(inputElement.getAttribute('max')) || Infinity;
+    const currentValue = parseFloat(inputElement.value) || 0;
+    
+    if (currentValue > maxValue) {
+        inputElement.value = 0;
+        alert(`Maximum allowed value is ${maxValue}. Value reset to 0.`);
+    }
+}
+
+// Function to save CA marks immediately (on blur)
+function saveCAMarksImmediately() {
+    // Clear any pending auto-save timer
+    if (window.autoSaveTimer) {
+        clearTimeout(window.autoSaveTimer);
+        window.autoSaveTimer = null;
+    }
+    
+    // Save immediately
+    saveCAMarks(false); // false = don't reload page
+}
+
+// Function to auto-save CA marks with debouncing
+function autoSaveCAMarks() {
+    // Clear any existing timer
+    if (window.autoSaveTimer) {
+        clearTimeout(window.autoSaveTimer);
+    }
+    
+    // Set a new timer to save after 1 second of inactivity
+    window.autoSaveTimer = setTimeout(function() {
+        saveCAMarks(false); // false = don't reload page
+        window.autoSaveTimer = null;
+    }, 1000);
+}
+
+// Function to update the "Best" class test value immediately when either class test input changes
+function updateClassTestBest(inputElement) {
+    const row = inputElement.closest('tr');
+    const firstClassTestInput = row.querySelector('input[name$="[first_class_test_mark]"]');
+    const secondClassTestInput = row.querySelector('input[name$="[second_class_test_mark]"]');
+    
+    if (!firstClassTestInput || !secondClassTestInput) {
+        return; // Not a class test row
+    }
+    
+    // Parse values carefully
+    let firstClassTest = 0;
+    if (firstClassTestInput.value !== '') {
+        const parsed = parseFloat(firstClassTestInput.value);
+        firstClassTest = isNaN(parsed) ? 0 : parsed;
+    }
+    
+    let secondClassTest = 0;
+    if (secondClassTestInput.value !== '') {
+        const parsed = parseFloat(secondClassTestInput.value);
+        secondClassTest = isNaN(parsed) ? 0 : parsed;
+    }
+    
+    const bestValue = Math.max(firstClassTest, secondClassTest);
+    
+    // Update the "Best" display immediately
+    const bestClassTestCell = row.querySelector('.class-test-best-value');
+    if (bestClassTestCell) {
+        bestClassTestCell.textContent = bestValue.toFixed(2);
+    }
+}
+
 // Function to initialize all averages when page loads
 function initializeAverages() {
-    console.log('Debug - initializeAverages called');
     const rows = document.querySelectorAll('tbody tr');
-    console.log('Debug - Found rows:', rows.length);
     rows.forEach((row, index) => {
         const firstInput = row.querySelector('input[name$="[first_assignment_mark]"]');
-        console.log(`Debug - Row ${index}, firstInput:`, firstInput);
         if (firstInput) {
             calculateStudentTotal(firstInput);
         }
@@ -1862,15 +2013,40 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Function to save CA marks
-function saveCAMarks() {
+function saveCAMarks(reloadPage = true) {
     const form = document.getElementById('ca-marks-form');
     const formData = new FormData(form);
     const studentsData = {};
     
     // Collect all student marks and notes
     form.querySelectorAll('tbody tr').forEach(row => {
-        const studentId = row.querySelector('.student-info').textContent;
-        const notes = row.querySelector('input[name$="[notes]"]').value;
+        // Get student ID from the data attribute (most reliable) or fallback to text content
+        const studentIdCell = row.querySelector('td.student-id[data-student-id]') || row.querySelector('td[data-student-id]');
+        let studentId = null;
+        if (studentIdCell) {
+            studentId = studentIdCell.getAttribute('data-student-id');
+            if (!studentId) {
+                // Fallback: use text content if attribute is missing
+                studentId = studentIdCell.textContent.trim();
+            }
+        } else {
+            // Fallback: use the first cell text content
+            const firstCell = row.querySelector('td:first-child');
+            studentId = firstCell ? firstCell.textContent.trim() : null;
+        }
+        
+        // Clean the student ID (remove any whitespace)
+        if (studentId) {
+            studentId = studentId.trim();
+        }
+        
+        if (!studentId) {
+            console.warn('Could not find student ID in row:', row);
+            return; // Skip this row if no student ID found
+        }
+        
+        const notesInput = row.querySelector('input[name$="[notes]"]');
+        const notes = notesInput ? notesInput.value : '';
         
         const marks = {
             'notes': notes
@@ -1885,23 +2061,46 @@ function saveCAMarks() {
             marks['project_evaluation_mark'] = parseFloat(row.querySelector('input[name$="[project_evaluation_mark]"]').value) || 0;
             marks['project_presentation_mark'] = parseFloat(row.querySelector('input[name$="[project_presentation_mark]"]').value) || 0;
         } else {
-            const attendanceMark = parseFloat(row.querySelector('input[name$="[attendance_mark]"]').value);
+            const attendanceInput = row.querySelector('input[name$="[attendance_mark]"]');
+            const attendanceMark = attendanceInput ? (parseFloat(attendanceInput.value) || 0) : 0;
             marks['attendance_mark'] = attendanceMark; // This will be auto-calculated on the server
 
         if (isLabCourse) {
-            marks['first_lab_assignment_mark'] = parseFloat(row.querySelector('input[name$="[first_lab_assignment_mark]"]').value);
-            marks['second_lab_assignment_mark'] = parseFloat(row.querySelector('input[name$="[second_lab_assignment_mark]"]').value);
-            marks['third_lab_assignment_mark'] = parseFloat(row.querySelector('input[name$="[third_lab_assignment_mark]"]').value);
-            marks['lab_practical_mark'] = parseFloat(row.querySelector('input[name$="[lab_practical_mark]"]').value);
+                const firstLabInput = row.querySelector('input[name$="[first_lab_assignment_mark]"]');
+                const secondLabInput = row.querySelector('input[name$="[second_lab_assignment_mark]"]');
+                const thirdLabInput = row.querySelector('input[name$="[third_lab_assignment_mark]"]');
+                const labPracticalInput = row.querySelector('input[name$="[lab_practical_mark]"]');
+                marks['first_lab_assignment_mark'] = firstLabInput ? (parseFloat(firstLabInput.value) || 0) : 0;
+                marks['second_lab_assignment_mark'] = secondLabInput ? (parseFloat(secondLabInput.value) || 0) : 0;
+                marks['third_lab_assignment_mark'] = thirdLabInput ? (parseFloat(thirdLabInput.value) || 0) : 0;
+                marks['lab_practical_mark'] = labPracticalInput ? (parseFloat(labPracticalInput.value) || 0) : 0;
         } else {
-            marks['first_assignment_mark'] = parseFloat(row.querySelector('input[name$="[first_assignment_mark]"]').value);
-            marks['second_assignment_mark'] = parseFloat(row.querySelector('input[name$="[second_assignment_mark]"]').value);
-            marks['third_assignment_mark'] = parseFloat(row.querySelector('input[name$="[third_assignment_mark]"]').value);
-            marks['midterm_mark'] = parseFloat(row.querySelector('input[name$="[midterm_mark]"]').value);
+                const firstInput = row.querySelector('input[name$="[first_assignment_mark]"]');
+                const secondInput = row.querySelector('input[name$="[second_assignment_mark]"]');
+                const thirdInput = row.querySelector('input[name$="[third_assignment_mark]"]');
+                marks['first_assignment_mark'] = firstInput ? (parseFloat(firstInput.value) || 0) : 0;
+                marks['second_assignment_mark'] = secondInput ? (parseFloat(secondInput.value) || 0) : 0;
+                marks['third_assignment_mark'] = thirdInput ? (parseFloat(thirdInput.value) || 0) : 0;
+                
+                // Check if it's old curriculum (class tests) or new curriculum (midterm)
+                const isOldCurriculum = {% if selected_semester and selected_semester.curriculum and selected_semester.curriculum.code == 'OLD' %}true{% else %}false{% endif %};
+                if (isOldCurriculum) {
+                    const firstClassTestInput = row.querySelector('input[name$="[first_class_test_mark]"]');
+                    const secondClassTestInput = row.querySelector('input[name$="[second_class_test_mark]"]');
+                    marks['first_class_test_mark'] = firstClassTestInput ? (parseFloat(firstClassTestInput.value) || 0) : 0;
+                    marks['second_class_test_mark'] = secondClassTestInput ? (parseFloat(secondClassTestInput.value) || 0) : 0;
+                } else {
+                    const midtermInput = row.querySelector('input[name$="[midterm_mark]"]');
+                    marks['midterm_mark'] = midtermInput ? (parseFloat(midtermInput.value) || 0) : 0;
+                }
             }
         }
         studentsData[studentId] = marks;
     });
+
+    // Add centre_id if available from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const centreId = urlParams.get('centre');
 
     const postData = {
         'csrfmiddlewaretoken': formData.get('csrfmiddlewaretoken'),
@@ -1909,6 +2108,11 @@ function saveCAMarks() {
         'course_id': formData.get('course_id'),
         'students_data': JSON.stringify(studentsData)
     };
+    
+    if (centreId) {
+        postData['centre_id'] = centreId;
+    }
+    
 
     fetch('{% url "save-ca-marks" %}', {
         method: 'POST',
@@ -1918,19 +2122,35 @@ function saveCAMarks() {
         },
         body: new URLSearchParams(postData).toString()
     })
-    .then(response => response.json())
+    .then(async response => {
+        if (!response.ok) {
+            // Try to get error message from response
+            let errorMessage = `HTTP error! status: ${response.status}`;
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.error || errorMessage;
+            } catch (e) {
+                // If response is not JSON, use status text
+                errorMessage = response.statusText || errorMessage;
+            }
+            throw new Error(errorMessage);
+        }
+        return response.json();
+    })
     .then(data => {
         if (data.success) {
-            alert(data.message);
-            // Reload the page to show updated marks
-            window.location.reload(); 
+            if (reloadPage) {
+                alert(data.message);
+                // Reload the page to show updated marks
+                window.location.reload();
+            }
         } else {
-            alert('Error: ' + data.error);
+            alert('Error: ' + (data.error || 'Unknown error'));
         }
     })
     .catch(error => {
         console.error('Error saving CA marks:', error);
-        alert('An error occurred while saving CA marks.');
+        alert('An error occurred while saving CA marks: ' + error.message);
     });
 }
 

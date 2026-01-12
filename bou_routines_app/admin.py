@@ -647,19 +647,19 @@ class CAMarkAdmin(admin.ModelAdmin):
     list_filter = ('semester', 'course', 'marked_by', 'updated_at')
     search_fields = ('student__id', 'student__name', 'course__code', 'course__name')
     ordering = ('semester', 'course', 'student__id')
-    readonly_fields = ('attendance_mark', 'total_ca_mark', 'marked_at', 'updated_at')
+    readonly_fields = ('attendance_mark', 'assignment_mark', 'lab_assignment_mark', 'class_test_mark', 'total_ca_mark', 'marked_at', 'updated_at')
     
     fieldsets = (
         ('Student & Course', {
             'fields': ('student', 'course', 'semester')
         }),
         ('Theory Course Marks', {
-            'fields': ('attendance_mark', 'assignment_mark', 'quiz_mark', 'midterm_mark'),
-            'description': 'Marks for theory courses'
+            'fields': ('attendance_mark', 'first_assignment_mark', 'second_assignment_mark', 'third_assignment_mark', 'assignment_mark', 'first_class_test_mark', 'second_class_test_mark', 'class_test_mark', 'midterm_mark'),
+            'description': 'Marks for theory courses. Assignment mark (average) is auto-calculated from the three individual assignments. Class test mark (best of first and second) is auto-calculated. Use class tests for old curriculum, midterm for new curriculum.'
         }),
         ('Lab Course Marks', {
-            'fields': ('lab_assignment_mark', 'lab_practical_mark'),
-            'description': 'Marks for lab courses'
+            'fields': ('first_lab_assignment_mark', 'second_lab_assignment_mark', 'third_lab_assignment_mark', 'lab_assignment_mark', 'lab_practical_mark'),
+            'description': 'Marks for lab courses. Lab assignment mark (average) is auto-calculated from the three individual lab assignments.'
         }),
         ('Total', {
             'fields': ('total_ca_mark',)

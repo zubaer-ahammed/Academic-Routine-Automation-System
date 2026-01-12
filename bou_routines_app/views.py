@@ -9432,59 +9432,209 @@ def save_ca_marks(request):
                 teacher = semester_course.teacher
         
         if not teacher:
-            return JsonResponse({'error': 'Teacher not found'}, status=400)
+            # More detailed error message
+            error_msg = 'Teacher not found. '
+            if hasattr(request.user, 'teacher'):
+                error_msg += f'User {request.user.username} has no teacher profile.'
+            elif request.user.is_superuser or request.user.is_staff:
+                error_msg += f'Could not find teacher for semester={semester_id}, course={course_id}'
+                centre_id = request.POST.get('centre_id')
+                if centre_id:
+                    error_msg += f', centre={centre_id}'
+            else:
+                error_msg += f'User {request.user.username} does not have permission.'
+            return JsonResponse({'error': error_msg}, status=400)
         
         # Process each student's marks
         students_data = request.POST.get('students_data')
-        if students_data:
-            import json
-            students_marks = json.loads(students_data)
-            
-            for student_id, marks_data in students_marks.items():
-                try:
-                    student = Student.objects.get(id=student_id)
-                    
-                    # Get or create CA mark record
-                    ca_mark, created = CAMark.objects.get_or_create(
-                        student=student,
-                        course=course,
-                        semester=semester,
-                        defaults={'marked_by': teacher}
-                    )
-                    
-                    # Update marks based on course type
-                    if course.course_type == 'PROJECT':
-                        # Project Work marks
-                        ca_mark.project_supervisor_mark = float(marks_data.get('project_supervisor_mark', 0))
-                        ca_mark.project_evaluation_mark = float(marks_data.get('project_evaluation_mark', 0))
-                        ca_mark.project_presentation_mark = float(marks_data.get('project_presentation_mark', 0))
-                    elif course.is_lab:
-                        # Lab course marks
-                        ca_mark.first_lab_assignment_mark = float(marks_data.get('first_lab_assignment_mark', 0))
-                        ca_mark.second_lab_assignment_mark = float(marks_data.get('second_lab_assignment_mark', 0))
-                        ca_mark.third_lab_assignment_mark = float(marks_data.get('third_lab_assignment_mark', 0))
-                        ca_mark.lab_practical_mark = float(marks_data.get('lab_practical_mark', 0))
-                    else:
-                        # Theory course marks
-                        ca_mark.first_assignment_mark = float(marks_data.get('first_assignment_mark', 0))
-                        ca_mark.second_assignment_mark = float(marks_data.get('second_assignment_mark', 0))
-                        ca_mark.third_assignment_mark = float(marks_data.get('third_assignment_mark', 0))
-                        ca_mark.quiz_mark = float(marks_data.get('quiz_mark', 0))
-                        ca_mark.midterm_mark = float(marks_data.get('midterm_mark', 0))
-                    
-                    # Update metadata
-                    ca_mark.marked_by = teacher
-                    ca_mark.notes = marks_data.get('notes', '')
-                    
-                    # Save (this will trigger auto-calculation of attendance and total marks)
-                    ca_mark.save()
-                    
-                except Student.DoesNotExist:
-                    continue
-                except (ValueError, TypeError) as e:
-                    continue
+        if not students_data:
+            return JsonResponse({'error': 'No student data provided'}, status=400)
         
-        return JsonResponse({'success': True, 'message': 'CA marks saved successfully'})
+        import json
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            students_marks = json.loads(students_data)
+            logger.info(f"CA marks save: Parsed JSON successfully. Keys: {list(students_marks.keys())}")
+            if students_marks:
+                first_key = list(students_marks.keys())[0]
+                logger.info(f"CA marks save: First student ID: '{first_key}' (type: {type(first_key).__name__}, repr: {repr(first_key)})")
+        except json.JSONDecodeError as e:
+            logger.error(f"CA marks save: JSON decode error: {e}. Raw data: {students_data[:200]}")
+            return JsonResponse({'error': f'Invalid JSON data: {str(e)}'}, status=400)
+        
+        if not students_marks:
+            return JsonResponse({'error': 'Empty student data'}, status=400)
+        
+        saved_count = 0
+        failed_students = []
+        
+        # Log first few student IDs being processed for debugging
+        sample_ids = list(students_marks.keys())[:5]
+        logger.info(f"CA marks save: Processing {len(students_marks)} students. Sample IDs: {sample_ids}")
+        logger.info(f"CA marks save: All student IDs received: {list(students_marks.keys())}")
+        
+        # Check if any of these IDs exist in database
+        existing_students = Student.objects.filter(id__in=sample_ids).values_list('id', flat=True)
+        logger.info(f"CA marks save: Found {len(existing_students)} of {len(sample_ids)} sample IDs in database: {list(existing_students)}")
+        
+        # Also check all IDs
+        all_received_ids = [str(id).strip() for id in students_marks.keys()]
+        all_existing_students = Student.objects.filter(id__in=all_received_ids).values_list('id', flat=True)
+        logger.info(f"CA marks save: Found {len(all_existing_students)} of {len(all_received_ids)} total IDs in database")
+        missing_ids = set(all_received_ids) - set(all_existing_students)
+        if missing_ids:
+            logger.warning(f"CA marks save: Missing student IDs: {missing_ids}")
+        
+        for student_id, marks_data in students_marks.items():
+            try:
+                # Student.id is a CharField, ensure we use string and strip whitespace
+                student_id_clean = str(student_id).strip()
+                logger.info(f"CA marks save: Looking up student with ID: '{student_id_clean}' (original: '{student_id}', type: {type(student_id).__name__})")
+                
+                # Direct database check first
+                try:
+                    student = Student.objects.get(id=student_id_clean)
+                    logger.info(f"CA marks save: Successfully found student using .get(): {student.id} - {student.name}")
+                except Student.DoesNotExist:
+                    logger.warning(f"CA marks save: .get() failed for '{student_id_clean}', trying .filter()")
+                    # Try with filter (more forgiving)
+                    student = Student.objects.filter(id=student_id_clean).first()
+                    if student:
+                        logger.info(f"CA marks save: Found student using .filter(): {student.id} - {student.name}")
+                    else:
+                        # Try with the original ID (no cleaning)
+                        logger.warning(f"CA marks save: Filter lookup failed for '{student_id_clean}', trying with original: '{student_id}'")
+                        student = Student.objects.filter(id=student_id).first()
+                        if student:
+                            logger.info(f"CA marks save: Found student using original ID: {student.id} - {student.name}")
+                
+                if not student:
+                    # Log all available student IDs for debugging
+                    sample_students = list(Student.objects.all()[:5].values_list('id', flat=True))
+                    logger.error(f"CA marks save: Student '{student_id_clean}' not found. Sample student IDs in DB: {sample_students}")
+                    # Check if student exists with any variation - try direct query
+                    direct_check = Student.objects.filter(id=student_id_clean).exists()
+                    logger.error(f"CA marks save: Direct exists() check for '{student_id_clean}': {direct_check}")
+                    # Check if student exists with any variation
+                    all_students_count = Student.objects.count()
+                    logger.error(f"CA marks save: Total students in DB: {all_students_count}")
+                    raise Student.DoesNotExist(f"Student with ID '{student_id_clean}' not found")
+                
+                # Get or create CA mark record
+                # Get or create CA mark record
+                ca_mark, created = CAMark.objects.get_or_create(
+                    student=student,
+                    course=course,
+                    semester=semester,
+                    defaults={'marked_by': teacher}
+                )
+                
+                # Update marks based on course type
+                if course.course_type == 'PROJECT':
+                    # Project Work marks
+                    ca_mark.project_supervisor_mark = float(marks_data.get('project_supervisor_mark', 0))
+                    ca_mark.project_evaluation_mark = float(marks_data.get('project_evaluation_mark', 0))
+                    ca_mark.project_presentation_mark = float(marks_data.get('project_presentation_mark', 0))
+                elif course.is_lab:
+                    # Lab course marks
+                    ca_mark.first_lab_assignment_mark = float(marks_data.get('first_lab_assignment_mark', 0))
+                    ca_mark.second_lab_assignment_mark = float(marks_data.get('second_lab_assignment_mark', 0))
+                    ca_mark.third_lab_assignment_mark = float(marks_data.get('third_lab_assignment_mark', 0))
+                    ca_mark.lab_practical_mark = float(marks_data.get('lab_practical_mark', 0))
+                else:
+                    # Theory course marks
+                    ca_mark.first_assignment_mark = float(marks_data.get('first_assignment_mark', 0))
+                    ca_mark.second_assignment_mark = float(marks_data.get('second_assignment_mark', 0))
+                    ca_mark.third_assignment_mark = float(marks_data.get('third_assignment_mark', 0))
+                    
+                    # Determine which exam type to use based on curriculum
+                    if semester.curriculum and semester.curriculum.code == 'OLD':
+                        # Old curriculum: use class tests (best of first and second)
+                        ca_mark.first_class_test_mark = float(marks_data.get('first_class_test_mark', 0))
+                        ca_mark.second_class_test_mark = float(marks_data.get('second_class_test_mark', 0))
+                        # Set midterm to 0 for old curriculum
+                        ca_mark.midterm_mark = 0
+                    else:
+                        # New curriculum: use midterm
+                        ca_mark.midterm_mark = float(marks_data.get('midterm_mark', 0))
+                        # Set class tests to 0 for new curriculum
+                        ca_mark.first_class_test_mark = 0
+                        ca_mark.second_class_test_mark = 0
+                
+                # Update metadata
+                ca_mark.marked_by = teacher
+                ca_mark.notes = marks_data.get('notes', '')
+                
+                # Validate that required fields are set before save
+                if not ca_mark.marked_by:
+                    logger.error(f"marked_by is None for student {student_id_clean}")
+                    failed_students.append(student_id_clean)
+                    continue
+                
+                # Save (this will trigger auto-calculation of attendance and total marks)
+                # The save() method in CAMark model will auto-calculate:
+                # - attendance_mark
+                # - assignment_mark (average of three assignments)
+                # - lab_assignment_mark (average of three lab assignments)
+                # - total_ca_mark
+                try:
+                    # Log the state before save for debugging
+                    logger.info(f"CA marks save: About to save for student {student_id_clean}. State: first_assignment={ca_mark.first_assignment_mark}, second_assignment={ca_mark.second_assignment_mark}, third_assignment={ca_mark.third_assignment_mark}, first_class_test={ca_mark.first_class_test_mark}, second_class_test={ca_mark.second_class_test_mark}, midterm={ca_mark.midterm_mark}, marked_by={ca_mark.marked_by.id if ca_mark.marked_by else 'None'}")
+                    ca_mark.save()
+                    saved_count += 1
+                    logger.info(f"Successfully saved CA marks for student {student_id_clean}: first_assignment={ca_mark.first_assignment_mark}, midterm={ca_mark.midterm_mark}, total={ca_mark.total_ca_mark}")
+                except Exception as save_ex:
+                    import traceback
+                    error_traceback = traceback.format_exc()
+                    logger.error(f"Database error saving CA marks for student {student_id_clean}: {save_ex}")
+                    logger.error(f"Full traceback:\n{error_traceback}")
+                    logger.error(f"CA mark state: student={ca_mark.student.id}, course={ca_mark.course.code}, semester={ca_mark.semester.name}, marked_by={ca_mark.marked_by.id if ca_mark.marked_by else 'None'}")
+                    logger.error(f"CA mark values: first_assignment={ca_mark.first_assignment_mark}, second_assignment={ca_mark.second_assignment_mark}, third_assignment={ca_mark.third_assignment_mark}")
+                    failed_students.append(student_id_clean)
+                    continue
+                
+            except Student.DoesNotExist:
+                logger.warning(f"Student {student_id} (cleaned: '{student_id_clean}') not found")
+                # Try to find similar IDs for debugging
+                similar_students = Student.objects.filter(id__icontains=student_id_clean[:10]).values_list('id', flat=True)[:5]
+                logger.warning(f"Similar student IDs found: {list(similar_students)}")
+                failed_students.append(student_id_clean)
+                continue
+            except (ValueError, TypeError) as e:
+                logger.error(f"Error processing marks for student {student_id}: {e}", exc_info=True)
+                failed_students.append(student_id_clean)
+                continue
+            except Exception as e:
+                # Catch any other exceptions during save (e.g., database errors, validation errors)
+                logger.error(f"Unexpected error saving CA marks for student {student_id}: {e}", exc_info=True)
+                failed_students.append(student_id_clean)
+                continue
+        
+        if saved_count == 0:
+            # More detailed error message
+            total_students = len(students_marks)
+            error_msg = f'No marks were saved out of {total_students} student(s). '
+            if failed_students:
+                sample_ids = failed_students[:5]  # Show first 5 failed IDs
+                # Check if these are actually student lookup failures or other errors
+                logger.warning(f"CA marks save failed: {total_students} students processed, 0 saved. Failed IDs: {failed_students[:10]}")
+                # Verify if students actually exist
+                existing_failed = Student.objects.filter(id__in=failed_students[:5]).values_list('id', flat=True)
+                if existing_failed:
+                    logger.error(f"CA marks save: Some failed IDs actually exist in DB: {list(existing_failed)}")
+                    error_msg += f'Student IDs found but save failed: {", ".join(sample_ids)}. Check server logs for details.'
+                else:
+                    error_msg += f'Sample student IDs not found: {", ".join(sample_ids)}'
+                if len(failed_students) > 5:
+                    error_msg += f' (and {len(failed_students) - 5} more)'
+            else:
+                error_msg += 'Possible reasons: Student IDs not found in database, or all marks failed validation.'
+            logger.warning(f"CA marks save failed: {total_students} students processed, 0 saved. Failed IDs: {failed_students[:10]}")
+            return JsonResponse({'error': error_msg}, status=400)
+        
+        return JsonResponse({'success': True, 'message': f'CA marks saved successfully for {saved_count} student(s)'})
         
     except (Semester.DoesNotExist, Course.DoesNotExist):
         return JsonResponse({'error': 'Invalid semester or course'}, status=400)

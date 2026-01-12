@@ -46,7 +46,7 @@
                 <a href="{% url 'download-routines' %}" class="bou-header-link">Download Routines</a>
                 <a href="{% url 'attendance-calendar' %}" class="bou-header-link">Attendance</a>
                 <a href="{% url 'ca-management' %}" class="bou-header-link">Marks</a>
-                {% if user.is_authenticated %}
+                    {% if user.is_authenticated %}
                     {% if user|has_teacher_profile %}
                         <a href="{% url 'teacher-dashboard' %}" class="bou-header-link">Dashboard</a>
                     {% endif %}

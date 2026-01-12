@@ -494,8 +494,11 @@ class CAMark(models.Model):
     third_assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Third Assignment/Presentation mark")
     assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Average Assignment mark (auto-calculated)")
     
-    quiz_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Quiz mark")
-    midterm_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Midterm mark")
+    # Class Test fields (for old curriculum - best of two is counted)
+    first_class_test_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="First Class Test mark (for old curriculum)")
+    second_class_test_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Second Class Test mark (for old curriculum)")
+    class_test_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Best Class Test mark (auto-calculated, best of first and second)")
+    midterm_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Midterm mark (for new curriculum)")
     
     # Lab course CA components
     # Lab Assignment/Presentation fields (3 assignments + average)
@@ -571,6 +574,12 @@ class CAMark(models.Model):
             return round(total / 3, 2)
         return 0
     
+    def calculate_class_test_mark(self):
+        """Calculate best class test mark (best of first and second)"""
+        first = float(self.first_class_test_mark or 0)
+        second = float(self.second_class_test_mark or 0)
+        return max(first, second)
+    
     def calculate_total_ca_mark(self):
         """Calculate total CA mark based on course type"""
         if self.course.course_type == 'PROJECT':
@@ -588,13 +597,27 @@ class CAMark(models.Model):
                 self.lab_practical_mark
             )
         else:
-            # Theory course: attendance + assignment + quiz + midterm
-            return (
-                self.attendance_mark +
-                self.assignment_mark +
-                self.quiz_mark +
-                self.midterm_mark
-            )
+            # Theory course: attendance + assignment + (class_test for old curriculum OR midterm for new curriculum)
+            # Determine which to use based on semester's curriculum
+            exam_mark = 0
+            if self.semester and self.semester.curriculum:
+                # Check if it's old curriculum (code='OLD')
+                if self.semester.curriculum.code == 'OLD':
+                    # Use class test mark (best of first and second)
+                    exam_mark = float(self.class_test_mark or 0)
+                else:
+                    # Use midterm mark for new curriculum
+                    exam_mark = float(self.midterm_mark or 0)
+            else:
+                # Default to midterm if curriculum is not set
+                exam_mark = float(self.midterm_mark or 0)
+            
+            # Convert to float for calculation, then return as float
+            # The save() method will convert to Decimal
+            attendance = float(self.attendance_mark or 0)
+            assignment = float(self.assignment_mark or 0)
+            exam = float(exam_mark or 0)
+            return attendance + assignment + exam
     
     def save(self, *args, **kwargs):
         from decimal import Decimal
@@ -611,8 +634,24 @@ class CAMark(models.Model):
         lab_assignment_mark_float = self.calculate_lab_assignment_mark()
         self.lab_assignment_mark = Decimal(str(lab_assignment_mark_float))
         
+        # Auto-calculate class test mark (best of first and second)
+        class_test_mark_float = self.calculate_class_test_mark()
+        self.class_test_mark = Decimal(str(class_test_mark_float))
+        
+        # Set midterm to 0 for old curriculum, class tests to 0 for new curriculum
+        if self.semester and self.semester.curriculum:
+            if self.semester.curriculum.code == 'OLD':
+                # Old curriculum: set midterm to 0 (use class tests)
+                self.midterm_mark = Decimal('0')
+            else:
+                # New curriculum: set class tests to 0 (use midterm)
+                self.first_class_test_mark = Decimal('0')
+                self.second_class_test_mark = Decimal('0')
+                self.class_test_mark = Decimal('0')
+        
         # Calculate total CA mark
-        self.total_ca_mark = self.calculate_total_ca_mark()
+        total_ca_mark_float = self.calculate_total_ca_mark()
+        self.total_ca_mark = Decimal(str(total_ca_mark_float))
         
         super().save(*args, **kwargs)
 

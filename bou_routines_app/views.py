@@ -9634,7 +9634,7 @@ def save_ca_marks(request):
             logger.warning(f"CA marks save failed: {total_students} students processed, 0 saved. Failed IDs: {failed_students[:10]}")
             return JsonResponse({'error': error_msg}, status=400)
         
-        return JsonResponse({'success': True, 'message': f'CA marks saved successfully for {saved_count} student(s)'})
+        return JsonResponse({'success': True, 'message': 'CA marks saved successfully'})
         
     except (Semester.DoesNotExist, Course.DoesNotExist):
         return JsonResponse({'error': 'Invalid semester or course'}, status=400)

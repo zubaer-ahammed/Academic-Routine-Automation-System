@@ -691,6 +691,7 @@
     .discrepancy-tooltip .tooltip-text {
         visibility: hidden;
         width: 300px;
+        max-width: 300px;
         background-color: #333;
         color: #fff;
         text-align: left;
@@ -706,6 +707,10 @@
         font-size: 0.85em;
         line-height: 1.4;
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        word-wrap: break-word;
+        word-break: break-word;
+        white-space: normal;
+        overflow-wrap: break-word;
     }
     
     .discrepancy-tooltip .tooltip-text::after {
@@ -725,9 +730,6 @@
     }
 
     .final-exam-section {
-        margin-top: 40px;
-        padding-top: 20px;
-        border-top: 2px solid #dee2e6;
     }
 
     .teacher-role-selector {
@@ -928,10 +930,14 @@
                                     <div class="table-header d-flex justify-content-between align-items-center">
                                 <h4><i class="fas fa-table"></i> CA Marks for Students</h4>
                                         {% if selected_semester_id and selected_course_id %}
-                                        <div class="dropdown">
-                                            <button class="btn btn-secondary dropdown-toggle" type="button" id="exportCAMarksDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                                                <i class="fas fa-download"></i> Export
+                                        <div class="d-flex align-items-center gap-2">
+                                            <button type="button" class="btn btn-success" id="save-ca-marks-btn-header" onclick="saveCAMarks()">
+                                                <i class="fas fa-save"></i> Save CA Marks
                                             </button>
+                                            <div class="dropdown">
+                                                <button class="btn btn-secondary dropdown-toggle" type="button" id="exportCAMarksDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                                    <i class="fas fa-download"></i> Export
+                                                </button>
                                             <ul class="dropdown-menu" aria-labelledby="exportCAMarksDropdown">
                                                 <li>
                                                     <a class="dropdown-item" href="{% url 'export-ca-marks-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}">
@@ -951,6 +957,7 @@
                                                     </a>
                                                 </li>
                                             </ul>
+                                            </div>
                                         </div>
                                         {% endif %}
                             </div>
@@ -1045,7 +1052,7 @@
                                                                    step="0.01"
                                                                    class="mark-input"
                                                                    placeholder="Supervisor"
-                                                                   oninput="calculateStudentTotal(this)">
+                                                                   oninput="validateCAMark(this); calculateStudentTotal(this); autoSaveCAMarks();"
                                                         </td>
                                                         <td>
                                                             <input type="number" 
@@ -1056,7 +1063,7 @@
                                                                    step="0.01"
                                                                    class="mark-input"
                                                                    placeholder="Evaluation"
-                                                                   oninput="calculateStudentTotal(this)">
+                                                                   oninput="validateCAMark(this); calculateStudentTotal(this); autoSaveCAMarks();"
                                                         </td>
                                                         <td>
                                                             <input type="number" 
@@ -1067,7 +1074,7 @@
                                                                    step="0.01"
                                                                    class="mark-input"
                                                                    placeholder="Presentation"
-                                                                   oninput="calculateStudentTotal(this)">
+                                                                   oninput="validateCAMark(this); calculateStudentTotal(this); autoSaveCAMarks();"
                                                         </td>
                                                     {% else %}
                                                     <td>
@@ -1094,7 +1101,7 @@
                                                                    step="0.01"
                                                                    class="mark-input"
                                                                    placeholder="First"
-                                                                   oninput="calculateStudentTotal(this)">
+                                                                   oninput="validateCAMark(this); calculateStudentTotal(this); autoSaveCAMarks();"
                                                         </td>
                                                         <td>
                                                             <input type="number" 
@@ -1105,7 +1112,7 @@
                                                                    step="0.01"
                                                                    class="mark-input"
                                                                    placeholder="Second"
-                                                                   oninput="calculateStudentTotal(this)">
+                                                                   oninput="validateCAMark(this); calculateStudentTotal(this); autoSaveCAMarks();"
                                                         </td>
                                                         <td>
                                                             <input type="number" 
@@ -1116,7 +1123,7 @@
                                                                    step="0.01"
                                                                    class="mark-input"
                                                                    placeholder="Third"
-                                                                   oninput="calculateStudentTotal(this)">
+                                                                   oninput="validateCAMark(this); calculateStudentTotal(this); autoSaveCAMarks();"
                                                         </td>
                                                         <td class="total-mark assignment-average">
                                                             <span class="assignment-average-value">{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.lab_assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}</span>
@@ -1130,7 +1137,7 @@
                                                                    step="0.01"
                                                                    class="mark-input"
                                                                    placeholder="Experiment/Lab Project"
-                                                                   oninput="calculateStudentTotal(this)">
+                                                                   oninput="validateCAMark(this); calculateStudentTotal(this); autoSaveCAMarks();"
                                                         </td>
                                                     {% else %}
                                                         <!-- Theory Course Marks -->
@@ -1143,7 +1150,7 @@
                                                                    step="0.01"
                                                                    class="mark-input"
                                                                    placeholder="First"
-                                                                   oninput="calculateStudentTotal(this)">
+                                                                   oninput="validateCAMark(this); calculateStudentTotal(this); autoSaveCAMarks();"
                                                         </td>
                                                         <td>
                                                             <input type="number" 
@@ -1154,7 +1161,7 @@
                                                                    step="0.01"
                                                                    class="mark-input"
                                                                    placeholder="Second"
-                                                                   oninput="calculateStudentTotal(this)">
+                                                                   oninput="validateCAMark(this); calculateStudentTotal(this); autoSaveCAMarks();"
                                                         </td>
                                                         <td>
                                                             <input type="number" 
@@ -1165,7 +1172,7 @@
                                                                    step="0.01"
                                                                    class="mark-input"
                                                                    placeholder="Third"
-                                                                   oninput="calculateStudentTotal(this)">
+                                                                   oninput="validateCAMark(this); calculateStudentTotal(this); autoSaveCAMarks();"
                                                         </td>
                                                         <td class="total-mark assignment-average">
                                                             <span class="assignment-average-value">{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}</span>
@@ -1251,7 +1258,7 @@
                             </div>
                             
                             <div class="text-right mt-3">
-                                <button type="button" class="btn-save-ca" onclick="saveCAMarks()">
+                                <button type="button" class="btn-save-ca" id="save-ca-marks-btn-bottom" onclick="saveCAMarks()">
                                     <i class="fas fa-save"></i> Save CA Marks
                                 </button>
                             </div>
@@ -1262,36 +1269,6 @@
                             {% if show_final_exam_tab %}
                             <div class="tab-pane fade" id="final-exam" role="tabpanel" aria-labelledby="final-exam-tab">
                                 <div class="final-exam-section">
-                                    <div class="table-header d-flex justify-content-between align-items-center">
-                                        <h4><i class="fas fa-file-alt"></i> Semester Final Examination Marks</h4>
-                                        {% if selected_semester_id and selected_course_id %}
-                                        <div class="dropdown">
-                                            <button class="btn btn-secondary dropdown-toggle" type="button" id="exportFinalExamDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                                                <i class="fas fa-download"></i> Export
-                                            </button>
-                                            <ul class="dropdown-menu" aria-labelledby="exportFinalExamDropdown">
-                                                <li>
-                                                    <a class="dropdown-item" href="{% url 'export-final-exam-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}{% if teacher_role %}&teacher_role={{ teacher_role }}{% endif %}">
-                                                        <i class="fas fa-file-pdf text-danger"></i> PDF
-                                                    </a>
-                                                </li>
-                                                {% if user.is_superuser or user.is_staff %}
-                                                <li>
-                                                    <a class="dropdown-item" href="{% url 'export-blank-final-exam-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}{% if teacher_role %}&teacher_role={{ teacher_role }}{% endif %}">
-                                                        <i class="fas fa-file-pdf text-danger"></i> Blank PDF
-                                                    </a>
-                                                </li>
-                                                {% endif %}
-                                                <li>
-                                                    <a class="dropdown-item" href="{% url 'export-final-exam-excel' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}{% if teacher_role %}&teacher_role={{ teacher_role }}{% endif %}">
-                                                        <i class="fas fa-file-excel text-success"></i> Excel
-                                                    </a>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                        {% endif %}
-                                    </div>
-
                             {% if selected_course.is_lab %}
                                 <!-- Lab Course Final Exam -->
                                 <div class="ca-distribution">
@@ -1383,6 +1360,41 @@
                                     <p class="mt-2 mb-0"><small class="text-muted">If the difference between Teacher 1 and Teacher 2 is more than 20% (or 14 marks), Teacher 3 evaluation is required.</small></p>
                                 </div>
                             {% endif %}
+
+                            <div class="table-header d-flex justify-content-between align-items-center mt-3 mb-3">
+                                <h4><i class="fas fa-file-alt"></i> Semester Final Examination Marks</h4>
+                                {% if selected_semester_id and selected_course_id %}
+                                <div class="d-flex align-items-center gap-2">
+                                    <button type="button" class="btn btn-success" onclick="saveFinalExamMarks()">
+                                        <i class="fas fa-save"></i> Save Final Exam Marks
+                                    </button>
+                                    <div class="dropdown">
+                                        <button class="btn btn-secondary dropdown-toggle" type="button" id="exportFinalExamDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                            <i class="fas fa-download"></i> Export
+                                        </button>
+                                        <ul class="dropdown-menu" aria-labelledby="exportFinalExamDropdown">
+                                            <li>
+                                                <a class="dropdown-item" href="{% url 'export-final-exam-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}{% if teacher_role %}&teacher_role={{ teacher_role }}{% endif %}">
+                                                    <i class="fas fa-file-pdf text-danger"></i> PDF
+                                                </a>
+                                            </li>
+                                            {% if user.is_superuser or user.is_staff %}
+                                            <li>
+                                                <a class="dropdown-item" href="{% url 'export-blank-final-exam-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}{% if teacher_role %}&teacher_role={{ teacher_role }}{% endif %}">
+                                                    <i class="fas fa-file-pdf text-danger"></i> Blank PDF
+                                                </a>
+                                            </li>
+                                            {% endif %}
+                                            <li>
+                                                <a class="dropdown-item" href="{% url 'export-final-exam-excel' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}{% if teacher_role %}&teacher_role={{ teacher_role }}{% endif %}">
+                                                    <i class="fas fa-file-excel text-success"></i> Excel
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
 
                             <div class="table-responsive">
                                 <form id="final-exam-marks-form">
@@ -1938,7 +1950,7 @@ function validateCAMark(inputElement) {
     }
 }
 
-// Function to save CA marks immediately (on blur)
+// Function to save CA marks immediately (on input or blur)
 function saveCAMarksImmediately() {
     // Clear any pending auto-save timer
     if (window.autoSaveTimer) {
@@ -1950,18 +1962,10 @@ function saveCAMarksImmediately() {
     saveCAMarks(false); // false = don't reload page
 }
 
-// Function to auto-save CA marks with debouncing
+// Function to auto-save CA marks immediately (replaces debounced version)
 function autoSaveCAMarks() {
-    // Clear any existing timer
-    if (window.autoSaveTimer) {
-        clearTimeout(window.autoSaveTimer);
-    }
-    
-    // Set a new timer to save after 1 second of inactivity
-    window.autoSaveTimer = setTimeout(function() {
-        saveCAMarks(false); // false = don't reload page
-        window.autoSaveTimer = null;
-    }, 1000);
+    // Save immediately when field is edited
+    saveCAMarksImmediately();
 }
 
 // Function to update the "Best" class test value immediately when either class test input changes
@@ -2012,8 +2016,35 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeAverages();
 });
 
+// Function to update Save CA Marks button status
+function updateSaveCAMarksButtonStatus(isSaving) {
+    const headerBtn = document.getElementById('save-ca-marks-btn-header');
+    const bottomBtn = document.getElementById('save-ca-marks-btn-bottom');
+    const buttons = [headerBtn, bottomBtn].filter(btn => btn !== null);
+    
+    buttons.forEach(btn => {
+        const icon = btn.querySelector('i');
+        if (isSaving) {
+            btn.disabled = true;
+            if (icon) {
+                icon.className = 'fas fa-spinner fa-spin';
+            }
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        } else {
+            btn.disabled = false;
+            if (icon) {
+                icon.className = 'fas fa-save';
+            }
+            btn.innerHTML = '<i class="fas fa-save"></i> Save CA Marks';
+        }
+    });
+}
+
 // Function to save CA marks
 function saveCAMarks(reloadPage = true) {
+    // Update button status to "Saving..."
+    updateSaveCAMarksButtonStatus(true);
+    
     const form = document.getElementById('ca-marks-form');
     const formData = new FormData(form);
     const studentsData = {};
@@ -2138,17 +2169,22 @@ function saveCAMarks(reloadPage = true) {
         return response.json();
     })
     .then(data => {
+        // Restore button status
+        updateSaveCAMarksButtonStatus(false);
+        
         if (data.success) {
             if (reloadPage) {
-                alert(data.message);
-                // Reload the page to show updated marks
-                window.location.reload();
+            alert(data.message);
+            // Reload the page to show updated marks
+            window.location.reload(); 
             }
         } else {
             alert('Error: ' + (data.error || 'Unknown error'));
         }
     })
     .catch(error => {
+        // Restore button status on error
+        updateSaveCAMarksButtonStatus(false);
         console.error('Error saving CA marks:', error);
         alert('An error occurred while saving CA marks: ' + error.message);
     });
@@ -2416,8 +2452,33 @@ function saveFinalExamMarks() {
     
     // Collect all student marks
     form.querySelectorAll('tbody tr').forEach(row => {
-        const studentId = row.querySelector('.student-info').textContent.trim();
-        const notes = row.querySelector('input[name$="[notes]"]').value;
+        // Get student ID from the data attribute (most reliable) or fallback to text content
+        const studentIdCell = row.querySelector('td.student-id[data-student-id]') || row.querySelector('td[data-student-id]') || row.querySelector('td.student-info');
+        let studentId = null;
+        if (studentIdCell) {
+            studentId = studentIdCell.getAttribute('data-student-id');
+            if (!studentId) {
+                // Fallback: use text content if attribute is missing
+                studentId = studentIdCell.textContent ? studentIdCell.textContent.trim() : null;
+            }
+        } else {
+            // Fallback: use the first cell text content
+            const firstCell = row.querySelector('td:first-child');
+            studentId = firstCell ? (firstCell.textContent ? firstCell.textContent.trim() : null) : null;
+        }
+        
+        // Clean the student ID (remove any whitespace)
+        if (studentId) {
+            studentId = studentId.trim();
+        }
+        
+        if (!studentId) {
+            console.warn('Could not find student ID in row:', row);
+            return; // Skip this row if no student ID found
+        }
+        
+        const notesInput = row.querySelector('input[name$="[notes]"]');
+        const notes = notesInput ? notesInput.value : '';
         
         const marks = {
             'notes': notes

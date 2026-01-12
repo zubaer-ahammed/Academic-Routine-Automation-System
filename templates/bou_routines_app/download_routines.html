@@ -227,7 +227,6 @@
             <div class="col-md-6">
                 <label for="curriculum_filter" class="form-label">Curriculum</label>
                 <select name="curriculum" id="curriculum_filter" class="form-control">
-                    <option value="">All Curricula</option>
                     {% for curriculum in curricula %}
                     <option value="{{ curriculum.id }}" {% if selected_curriculum_id == curriculum.id %}selected{% endif %}>
                         {{ curriculum.name }}
@@ -238,7 +237,6 @@
             <div class="col-md-6">
                 <label for="centre_filter" class="form-label">Study Center</label>
                 <select name="centre" id="centre_filter" class="form-control">
-                    <option value="">All Centres</option>
                     {% for centre in centres %}
                     <option value="{{ centre.id }}" {% if selected_centre_id == centre.id %}selected{% endif %}>
                         {{ centre.name }}
@@ -381,17 +379,9 @@
                 
                 var url = new URL(window.location);
                 
-                if (curriculumId) {
-                    url.searchParams.set('curriculum', curriculumId);
-                } else {
-                    url.searchParams.delete('curriculum');
-                }
-                
-                if (centreId) {
-                    url.searchParams.set('centre', centreId);
-                } else {
-                    url.searchParams.delete('centre');
-                }
+                // Set the parameters (no empty values since "All" options are removed)
+                url.searchParams.set('curriculum', curriculumId);
+                url.searchParams.set('centre', centreId);
                 
                 window.location.href = url.toString();
             }

@@ -6972,7 +6972,7 @@ def export_ca_marks_pdf(request):
                 if course.course_type == 'PROJECT':
                     row = [
                         student.id,
-                        student.name,
+                        student.name.upper(),
                         f"{mark.project_supervisor_mark:.2f}",
                         f"{mark.project_evaluation_mark:.2f}",
                         f"{mark.project_presentation_mark:.2f}",
@@ -6981,7 +6981,7 @@ def export_ca_marks_pdf(request):
                 elif course.is_lab:
                     row = [
                         student.id,
-                        student.name,
+                        student.name.upper(),
                         f"{mark.attendance_mark:.2f}",
                         f"{mark.first_lab_assignment_mark:.2f}",
                         f"{mark.second_lab_assignment_mark:.2f}",
@@ -6997,7 +6997,7 @@ def export_ca_marks_pdf(request):
                         # Old curriculum: use class tests
                         row = [
                             student.id,
-                            student.name,
+                            student.name.upper(),
                             f"{mark.attendance_mark:.2f}",
                             f"{mark.first_assignment_mark:.2f}",
                             f"{mark.second_assignment_mark:.2f}",
@@ -7012,7 +7012,7 @@ def export_ca_marks_pdf(request):
                         # New curriculum: use mid-term
                         row = [
                             student.id,
-                            student.name,
+                            student.name.upper(),
                             f"{mark.attendance_mark:.2f}",
                             f"{mark.first_assignment_mark:.2f}",
                             f"{mark.second_assignment_mark:.2f}",
@@ -7023,18 +7023,18 @@ def export_ca_marks_pdf(request):
                         ]
             else:
                 if course.course_type == 'PROJECT':
-                    row = [student.id, student.name, '0.00', '0.00', '0.00', '0.00']
+                    row = [student.id, student.name.upper(), '0.00', '0.00', '0.00', '0.00']
                 elif course.is_lab:
-                    row = [student.id, student.name, '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
+                    row = [student.id, student.name.upper(), '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
                 else:
                     # Theory course - check curriculum
                     is_old_curriculum = semester.curriculum and semester.curriculum.code == 'OLD'
                     if is_old_curriculum:
                         # Old curriculum: 11 columns (Student ID, Name, Attendance, First, Second, Third, Average, First Class Test, Second Class Test, Best, Total)
-                        row = [student.id, student.name, '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
+                        row = [student.id, student.name.upper(), '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
                     else:
                         # New curriculum: 9 columns (Student ID, Name, Attendance, First, Second, Third, Average, Mid-Term, Total)
-                        row = [student.id, student.name, '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
+                        row = [student.id, student.name.upper(), '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
             table_data.append(row)
         
         # Create table with full width to align with header and footer
@@ -7075,6 +7075,7 @@ def export_ca_marks_pdf(request):
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
             # Data rows styling
             ('FONTSIZE', (0, header_rows), (-1, -1), 8),
+            ('FONTSIZE', (1, header_rows), (1, -1), 7),  # Smaller font for Name column
             ('ROWBACKGROUNDS', (0, header_rows), (-1, -1), [colors.white, colors.lightgrey]),
         ]
         
@@ -7570,18 +7571,18 @@ def export_blank_ca_marks_pdf(request):
         # Data rows - only Student ID and Name filled, all other cells blank
         for student in students:
             if course.course_type == 'PROJECT':
-                row = [student.id, student.name, '', '', '', '']
+                row = [student.id, student.name.upper(), '', '', '', '']
             elif course.is_lab:
-                row = [student.id, student.name, '', '', '', '', '', '', '']
+                row = [student.id, student.name.upper(), '', '', '', '', '', '', '']
             else:
                 # Theory course - check curriculum
                 is_old_curriculum = semester.curriculum and semester.curriculum.code == 'OLD'
                 if is_old_curriculum:
                     # Old curriculum: 11 columns (Student ID, Name, Attendance, First, Second, Third, Average, First Class Test, Second Class Test, Best, Total)
-                    row = [student.id, student.name, '', '', '', '', '', '', '', '', '']
+                    row = [student.id, student.name.upper(), '', '', '', '', '', '', '', '', '']
                 else:
                     # New curriculum: 9 columns (Student ID, Name, Attendance, First, Second, Third, Average, Mid-Term, Total)
-                    row = [student.id, student.name, '', '', '', '', '', '', '']
+                    row = [student.id, student.name.upper(), '', '', '', '', '', '', '']
             table_data.append(row)
         
         # Create table with full width to align with header and footer
@@ -7619,6 +7620,7 @@ def export_blank_ca_marks_pdf(request):
             ('TOPPADDING', (0, 0), (-1, header_rows - 1), 8),
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
             ('FONTSIZE', (0, header_rows), (-1, -1), 8),
+            ('FONTSIZE', (1, header_rows), (1, -1), 7),  # Smaller font for Name column
             ('ROWBACKGROUNDS', (0, header_rows), (-1, -1), [colors.white, colors.lightgrey]),
         ]
         
@@ -8252,7 +8254,7 @@ def export_final_exam_pdf(request):
                 if course.is_lab:
                     row = [
                         student.id,
-                        student.name,
+                        student.name.upper(),
                         f"{mark.lab_final_exam_mark:.2f}" if mark.lab_final_exam_mark else '0.00',
                         f"{mark.calculate_final_total():.2f}"
                     ]
@@ -8294,7 +8296,7 @@ def export_final_exam_pdf(request):
                     
                     row = [
                         student.id,
-                        student.name,
+                        student.name.upper(),
                         f"{q1:.2f}",
                         f"{q2:.2f}",
                         f"{q3:.2f}",
@@ -8306,9 +8308,9 @@ def export_final_exam_pdf(request):
                     ]
             else:
                 if course.is_lab:
-                    row = [student.id, student.name, '0.00', '0.00']
+                    row = [student.id, student.name.upper(), '0.00', '0.00']
                 else:
-                    row = [student.id, student.name, '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
+                    row = [student.id, student.name.upper(), '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
             table_data.append(row)
         
         # Calculate column widths to match header/footer width
@@ -8749,9 +8751,9 @@ def export_blank_final_exam_pdf(request):
         # Data rows - only Student ID and Name filled, all other cells blank
         for student in students:
             if course.is_lab:
-                row = [student.id, student.name, '', '']
+                row = [student.id, student.name.upper(), '', '']
             else:
-                row = [student.id, student.name, '', '', '', '', '', '', '', '']
+                row = [student.id, student.name.upper(), '', '', '', '', '', '', '', '']
             table_data.append(row)
         
         # Calculate column widths to match header/footer width
@@ -8777,6 +8779,7 @@ def export_blank_final_exam_pdf(request):
             ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
             ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('FONTSIZE', (1, 1), (1, -1), 7),  # Smaller font for Name column
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
         ]))
         

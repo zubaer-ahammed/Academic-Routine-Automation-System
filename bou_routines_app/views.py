@@ -758,7 +758,7 @@ def generate_routine(request):
                     "selected_curriculum_id": selected_curriculum.id if selected_curriculum else None,
                     "centres": centres,
                     "selected_centre": selected_centre,
-                    "selected_centre_id": selected_centre.id if selected_centre else None,
+                    "selected_centre_id": selected_centre_id,
                     "selected_semester_id": selected_semester_id,
                 })
             
@@ -775,7 +775,7 @@ def generate_routine(request):
                     "selected_curriculum_id": selected_curriculum.id if selected_curriculum else None,
                     "centres": centres,
                     "selected_centre": selected_centre,
-                    "selected_centre_id": selected_centre.id if selected_centre else None,
+                    "selected_centre_id": selected_centre_id,
                     "selected_semester_id": selected_semester_id,
                 })
                 
@@ -1230,7 +1230,7 @@ def generate_routine(request):
                 "selected_curriculum_id": selected_curriculum.id if selected_curriculum else None,
                 "centres": centres,
                 "selected_centre": selected_centre,
-                "selected_centre_id": selected_centre.id if selected_centre else None,
+                "selected_centre_id": selected_centre_id,
             })
 
     # Add selected_semester_id to the context if it was provided in POST
@@ -1248,7 +1248,7 @@ def generate_routine(request):
         "selected_curriculum_id": selected_curriculum.id if selected_curriculum else None,
         "centres": centres,
         "selected_centre": selected_centre,
-        "selected_centre_id": selected_centre.id if selected_centre else None,
+        "selected_centre_id": selected_centre_id,
     }
     
     
@@ -1395,7 +1395,7 @@ def update_semester_courses(request):
         "selected_curriculum_id": selected_curriculum.id if selected_curriculum else None,
         "centres": centres,
         "selected_centre": selected_centre,
-        "selected_centre_id": selected_centre.id if selected_centre else None,
+        "selected_centre_id": selected_centre_id,
         "program_coordinators": program_coordinators,
     }
     
@@ -3170,6 +3170,7 @@ def export_academic_calendar_pdf(request, semester_id):
         selected_semester = Semester.objects.get(id=semester_id)
         # Get centre from request parameter
         centre_id = request.GET.get('centre')
+        centre = None
         centre_name = ''
         if centre_id:
             try:
@@ -3301,7 +3302,12 @@ def export_academic_calendar_pdf(request, semester_id):
         left_content.append(Spacer(1, 2))  # Reduced from 8
         left_content.append(Paragraph('Academic Calendar', header_style_bold))
         commencement = selected_semester.start_date.strftime('%d %B %Y') if selected_semester.start_date else ''
-        # centre_name is now set from request parameter above
+        # Fallback: if centre_name is not set, try to get it from SemesterCourse
+        if not centre_name:
+            first_sc = SemesterCourse.objects.filter(semester=selected_semester).select_related('centre').first()
+            if first_sc and first_sc.centre:
+                centre_name = first_sc.centre.name
+                centre = first_sc.centre
         if commencement:
             left_content.append(Paragraph(f'<b>Date of Commencement:</b> {commencement}', header_style_normal))
         if centre_name:
@@ -3343,6 +3349,20 @@ def export_academic_calendar_pdf(request, semester_id):
             ).select_related('program_coordinator', 'program_coordinator__teacher').first()
             if semester_centre_coordinator:
                 coordinator = semester_centre_coordinator.program_coordinator
+        
+        # Fallback: try to get centre from centre_name if centre_id not available
+        if not coordinator and centre_name:
+            try:
+                centre_obj = Centre.objects.get(name=centre_name)
+                semester_centre_coordinator = SemesterCentreCoordinator.objects.filter(
+                    semester=selected_semester,
+                    centre=centre_obj
+                ).select_related('program_coordinator', 'program_coordinator__teacher').first()
+                if semester_centre_coordinator:
+                    coordinator = semester_centre_coordinator.program_coordinator
+            except Centre.DoesNotExist:
+                pass
+        
         if coordinator and coordinator.teacher:
             contact_info_lines.append(coordinator.teacher.name)
         if coordinator and coordinator.designation:
@@ -5602,11 +5622,11 @@ def export_attendance_pdf(request):
                 contact_info_lines.append(coordinator.designation)
             if coordinator.secondary_designation:
                 contact_info_lines.append(coordinator.secondary_designation)
-        contact_info_lines.append('Bangladesh Open University')
-        if coordinator and coordinator.phone:
-            contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
-        if coordinator and coordinator.email:
-            contact_info_lines.append(f'email:{coordinator.email}')
+            contact_info_lines.append('Bangladesh Open University')
+            if coordinator.phone:
+                contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
+            if coordinator.email:
+                contact_info_lines.append(f'email:{coordinator.email}')
         else:
             contact_info_lines.append('Bangladesh Open University')
             contact_label = Paragraph(
@@ -6142,11 +6162,11 @@ def export_blank_attendance_pdf(request):
                 contact_info_lines.append(coordinator.designation)
             if coordinator.secondary_designation:
                 contact_info_lines.append(coordinator.secondary_designation)
-        contact_info_lines.append('Bangladesh Open University')
-        if coordinator and coordinator.phone:
-            contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
-        if coordinator and coordinator.email:
-            contact_info_lines.append(f'email:{coordinator.email}')
+            contact_info_lines.append('Bangladesh Open University')
+            if coordinator.phone:
+                contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
+            if coordinator.email:
+                contact_info_lines.append(f'email:{coordinator.email}')
         else:
             contact_info_lines.append('Bangladesh Open University')
             contact_label = Paragraph(
@@ -6761,11 +6781,11 @@ def export_ca_marks_pdf(request):
                 contact_info_lines.append(coordinator.designation)
             if coordinator.secondary_designation:
                 contact_info_lines.append(coordinator.secondary_designation)
-        contact_info_lines.append('Bangladesh Open University')
-        if coordinator and coordinator.phone:
-            contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
-        if coordinator and coordinator.email:
-            contact_info_lines.append(f'email:{coordinator.email}')
+            contact_info_lines.append('Bangladesh Open University')
+            if coordinator.phone:
+                contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
+            if coordinator.email:
+                contact_info_lines.append(f'email:{coordinator.email}')
         else:
             contact_info_lines.append('Bangladesh Open University')
             contact_label = Paragraph(
@@ -6894,25 +6914,53 @@ def export_ca_marks_pdf(request):
             table_data.append(header_row_3)
         else:
             # Theory course headers (3 rows)
-            total_ca = course.effective_ca_attendance_weight + course.effective_ca_assignment_weight + course.effective_ca_midterm_weight
-            header_row_1 = [
-                'Student ID', 'Name',
-                f'Theory Course CA (Total: {total_ca}%)', '', '', '', '',
-                '', 'Total'
-            ]
-            header_row_2 = [
-                '', '',
-                f'Attendance\n({course.effective_ca_attendance_weight}%)',
-                f'Assignment/Presentation\n({course.effective_ca_assignment_weight}%)', '', '', '',
-                f'Mid-Term\nExam\n({course.effective_ca_midterm_weight}%)',
-                ''
-            ]
-            header_row_3 = [
-                '', '',
-                '',
-                'First', 'Second', 'Third', 'Average',
-                '', ''
-            ]
+            # Check curriculum to determine if we use class tests (old) or mid-term (new)
+            is_old_curriculum = semester.curriculum and semester.curriculum.code == 'OLD'
+            if is_old_curriculum:
+                # Old curriculum: use class tests
+                exam_weight = course.effective_ca_quiz_weight
+                total_ca = course.effective_ca_attendance_weight + course.effective_ca_assignment_weight + exam_weight
+                header_row_1 = [
+                    'Student ID', 'Name',
+                    f'Theory Course CA (Total: {total_ca}%)', '', '', '', '', '', '',
+                    '', 'Total'
+                ]
+                header_row_2 = [
+                    '', '',
+                    f'Attendance\n({course.effective_ca_attendance_weight}%)',
+                    f'Assignment/Presentation\n({course.effective_ca_assignment_weight}%)', '', '', '',
+                    f'Class Test\n({exam_weight}%)', '', '',
+                    'Total'
+                ]
+                header_row_3 = [
+                    '', '',
+                    '',
+                    'First', 'Second', 'Third', 'Average',
+                    'First', 'Second', 'Best',
+                    'Total'
+                ]
+            else:
+                # New curriculum: use mid-term
+                exam_weight = course.effective_ca_midterm_weight
+                total_ca = course.effective_ca_attendance_weight + course.effective_ca_assignment_weight + exam_weight
+                header_row_1 = [
+                    'Student ID', 'Name',
+                    f'Theory Course CA (Total: {total_ca}%)', '', '', '', '',
+                    '', 'Total'
+                ]
+                header_row_2 = [
+                    '', '',
+                    f'Attendance\n({course.effective_ca_attendance_weight}%)',
+                    f'Assignment/Presentation\n({course.effective_ca_assignment_weight}%)', '', '', '',
+                    f'Mid-Term\nExam\n({exam_weight}%)',
+                    'Total'
+                ]
+                header_row_3 = [
+                    '', '',
+                    '',
+                    'First', 'Second', 'Third', 'Average',
+                    '', 'Total'
+                ]
             table_data.append(header_row_1)
             table_data.append(header_row_2)
             table_data.append(header_row_3)
@@ -6943,24 +6991,50 @@ def export_ca_marks_pdf(request):
                         f"{mark.calculate_total_ca_mark():.2f}"
                     ]
                 else:
-                    row = [
-                        student.id,
-                        student.name,
-                        f"{mark.attendance_mark:.2f}",
-                        f"{mark.first_assignment_mark:.2f}",
-                        f"{mark.second_assignment_mark:.2f}",
-                        f"{mark.third_assignment_mark:.2f}",
-                        f"{mark.assignment_mark:.2f}",
-                        f"{mark.midterm_mark:.2f}",
-                        f"{mark.calculate_total_ca_mark():.2f}"
-                    ]
+                    # Theory course - check curriculum
+                    is_old_curriculum = semester.curriculum and semester.curriculum.code == 'OLD'
+                    if is_old_curriculum:
+                        # Old curriculum: use class tests
+                        row = [
+                            student.id,
+                            student.name,
+                            f"{mark.attendance_mark:.2f}",
+                            f"{mark.first_assignment_mark:.2f}",
+                            f"{mark.second_assignment_mark:.2f}",
+                            f"{mark.third_assignment_mark:.2f}",
+                            f"{mark.assignment_mark:.2f}",
+                            f"{mark.first_class_test_mark:.2f}",
+                            f"{mark.second_class_test_mark:.2f}",
+                            f"{mark.class_test_mark:.2f}",
+                            f"{mark.calculate_total_ca_mark():.2f}"
+                        ]
+                    else:
+                        # New curriculum: use mid-term
+                        row = [
+                            student.id,
+                            student.name,
+                            f"{mark.attendance_mark:.2f}",
+                            f"{mark.first_assignment_mark:.2f}",
+                            f"{mark.second_assignment_mark:.2f}",
+                            f"{mark.third_assignment_mark:.2f}",
+                            f"{mark.assignment_mark:.2f}",
+                            f"{mark.midterm_mark:.2f}",
+                            f"{mark.calculate_total_ca_mark():.2f}"
+                        ]
             else:
                 if course.course_type == 'PROJECT':
                     row = [student.id, student.name, '0.00', '0.00', '0.00', '0.00']
                 elif course.is_lab:
                     row = [student.id, student.name, '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
                 else:
-                    row = [student.id, student.name, '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
+                    # Theory course - check curriculum
+                    is_old_curriculum = semester.curriculum and semester.curriculum.code == 'OLD'
+                    if is_old_curriculum:
+                        # Old curriculum: 11 columns (Student ID, Name, Attendance, First, Second, Third, Average, First Class Test, Second Class Test, Best, Total)
+                        row = [student.id, student.name, '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
+                    else:
+                        # New curriculum: 9 columns (Student ID, Name, Attendance, First, Second, Third, Average, Mid-Term, Total)
+                        row = [student.id, student.name, '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
             table_data.append(row)
         
         # Create table with full width to align with header and footer
@@ -7021,15 +7095,25 @@ def export_ca_marks_pdf(request):
             style_commands.append(('SPAN', (7, 1), (7, 2)))  # Experiment/Lab Project (spans rows 1-2)
             style_commands.append(('SPAN', (8, 0), (8, 2)))  # Total (spans rows 0-2, column 8)
         else:
-            # Theory course
+            # Theory course - check curriculum to determine column spans
+            is_old_curriculum = semester.curriculum and semester.curriculum.code == 'OLD'
             # Student ID and Name span 3 rows
             style_commands.append(('SPAN', (0, 0), (0, 2)))  # Student ID
             style_commands.append(('SPAN', (1, 0), (1, 2)))  # Name
-            style_commands.append(('SPAN', (2, 0), (7, 0)))  # Theory Course CA header (spans columns 2-7)
-            style_commands.append(('SPAN', (2, 1), (2, 2)))  # Attendance (spans rows 1-2)
-            style_commands.append(('SPAN', (3, 1), (6, 1)))  # Assignment/Presentation (spans columns 3-6, row 1)
-            style_commands.append(('SPAN', (7, 1), (7, 2)))  # Mid-Term Exam (spans rows 1-2)
-            style_commands.append(('SPAN', (8, 0), (8, 2)))  # Total (spans rows 0-2, column 8)
+            if is_old_curriculum:
+                # Old curriculum: Class Test has 3 columns (First, Second, Best)
+                style_commands.append(('SPAN', (2, 0), (9, 0)))  # Theory Course CA header (spans columns 2-9)
+                style_commands.append(('SPAN', (2, 1), (2, 2)))  # Attendance (spans rows 1-2)
+                style_commands.append(('SPAN', (3, 1), (6, 1)))  # Assignment/Presentation (spans columns 3-6, row 1)
+                style_commands.append(('SPAN', (7, 1), (9, 1)))  # Class Test (spans columns 7-9, row 1)
+                style_commands.append(('SPAN', (10, 0), (10, 2)))  # Total (spans rows 0-2, column 10)
+            else:
+                # New curriculum: Mid-Term Exam is single column
+                style_commands.append(('SPAN', (2, 0), (7, 0)))  # Theory Course CA header (spans columns 2-7)
+                style_commands.append(('SPAN', (2, 1), (2, 2)))  # Attendance (spans rows 1-2)
+                style_commands.append(('SPAN', (3, 1), (6, 1)))  # Assignment/Presentation (spans columns 3-6, row 1)
+                style_commands.append(('SPAN', (7, 1), (7, 2)))  # Mid-Term Exam (spans rows 1-2)
+                style_commands.append(('SPAN', (8, 0), (8, 2)))  # Total (spans rows 0-2, column 8)
         
         table.setStyle(TableStyle(style_commands))
         
@@ -7302,11 +7386,11 @@ def export_blank_ca_marks_pdf(request):
                 contact_info_lines.append(coordinator.designation)
             if coordinator.secondary_designation:
                 contact_info_lines.append(coordinator.secondary_designation)
-        contact_info_lines.append('Bangladesh Open University')
-        if coordinator and coordinator.phone:
-            contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
-        if coordinator and coordinator.email:
-            contact_info_lines.append(f'email:{coordinator.email}')
+            contact_info_lines.append('Bangladesh Open University')
+            if coordinator.phone:
+                contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
+            if coordinator.email:
+                contact_info_lines.append(f'email:{coordinator.email}')
         else:
             contact_info_lines.append('Bangladesh Open University')
             contact_label = Paragraph(
@@ -7432,25 +7516,53 @@ def export_blank_ca_marks_pdf(request):
             table_data.append(header_row_2)
             table_data.append(header_row_3)
         else:
-            total_ca = course.effective_ca_attendance_weight + course.effective_ca_assignment_weight + course.effective_ca_midterm_weight
-            header_row_1 = [
-                'Student ID', 'Name',
-                f'Theory Course CA (Total: {total_ca}%)', '', '', '', '',
-                '', 'Total'
-            ]
-            header_row_2 = [
-                '', '',
-                f'Attendance\n({course.effective_ca_attendance_weight}%)',
-                f'Assignment/Presentation\n({course.effective_ca_assignment_weight}%)', '', '', '',
-                f'Mid-Term\nExam\n({course.effective_ca_midterm_weight}%)',
-                ''
-            ]
-            header_row_3 = [
-                '', '',
-                '',
-                'First', 'Second', 'Third', 'Average',
-                '', ''
-            ]
+            # Theory course headers - check curriculum
+            is_old_curriculum = semester.curriculum and semester.curriculum.code == 'OLD'
+            if is_old_curriculum:
+                # Old curriculum: use class tests
+                exam_weight = course.effective_ca_quiz_weight
+                total_ca = course.effective_ca_attendance_weight + course.effective_ca_assignment_weight + exam_weight
+                header_row_1 = [
+                    'Student ID', 'Name',
+                    f'Theory Course CA (Total: {total_ca}%)', '', '', '', '', '', '',
+                    '', 'Total'
+                ]
+                header_row_2 = [
+                    '', '',
+                    f'Attendance\n({course.effective_ca_attendance_weight}%)',
+                    f'Assignment/Presentation\n({course.effective_ca_assignment_weight}%)', '', '', '',
+                    f'Class Test\n({exam_weight}%)', '', '',
+                    'Total'
+                ]
+                header_row_3 = [
+                    '', '',
+                    '',
+                    'First', 'Second', 'Third', 'Average',
+                    'First', 'Second', 'Best',
+                    'Total'
+                ]
+            else:
+                # New curriculum: use mid-term
+                exam_weight = course.effective_ca_midterm_weight
+                total_ca = course.effective_ca_attendance_weight + course.effective_ca_assignment_weight + exam_weight
+                header_row_1 = [
+                    'Student ID', 'Name',
+                    f'Theory Course CA (Total: {total_ca}%)', '', '', '', '',
+                    '', 'Total'
+                ]
+                header_row_2 = [
+                    '', '',
+                    f'Attendance\n({course.effective_ca_attendance_weight}%)',
+                    f'Assignment/Presentation\n({course.effective_ca_assignment_weight}%)', '', '', '',
+                    f'Mid-Term\nExam\n({exam_weight}%)',
+                    'Total'
+                ]
+                header_row_3 = [
+                    '', '',
+                    '',
+                    'First', 'Second', 'Third', 'Average',
+                    '', 'Total'
+                ]
             table_data.append(header_row_1)
             table_data.append(header_row_2)
             table_data.append(header_row_3)
@@ -7462,7 +7574,14 @@ def export_blank_ca_marks_pdf(request):
             elif course.is_lab:
                 row = [student.id, student.name, '', '', '', '', '', '', '']
             else:
-                row = [student.id, student.name, '', '', '', '', '', '', '']
+                # Theory course - check curriculum
+                is_old_curriculum = semester.curriculum and semester.curriculum.code == 'OLD'
+                if is_old_curriculum:
+                    # Old curriculum: 11 columns (Student ID, Name, Attendance, First, Second, Third, Average, First Class Test, Second Class Test, Best, Total)
+                    row = [student.id, student.name, '', '', '', '', '', '', '', '', '']
+                else:
+                    # New curriculum: 9 columns (Student ID, Name, Attendance, First, Second, Third, Average, Mid-Term, Total)
+                    row = [student.id, student.name, '', '', '', '', '', '', '']
             table_data.append(row)
         
         # Create table with full width to align with header and footer
@@ -7518,13 +7637,24 @@ def export_blank_ca_marks_pdf(request):
             style_commands.append(('SPAN', (7, 1), (7, 2)))  # Experiment/Lab Project
             style_commands.append(('SPAN', (8, 0), (8, 2)))  # Total
         else:
+            # Theory course - check curriculum
+            is_old_curriculum = semester.curriculum and semester.curriculum.code == 'OLD'
             style_commands.append(('SPAN', (0, 0), (0, 2)))  # Student ID
             style_commands.append(('SPAN', (1, 0), (1, 2)))  # Name
-            style_commands.append(('SPAN', (2, 0), (7, 0)))  # Theory Course CA header
-            style_commands.append(('SPAN', (2, 1), (2, 2)))  # Attendance
-            style_commands.append(('SPAN', (3, 1), (6, 1)))  # Assignment/Presentation
-            style_commands.append(('SPAN', (7, 1), (7, 2)))  # Mid-Term Exam
-            style_commands.append(('SPAN', (8, 0), (8, 2)))  # Total
+            if is_old_curriculum:
+                # Old curriculum: Class Test has 3 columns (First, Second, Best)
+                style_commands.append(('SPAN', (2, 0), (9, 0)))  # Theory Course CA header (spans columns 2-9)
+                style_commands.append(('SPAN', (2, 1), (2, 2)))  # Attendance (spans rows 1-2)
+                style_commands.append(('SPAN', (3, 1), (6, 1)))  # Assignment/Presentation (spans columns 3-6, row 1)
+                style_commands.append(('SPAN', (7, 1), (9, 1)))  # Class Test (spans columns 7-9, row 1)
+                style_commands.append(('SPAN', (10, 0), (10, 2)))  # Total (spans rows 0-2, column 10)
+            else:
+                # New curriculum: Mid-Term Exam is single column
+                style_commands.append(('SPAN', (2, 0), (7, 0)))  # Theory Course CA header (spans columns 2-7)
+                style_commands.append(('SPAN', (2, 1), (2, 2)))  # Attendance (spans rows 1-2)
+                style_commands.append(('SPAN', (3, 1), (6, 1)))  # Assignment/Presentation (spans columns 3-6, row 1)
+                style_commands.append(('SPAN', (7, 1), (7, 2)))  # Mid-Term Exam (spans rows 1-2)
+                style_commands.append(('SPAN', (8, 0), (8, 2)))  # Total (spans rows 0-2, column 8)
         
         table.setStyle(TableStyle(style_commands))
         
@@ -8008,11 +8138,11 @@ def export_final_exam_pdf(request):
                 contact_info_lines.append(coordinator.designation)
             if coordinator.secondary_designation:
                 contact_info_lines.append(coordinator.secondary_designation)
-        contact_info_lines.append('Bangladesh Open University')
-        if coordinator and coordinator.phone:
-            contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
-        if coordinator and coordinator.email:
-            contact_info_lines.append(f'email:{coordinator.email}')
+            contact_info_lines.append('Bangladesh Open University')
+            if coordinator.phone:
+                contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
+            if coordinator.email:
+                contact_info_lines.append(f'email:{coordinator.email}')
         else:
             contact_info_lines.append('Bangladesh Open University')
             contact_label = Paragraph(
@@ -8509,11 +8639,11 @@ def export_blank_final_exam_pdf(request):
                 contact_info_lines.append(coordinator.designation)
             if coordinator.secondary_designation:
                 contact_info_lines.append(coordinator.secondary_designation)
-        contact_info_lines.append('Bangladesh Open University')
-        if coordinator and coordinator.phone:
-            contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
-        if coordinator and coordinator.email:
-            contact_info_lines.append(f'email:{coordinator.email}')
+            contact_info_lines.append('Bangladesh Open University')
+            if coordinator.phone:
+                contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
+            if coordinator.email:
+                contact_info_lines.append(f'email:{coordinator.email}')
         else:
             contact_info_lines.append('Bangladesh Open University')
             contact_label = Paragraph(

@@ -2203,10 +2203,70 @@ def export_to_excel(request, semester_id):
 @login_required
 def download_routines(request):
     """Display the last generated routines for all semesters"""
+    # Get all curricula and centres for filters
+    curricula = Curriculum.objects.filter(is_active=True).order_by('name')
+    centres = Centre.objects.filter(is_active=True).order_by('name')
+    
+    # Get selected curriculum from request
+    selected_curriculum_id = request.GET.get('curriculum')
+    selected_curriculum = None
+    curriculum_param_present = 'curriculum' in request.GET
+    
+    if selected_curriculum_id:
+        try:
+            selected_curriculum_id = int(selected_curriculum_id)
+            selected_curriculum = Curriculum.objects.get(id=selected_curriculum_id)
+        except (Curriculum.DoesNotExist, ValueError):
+            selected_curriculum = None
+            selected_curriculum_id = None
+    
+    # Only set default if curriculum parameter was not in the request at all
+    if not selected_curriculum and not curriculum_param_present and curricula.exists():
+        try:
+            selected_curriculum = Curriculum.objects.get(code='OLD')
+            selected_curriculum_id = selected_curriculum.id
+        except Curriculum.DoesNotExist:
+            selected_curriculum = curricula.first()
+            selected_curriculum_id = selected_curriculum.id if selected_curriculum else None
+    
+    # Get selected centre from request
+    selected_centre_id = request.GET.get('centre')
+    selected_centre = None
+    centre_param_present = 'centre' in request.GET
+    
+    if selected_centre_id:
+        try:
+            selected_centre_id = int(selected_centre_id)
+            selected_centre = Centre.objects.get(id=selected_centre_id)
+        except (Centre.DoesNotExist, ValueError):
+            selected_centre = None
+            selected_centre_id = None
+    
+    # Only set default if centre parameter was not in the request at all
+    if not selected_centre and not centre_param_present and centres.exists():
+        try:
+            selected_centre = Centre.objects.get(code='DRC')
+            selected_centre_id = selected_centre.id
+        except Centre.DoesNotExist:
+            selected_centre = None
+            selected_centre_id = None
+    
     # Get all semesters that have generated routines
     semesters_with_routines = Semester.objects.filter(
         newroutine__isnull=False
-    ).distinct().order_by('order', 'name')
+    ).distinct()
+    
+    # Filter by curriculum if selected
+    if selected_curriculum:
+        semesters_with_routines = semesters_with_routines.filter(curriculum=selected_curriculum)
+    
+    # Filter by centre if selected (through SemesterCourse)
+    if selected_centre:
+        semesters_with_routines = semesters_with_routines.filter(
+            semestercourse__centre=selected_centre
+        ).distinct()
+    
+    semesters_with_routines = semesters_with_routines.order_by('order', 'name')
     
     # For each semester, get the last generated routine data
     semester_routines = []
@@ -2335,9 +2395,14 @@ def download_routines(request):
                     for date in semester.makeup_dates.split(',')
                     if date.strip()
                 ]
-            # Get centre from first SemesterCourse for this semester (for PDF export)
-            first_sc = SemesterCourse.objects.filter(semester=semester).select_related('centre').first()
-            centre_id = first_sc.centre.id if first_sc and first_sc.centre else None
+            # Get centre from selected_centre if available, otherwise from first SemesterCourse for this semester
+            if selected_centre:
+                centre_id = selected_centre.id
+                centre_name = selected_centre.name
+            else:
+                first_sc = SemesterCourse.objects.filter(semester=semester).select_related('centre').first()
+                centre_id = first_sc.centre.id if first_sc and first_sc.centre else None
+                centre_name = first_sc.centre.name if first_sc and first_sc.centre else None
             
             semester_routines.append({
                 'semester': semester,
@@ -2346,10 +2411,17 @@ def download_routines(request):
                 'routine_count': latest_routines.count(),
                 'makeup_dates': makeup_dates,
                 'centre_id': centre_id,  # Add centre_id for PDF export links
+                'centre_name': centre_name,  # Add centre_name for display
             })
     
     return render(request, 'bou_routines_app/download_routines.html', {
-        'semester_routines': semester_routines
+        'semester_routines': semester_routines,
+        'curricula': curricula,
+        'selected_curriculum': selected_curriculum,
+        'selected_curriculum_id': selected_curriculum_id,
+        'centres': centres,
+        'selected_centre': selected_centre,
+        'selected_centre_id': selected_centre_id,
     })
 
 @login_required

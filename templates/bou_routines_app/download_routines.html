@@ -222,6 +222,32 @@
     <div class="container container-box-bou">
         <h1>Download Routines</h1>
         
+        <!-- Filter Section -->
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label for="curriculum_filter" class="form-label">Curriculum</label>
+                <select name="curriculum" id="curriculum_filter" class="form-control">
+                    <option value="">All Curricula</option>
+                    {% for curriculum in curricula %}
+                    <option value="{{ curriculum.id }}" {% if selected_curriculum_id == curriculum.id %}selected{% endif %}>
+                        {{ curriculum.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label for="centre_filter" class="form-label">Study Center</label>
+                <select name="centre" id="centre_filter" class="form-control">
+                    <option value="">All Centres</option>
+                    {% for centre in centres %}
+                    <option value="{{ centre.id }}" {% if selected_centre_id == centre.id %}selected{% endif %}>
+                        {{ centre.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        
         {% if semester_routines %}
             <div class="alert alert-info">
                 <i class="bi bi-info-circle"></i>
@@ -232,7 +258,7 @@
                 <div class="semester-card">
                     <div class="semester-header">
                         <div>
-                            <h3 class="semester-title">{{ semester_data.semester.name }}</h3>
+                            <h3 class="semester-title">{{ semester_data.semester.name }}{% if semester_data.centre_name %} - {{ semester_data.centre_name }}{% endif %}</h3>
                             <div class="semester-info">
                                 {% if semester_data.semester.semester_full_name %}
                                     {{ semester_data.semester.semester_full_name }}
@@ -347,6 +373,31 @@
                     if (btn) btn.querySelector('.toggle-text').textContent = 'View';
                 });
             });
+            
+            // Handle filter changes
+            function updateFilters() {
+                var curriculumId = document.getElementById('curriculum_filter').value;
+                var centreId = document.getElementById('centre_filter').value;
+                
+                var url = new URL(window.location);
+                
+                if (curriculumId) {
+                    url.searchParams.set('curriculum', curriculumId);
+                } else {
+                    url.searchParams.delete('curriculum');
+                }
+                
+                if (centreId) {
+                    url.searchParams.set('centre', centreId);
+                } else {
+                    url.searchParams.delete('centre');
+                }
+                
+                window.location.href = url.toString();
+            }
+            
+            document.getElementById('curriculum_filter').addEventListener('change', updateFilters);
+            document.getElementById('centre_filter').addEventListener('change', updateFilters);
         });
     </script>
 

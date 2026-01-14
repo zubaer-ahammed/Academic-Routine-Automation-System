@@ -4639,12 +4639,17 @@ def attendance_calendar(request):
             else:
                 course = Course.objects.get(id=course_id)
             
-            # Get students for this semester with custom sorting
+            # Get students for this semester and selected centre with custom sorting
             # Sort by first two digits (descending), then last three digits (ascending)
             from django.db.models import Case, When, IntegerField
             from django.db.models.functions import Cast, Substr
             
-            students = Student.objects.filter(semesters=semester).extra(
+            students = Student.objects.filter(semesters=semester)
+            # Filter by selected centre if one is selected
+            if selected_centre:
+                students = students.filter(centre=selected_centre)
+            
+            students = students.extra(
                 select={
                     'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
                     'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
@@ -5165,6 +5170,7 @@ def mark_attendance(request):
         semester = Semester.objects.get(id=semester_id)
         # Verify course access through SemesterCourse
         teacher_user = get_teacher_from_user(request.user)
+        selected_centre = None
         if teacher_user:
             semester_course = SemesterCourse.objects.filter(
                 semester_id=semester_id,
@@ -5174,8 +5180,24 @@ def mark_attendance(request):
             if not semester_course:
                 return JsonResponse({'success': False, 'message': 'You don\'t have access to this course.'})
             course = semester_course.course
+            selected_centre = semester_course.centre
         else:
             course = Course.objects.get(id=course_id)
+            # For admin users, get centre from request or from semester_course
+            centre_id = request.POST.get('centre_id') or request.GET.get('centre')
+            if centre_id:
+                try:
+                    selected_centre = Centre.objects.get(id=centre_id)
+                except Centre.DoesNotExist:
+                    pass
+            # If no centre from request, try to get from semester_course
+            if not selected_centre:
+                semester_course = SemesterCourse.objects.filter(
+                    semester_id=semester_id,
+                    course_id=course_id
+                ).first()
+                if semester_course:
+                    selected_centre = semester_course.centre
         
         # Server-side date validation for teachers (current week ± 1 week)
         # IMPORTANT: If user has a teacher profile, treat them as a teacher (not admin)
@@ -5202,9 +5224,14 @@ def mark_attendance(request):
             except ValueError:
                 return JsonResponse({'success': False, 'message': 'Invalid date format'})
         
-        # Get all students for this semester with custom sorting
+        # Get all students for this semester and selected centre with custom sorting
         # Sort by first two digits (descending), then last three digits (ascending)
-        students = Student.objects.filter(semesters=semester).extra(
+        students = Student.objects.filter(semesters=semester)
+        # Filter by selected centre if one is selected
+        if selected_centre:
+            students = students.filter(centre=selected_centre)
+        
+        students = students.extra(
             select={
                 'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
                 'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
@@ -5303,6 +5330,7 @@ def attendance_report(request):
         
         semester = Semester.objects.get(id=semester_id)
         # Verify course access through SemesterCourse
+        selected_centre = None
         if teacher:
             semester_course = SemesterCourse.objects.filter(
                 semester_id=semester_id,
@@ -5313,12 +5341,33 @@ def attendance_report(request):
                 messages.error(request, "You don't have access to this course.")
                 return redirect('attendance-calendar')
             course = semester_course.course
+            selected_centre = semester_course.centre
         else:
             course = Course.objects.get(id=course_id)
+            # For admin users, get centre from request
+            centre_id = request.GET.get('centre')
+            if centre_id:
+                try:
+                    selected_centre = Centre.objects.get(id=centre_id)
+                except Centre.DoesNotExist:
+                    pass
+            # If no centre from request, try to get from semester_course
+            if not selected_centre:
+                semester_course = SemesterCourse.objects.filter(
+                    semester_id=semester_id,
+                    course_id=course_id
+                ).first()
+                if semester_course:
+                    selected_centre = semester_course.centre
         
         # Get all students and their attendance records with custom sorting
         # Sort by first two digits (descending), then last three digits (ascending)
-        students = Student.objects.filter(semesters=semester).extra(
+        students = Student.objects.filter(semesters=semester)
+        # Filter by selected centre if one is selected
+        if selected_centre:
+            students = students.filter(centre=selected_centre)
+        
+        students = students.extra(
             select={
                 'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
                 'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
@@ -5383,6 +5432,7 @@ def export_attendance_pdf(request):
         
         semester_id = request.GET.get('semester')
         course_id = request.GET.get('course')
+        centre_id = request.GET.get('centre')
         
         if not semester_id or not course_id:
             messages.error(request, "Please select a semester and course.")
@@ -5391,8 +5441,41 @@ def export_attendance_pdf(request):
         semester = Semester.objects.get(id=semester_id)
         course = Course.objects.get(id=course_id)
         
+        # Get selected centre
+        selected_centre = None
+        teacher = get_teacher_from_user(request.user)
+        if teacher:
+            # For teachers, get centre from semester_course
+            semester_course = SemesterCourse.objects.filter(
+                semester_id=semester_id,
+                course_id=course_id,
+                teacher=teacher
+            ).first()
+            if semester_course:
+                selected_centre = semester_course.centre
+        else:
+            # For admin users, get centre from request or from semester_course
+            if centre_id:
+                try:
+                    selected_centre = Centre.objects.get(id=centre_id)
+                except Centre.DoesNotExist:
+                    pass
+            # If no centre from request, try to get from semester_course
+            if not selected_centre:
+                semester_course = SemesterCourse.objects.filter(
+                    semester_id=semester_id,
+                    course_id=course_id
+                ).first()
+                if semester_course:
+                    selected_centre = semester_course.centre
+        
         # Get all students and their attendance records with custom sorting
-        students = Student.objects.filter(semesters=semester).extra(
+        students = Student.objects.filter(semesters=semester)
+        # Filter by selected centre if one is selected
+        if selected_centre:
+            students = students.filter(centre=selected_centre)
+        
+        students = students.extra(
             select={
                 'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
                 'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
@@ -5918,11 +6001,11 @@ def export_attendance_pdf(request):
             ('BOTTOMPADDING', (0, 1), (0, -1), 0),  # No bottom padding for Student ID
             ('TOPPADDING', (1, 1), (1, -1), 0),  # No top padding for Name
             ('BOTTOMPADDING', (1, 1), (1, -1), -2),  # More negative bottom padding to compensate for extra space
-            # Keep padding for other columns
-            ('TOPPADDING', (2, 1), (-1, -1), 4),
-            ('BOTTOMPADDING', (2, 1), (-1, -1), 4),
-            # Set compact row height for data rows - uniform height just enough for 9pt font
-            ('ROWHEIGHT', (0, 1), (-1, -1), 10),  # Uniform row height (9pt font + 1pt for centering)
+            # Keep padding for other columns - slightly reduced
+            ('TOPPADDING', (2, 1), (-1, -1), 1.5),
+            ('BOTTOMPADDING', (2, 1), (-1, -1), 1.5),
+            # Set compact row height for data rows - slightly reduced
+            ('ROWHEIGHT', (0, 1), (-1, -1), 8.5),  # Slightly reduced row height
         ]))
         
         elements.append(table)
@@ -6061,6 +6144,7 @@ def export_blank_attendance_pdf(request):
         
         semester_id = request.GET.get('semester')
         course_id = request.GET.get('course')
+        centre_id = request.GET.get('centre')
         
         if not semester_id or not course_id:
             messages.error(request, "Please select a semester and course.")
@@ -6069,8 +6153,29 @@ def export_blank_attendance_pdf(request):
         semester = Semester.objects.get(id=semester_id)
         course = Course.objects.get(id=course_id)
         
+        # Get selected centre
+        selected_centre = None
+        if centre_id:
+            try:
+                selected_centre = Centre.objects.get(id=centre_id)
+            except Centre.DoesNotExist:
+                pass
+        # If no centre from request, try to get from semester_course
+        if not selected_centre:
+            semester_course = SemesterCourse.objects.filter(
+                semester_id=semester_id,
+                course_id=course_id
+            ).first()
+            if semester_course:
+                selected_centre = semester_course.centre
+        
         # Get all students with custom sorting
-        students = Student.objects.filter(semesters=semester).extra(
+        students = Student.objects.filter(semesters=semester)
+        # Filter by selected centre if one is selected
+        if selected_centre:
+            students = students.filter(centre=selected_centre)
+        
+        students = students.extra(
             select={
                 'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
                 'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
@@ -6555,11 +6660,11 @@ def export_blank_attendance_pdf(request):
             ('BOTTOMPADDING', (0, 1), (0, -1), 0),  # No bottom padding for Student ID
             ('TOPPADDING', (1, 1), (1, -1), 0),  # No top padding for Name
             ('BOTTOMPADDING', (1, 1), (1, -1), -2),  # More negative bottom padding to compensate for extra space
-            # Keep padding for other columns
-            ('TOPPADDING', (2, 1), (-1, -1), 4),
-            ('BOTTOMPADDING', (2, 1), (-1, -1), 4),
-            # Set compact row height for data rows - uniform height just enough for 9pt font
-            ('ROWHEIGHT', (0, 1), (-1, -1), 10),  # Uniform row height (9pt font + 1pt for centering)
+            # Keep padding for other columns - slightly reduced
+            ('TOPPADDING', (2, 1), (-1, -1), 1.5),
+            ('BOTTOMPADDING', (2, 1), (-1, -1), 1.5),
+            # Set compact row height for data rows - slightly reduced
+            ('ROWHEIGHT', (0, 1), (-1, -1), 8.5),  # Slightly reduced row height
         ]))
         
         elements.append(table)

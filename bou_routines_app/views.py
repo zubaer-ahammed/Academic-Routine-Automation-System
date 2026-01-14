@@ -5909,6 +5909,7 @@ def export_attendance_pdf(request):
             ('ALIGN', (1, 1), (1, -1), 'LEFT'),  # Left align Name column
             ('VALIGN', (1, 1), (1, -1), 'MIDDLE'),  # Explicitly set vertical center for Name column
             ('FONTSIZE', (2, 1), (-1, -1), 7),  # Regular font size for other columns
+            ('FONTNAME', (2, 1), (-1, -1), 'Helvetica-Bold'),  # Bold for all other columns (attendance marks, Present, %)
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
             ('LEFTPADDING', (0, 0), (-1, -1), 4),
             ('RIGHTPADDING', (0, 0), (-1, -1), 4),
@@ -6545,6 +6546,7 @@ def export_blank_attendance_pdf(request):
             ('ALIGN', (1, 1), (1, -1), 'LEFT'),  # Left align Name column
             ('VALIGN', (1, 1), (1, -1), 'MIDDLE'),  # Explicitly set vertical center for Name column
             ('FONTSIZE', (2, 1), (-1, -1), 7),  # Regular font size for other columns
+            ('FONTNAME', (2, 1), (-1, -1), 'Helvetica-Bold'),  # Bold for all other columns (attendance marks, Present, %)
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
             ('LEFTPADDING', (0, 0), (-1, -1), 4),
             ('RIGHTPADDING', (0, 0), (-1, -1), 4),

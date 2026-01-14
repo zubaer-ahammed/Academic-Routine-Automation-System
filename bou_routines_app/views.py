@@ -5458,8 +5458,18 @@ def export_attendance_pdf(request):
                         semester_dates.append(current_date)
                 current_date += timedelta(days=1)
             
-            # Add makeup dates to the semester dates
+            # Filter makeup dates based on course's scheduled day
+            # If course is on Friday only, keep only Friday makeup dates
+            # If course is on Saturday only, keep only Saturday makeup dates
+            filtered_makeup_dates = []
             for makeup_date in makeup_dates:
+                makeup_day = makeup_date.strftime('%A')
+                # Only include makeup dates that match the course's scheduled day
+                if makeup_day in days_to_show:
+                    filtered_makeup_dates.append(makeup_date)
+            
+            # Add filtered makeup dates to the semester dates
+            for makeup_date in filtered_makeup_dates:
                 if makeup_date not in semester_dates:
                     semester_dates.append(makeup_date)
             
@@ -5857,12 +5867,22 @@ def export_attendance_pdf(request):
         # Student ID: 70, Name: 120, each date: 25, Present/%: 40 each (reduced)
         # Adjust date column width based on available space
         # Minimum width of 25pt for compact layout (using <br/> ensures vertical rendering works)
-        available_width = 752  # Landscape A4 width minus margins
-        fixed_cols_width = 70 + 120 + 40 + 40  # Student ID + Name + Present + % (removed Absent)
+        # Use the same available_width as header and footer for consistency
+        # Column widths: Student ID (70), Name (128), date columns (variable), Present (32), % (32)
+        fixed_cols_width = 70 + 128 + 32 + 32  # Student ID + Name + Present + % (removed Absent)
         num_date_cols = len(attendance_dates)
         date_col_width = max(22, (available_width - fixed_cols_width) / num_date_cols) if num_date_cols > 0 else 25
         
         col_widths = [70, 128] + [date_col_width] * len(attendance_dates) + [32, 32]
+        
+        # Ensure total width equals available_width exactly
+        total_width = sum(col_widths)
+        if total_width != available_width:
+            # Adjust date columns proportionally to match available_width
+            adjustment = available_width - total_width
+            if num_date_cols > 0:
+                per_date_adjustment = adjustment / num_date_cols
+                col_widths = [70, 128] + [date_col_width + per_date_adjustment] * len(attendance_dates) + [32, 32]
         
         # Create table with adjusted column widths
         table = Table(table_data, colWidths=col_widths, repeatRows=1)
@@ -6103,8 +6123,18 @@ def export_blank_attendance_pdf(request):
                         semester_dates.append(current_date)
                 current_date += timedelta(days=1)
             
-            # Add makeup dates to the semester dates
+            # Filter makeup dates based on course's scheduled day
+            # If course is on Friday only, keep only Friday makeup dates
+            # If course is on Saturday only, keep only Saturday makeup dates
+            filtered_makeup_dates = []
             for makeup_date in makeup_dates:
+                makeup_day = makeup_date.strftime('%A')
+                # Only include makeup dates that match the course's scheduled day
+                if makeup_day in days_to_show:
+                    filtered_makeup_dates.append(makeup_date)
+            
+            # Add filtered makeup dates to the semester dates
+            for makeup_date in filtered_makeup_dates:
                 if makeup_date not in semester_dates:
                     semester_dates.append(makeup_date)
             
@@ -6462,12 +6492,22 @@ def export_blank_attendance_pdf(request):
             table_data.append(row)
         
         # Calculate column widths dynamically for landscape orientation
-        available_width = 752
+        # Use the same available_width as header and footer for consistency
+        # Column widths: Student ID (70), Name (128), date columns (variable), Present (32), % (32)
         fixed_cols_width = 70 + 128 + 32 + 32  # Student ID + Name + Present + % (removed Absent)
         num_date_cols = len(attendance_dates)
         date_col_width = max(22, (available_width - fixed_cols_width) / num_date_cols) if num_date_cols > 0 else 25
         
         col_widths = [70, 128] + [date_col_width] * len(attendance_dates) + [32, 32]
+        
+        # Ensure total width equals available_width exactly
+        total_width = sum(col_widths)
+        if total_width != available_width:
+            # Adjust date columns proportionally to match available_width
+            adjustment = available_width - total_width
+            if num_date_cols > 0:
+                per_date_adjustment = adjustment / num_date_cols
+                col_widths = [70, 128] + [date_col_width + per_date_adjustment] * len(attendance_dates) + [32, 32]
         
         # Create table with adjusted column widths
         table = Table(table_data, colWidths=col_widths, repeatRows=1)

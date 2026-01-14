@@ -5591,16 +5591,17 @@ def export_attendance_pdf(request):
         program_name = 'B. Sc in Computer Science and Engineering Program'
         left_content.append(Paragraph(program_name, header_style))
         session = semester.session or ''
-        if session:
-            left_content.append(Paragraph(f'{session} Session', header_style_small))
         term = semester.term or ''
         semester_full_name = semester.semester_full_name or ''
         if term or semester_full_name:
             combined = f'{term} Term {semester_full_name}'.strip()
+            if session:
+                combined = f'{combined} ({session} Session)'
             left_content.append(Paragraph(combined, header_style_small))
         left_content.append(Spacer(1, 2))
         course_name_display = f"{course.code} - {course.name}" if course else "Course"
-        left_content.append(Paragraph(f'Attendance Report - {course_name_display}', header_style_bold))
+        left_content.append(Paragraph('Attendance Report', header_style_bold))
+        left_content.append(Paragraph(f'Course Code & Title: {course_name_display}', header_style_small))
         # Get teacher name from SemesterCourse
         teacher_name = None
         # Try to get centre_id from request first
@@ -5808,17 +5809,38 @@ def export_attendance_pdf(request):
             para = Paragraph(date_text, vertical_header_style)
             return para
         
+        # Create styles for student ID and name (bold)
+        student_id_style = ParagraphStyle(
+            'StudentIDStyle',
+            parent=styles['Normal'],
+            fontSize=9,  # Increased font size for Student ID
+            fontName='Helvetica-Bold',
+            alignment=TA_CENTER,
+            leading=9,
+        )
+        student_name_style = ParagraphStyle(
+            'StudentNameStyle',
+            parent=styles['Normal'],
+            fontSize=7,
+            fontName='Helvetica-Bold',
+            alignment=0,  # Left align
+            leading=7,
+        )
+        
         header = ['Student ID', 'Name']
         # Add date columns with vertical format (Day, Date, Month)
         for date in attendance_dates:
             header.append(make_date_header(date))
-        # Add Present, Absent, and % columns (horizontal)
-        header.extend(['Present', 'Absent', '%'])
+        # Add Present and % columns (horizontal) - removed Absent
+        header.extend(['Present', '%'])
         table_data.append(header)
         
         # Data rows
         for student in students:
-            row = [student.id, student.name.upper()]
+            # Use Paragraph for Student ID and Name to make them bold
+            student_id_para = Paragraph(student.id, student_id_style)
+            student_name_para = Paragraph(student.name.upper(), student_name_style)
+            row = [student_id_para, student_name_para]
             for date in attendance_dates:
                 if date in attendance_matrix[student.id]['attendance']:
                     status = 'P' if attendance_matrix[student.id]['attendance'][date] else 'A'
@@ -5826,21 +5848,21 @@ def export_attendance_pdf(request):
                     status = '-'
                 row.append(status)
             row.append(str(attendance_matrix[student.id]['present_count']))
-            row.append(str(attendance_matrix[student.id]['absent_count']))
+            # Removed absent_count
             row.append(f"{attendance_matrix[student.id]['percentage']:.1f}%")
             table_data.append(row)
         
         # Calculate column widths dynamically for landscape orientation
         # Landscape A4: ~792pt width, minus margins (40pt total) = ~752pt available
-        # Student ID: 70, Name: 120, each date: 25, Present/Absent/%: 40 each (reduced)
+        # Student ID: 70, Name: 120, each date: 25, Present/%: 40 each (reduced)
         # Adjust date column width based on available space
         # Minimum width of 25pt for compact layout (using <br/> ensures vertical rendering works)
         available_width = 752  # Landscape A4 width minus margins
-        fixed_cols_width = 70 + 120 + 40 + 40 + 40  # Student ID + Name + Present + Absent + % (reduced)
+        fixed_cols_width = 70 + 120 + 40 + 40  # Student ID + Name + Present + % (removed Absent)
         num_date_cols = len(attendance_dates)
         date_col_width = max(22, (available_width - fixed_cols_width) / num_date_cols) if num_date_cols > 0 else 25
         
-        col_widths = [70, 128] + [date_col_width] * len(attendance_dates) + [32, 32, 32]
+        col_widths = [70, 128] + [date_col_width] * len(attendance_dates) + [32, 32]
         
         # Create table with adjusted column widths
         table = Table(table_data, colWidths=col_widths, repeatRows=1)
@@ -5857,8 +5879,12 @@ def export_attendance_pdf(request):
             ('ROWHEIGHT', (0, 0), (-1, 0), 50),  # Increased height for vertical date headers
             ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-            ('FONTSIZE', (0, 1), (-1, -1), 7),  # Slightly larger data font for landscape
-            ('FONTSIZE', (1, 1), (1, -1), 6),  # Smaller font for Name column
+            ('FONTSIZE', (0, 1), (0, -1), 9),  # Larger font for Student ID column (bold)
+            ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),  # Bold for Student ID
+            ('FONTSIZE', (1, 1), (1, -1), 7),  # Font for Name column (bold)
+            ('FONTNAME', (1, 1), (1, -1), 'Helvetica-Bold'),  # Bold for Name
+            ('ALIGN', (1, 1), (1, -1), 'LEFT'),  # Left align Name column
+            ('FONTSIZE', (2, 1), (-1, -1), 7),  # Regular font size for other columns
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
             ('LEFTPADDING', (0, 0), (-1, -1), 4),
             ('RIGHTPADDING', (0, 0), (-1, -1), 4),
@@ -5868,19 +5894,10 @@ def export_attendance_pdf(request):
         
         elements.append(table)
         
-        # Add footer with signatures
+        # Add footer with signature
         elements.append(Spacer(1, 40))  # Increased from 24 to 40 for more space above signature
         signature_style = ParagraphStyle(
             'SignatureStyle',
-            fontName='Helvetica',
-            fontSize=10,
-            alignment=TA_RIGHT,
-            leading=6,
-            spaceBefore=0,
-            spaceAfter=0,
-        )
-        signature_style_left = ParagraphStyle(
-            'SignatureStyleLeft',
             fontName='Helvetica',
             fontSize=10,
             alignment=0,
@@ -5888,51 +5905,109 @@ def export_attendance_pdf(request):
             spaceBefore=0,
             spaceAfter=0,
         )
-        dean_line = Paragraph("Dean", signature_style)
-        school_line = Paragraph("School of Science and Technology", signature_style)
-        bou_line = Paragraph("Bangladesh Open University", signature_style)
-        coordinator_line = Paragraph("Program Co-ordinator", signature_style_left)
-        school_line_left = Paragraph("School of Science and Technology", signature_style_left)
-        bou_line_left = Paragraph("Bangladesh Open University", signature_style_left)
+        # Create a table with title and signature line on the same row, full width
+        teacher_signature_text = Paragraph("Signature and Name of Course Teacher", signature_style)
+        signature_line = Paragraph("", signature_style)  # Empty cell for the line
+        # Text column width (approximate width for the text), signature line fills the rest
+        text_col_width = 200
+        signature_col_width = available_width - text_col_width
         signature_data = [
-            [dean_line],
-            [school_line],
-            [bou_line]
+            [teacher_signature_text, signature_line]
         ]
-        signature_data_left = [
-            [coordinator_line],
-            [school_line_left],
-            [bou_line_left]
-        ]
-        signature_table_width = 250
-        signature_table = Table(signature_data, colWidths=[signature_table_width])
+        signature_table = Table(signature_data, colWidths=[text_col_width, signature_col_width])
         signature_table.setStyle(TableStyle([
-            ('ALIGN', (0,0), (-1,-1), 'RIGHT'),
-            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
-            ('TOPPADDING', (0,0), (0,0), 4),
-        ]))
-        signature_table_left = Table(signature_data_left, colWidths=[signature_table_width])
-        signature_table_left.setStyle(TableStyle([
-            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
-            ('TOPPADDING', (0,0), (0,0), 4),
-        ]))
-        wrapper_col_widths = [available_width - signature_table_width * 2, signature_table_width, signature_table_width]
-        signature_wrapper_table = Table([[signature_table_left, '', signature_table]], colWidths=wrapper_col_widths)
-        signature_wrapper_table.setStyle(TableStyle([
             ('ALIGN', (0,0), (0,0), 'LEFT'),
-            ('ALIGN', (2,0), (2,0), 'RIGHT'),
-            ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
+            ('ALIGN', (1,0), (1,0), 'LEFT'),
+            ('LINEBELOW', (1,0), (1,0), 1, colors.black),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('TOPPADDING', (0,0), (-1,-1), 0),
+            ('BOTTOMPADDING', (0,0), (0,0), 4),
+            ('BOTTOMPADDING', (1,0), (1,0), 4),
             ('LEFTPADDING', (0,0), (-1,-1), 0),
             ('RIGHTPADDING', (0,0), (-1,-1), 0),
-            ('TOPPADDING', (0,0), (-1,-1), 0),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 0),
         ]))
-        elements.append(signature_wrapper_table)
+        elements.append(signature_table)
         
-        # Build PDF
-        doc.build(elements)
-        buffer.seek(0)
+        # Build PDF with page numbers - two pass approach
+        # First pass: build to temp buffer to count pages
+        temp_buffer = io.BytesIO()
+        temp_doc = SimpleDocTemplate(
+            temp_buffer,
+            pagesize=landscape(A4),
+            rightMargin=54,
+            leftMargin=54,
+            topMargin=34,
+            bottomMargin=34
+        )
+        # Build without page numbers to count pages
+        temp_doc.build(elements)
+        temp_buffer.seek(0)
+        
+        # Count pages using PyPDF2/pypdf
+        total_pages = 1
+        try:
+            try:
+                from PyPDF2 import PdfWriter, PdfReader
+            except ImportError:
+                from pypdf import PdfWriter, PdfReader
+            
+            reader = PdfReader(temp_buffer)
+            total_pages = len(reader.pages)
+            
+            # Create overlay with page numbers
+            from reportlab.pdfgen import canvas as reportlab_canvas
+            overlay_buffer = io.BytesIO()
+            overlay_canvas = reportlab_canvas.Canvas(overlay_buffer, pagesize=landscape(A4))
+            
+            for page_num in range(1, total_pages + 1):
+                overlay_canvas.setFont('Helvetica', 9)
+                page_width, page_height = landscape(A4)
+                text = f"{page_num}-{total_pages}"
+                overlay_canvas.drawCentredString(page_width / 2.0, 20, text)
+                overlay_canvas.showPage()
+            
+            overlay_canvas.save()
+            overlay_buffer.seek(0)
+            overlay_reader = PdfReader(overlay_buffer)
+            temp_buffer.seek(0)
+            reader = PdfReader(temp_buffer)
+            
+            # Merge original PDF with page number overlay
+            writer = PdfWriter()
+            for i in range(total_pages):
+                page = reader.pages[i]
+                overlay_page = overlay_reader.pages[i]
+                page.merge_page(overlay_page)
+                writer.add_page(page)
+            
+            # Write to final buffer
+            writer.write(buffer)
+            buffer.seek(0)
+            
+        except (ImportError, Exception) as e:
+            # If PyPDF2/pypdf not available or error, build with canvas callbacks using estimation
+            total_pages = max(1, len(students) // 12 + 1)
+            
+            def add_page_number(canvas, doc):
+                """Add page numbers in format '1-5', '2-5', etc."""
+                page_num = canvas.getPageNumber()
+                text = f"{page_num}-{total_pages}"
+                canvas.saveState()
+                canvas.setFont('Helvetica', 9)
+                page_width, page_height = landscape(A4)
+                canvas.drawCentredString(page_width / 2.0, 20, text)
+                canvas.restoreState()
+            
+            def on_first_page(canvas, doc):
+                add_page_number(canvas, doc)
+            
+            def on_later_pages(canvas, doc):
+                add_page_number(canvas, doc)
+            
+            # Use temp buffer as source, but we can't rebuild elements
+            # So just use temp buffer without page numbers if PyPDF2 fails
+            buffer = temp_buffer
+            buffer.seek(0)
         
         response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
         filename = f"Attendance_{course.code}_{semester.name}.pdf"
@@ -6131,16 +6206,17 @@ def export_blank_attendance_pdf(request):
         program_name = 'B. Sc in Computer Science and Engineering Program'
         left_content.append(Paragraph(program_name, header_style))
         session = semester.session or ''
-        if session:
-            left_content.append(Paragraph(f'{session} Session', header_style_small))
         term = semester.term or ''
         semester_full_name = semester.semester_full_name or ''
         if term or semester_full_name:
             combined = f'{term} Term {semester_full_name}'.strip()
+            if session:
+                combined = f'{combined} ({session} Session)'
             left_content.append(Paragraph(combined, header_style_small))
         left_content.append(Spacer(1, 2))
         course_name_display = f"{course.code} - {course.name}" if course else "Course"
-        left_content.append(Paragraph(f'Attendance Sheet - {course_name_display}', header_style_bold))
+        left_content.append(Paragraph('Attendance Sheet', header_style_bold))
+        left_content.append(Paragraph(f'Course Code & Title: {course_name_display}', header_style_small))
         # Get teacher name from SemesterCourse
         teacher_name = None
         # Try to get centre_id from request first
@@ -6346,31 +6422,52 @@ def export_blank_attendance_pdf(request):
             para = Paragraph(date_text, vertical_header_style)
             return para
         
+        # Create styles for student ID and name (bold)
+        student_id_style = ParagraphStyle(
+            'StudentIDStyle',
+            parent=styles['Normal'],
+            fontSize=9,  # Increased font size for Student ID
+            fontName='Helvetica-Bold',
+            alignment=TA_CENTER,
+            leading=9,
+        )
+        student_name_style = ParagraphStyle(
+            'StudentNameStyle',
+            parent=styles['Normal'],
+            fontSize=7,
+            fontName='Helvetica-Bold',
+            alignment=0,  # Left align
+            leading=7,
+        )
+        
         header = ['Student ID', 'Name']
         # Add date columns with vertical format
         for date in attendance_dates:
             header.append(make_date_header(date))
-        # Add Present, Absent, and % columns (horizontal)
-        header.extend(['Present', 'Absent', '%'])
+        # Add Present and % columns (horizontal) - removed Absent
+        header.extend(['Present', '%'])
         table_data.append(header)
         
         # Data rows - only Student ID and Name filled, all other cells blank
         for student in students:
-            row = [student.id, student.name.upper()]
+            # Use Paragraph for Student ID and Name to make them bold
+            student_id_para = Paragraph(student.id, student_id_style)
+            student_name_para = Paragraph(student.name.upper(), student_name_style)
+            row = [student_id_para, student_name_para]
             # Add blank cells for all dates
             for date in attendance_dates:
                 row.append('')  # Blank cell
-            # Add blank cells for Present, Absent, %
-            row.extend(['', '', ''])
+            # Add blank cells for Present and % (removed Absent)
+            row.extend(['', ''])
             table_data.append(row)
         
         # Calculate column widths dynamically for landscape orientation
         available_width = 752
-        fixed_cols_width = 70 + 128 + 32 + 32 + 32  # Student ID + Name + Present + Absent + %
+        fixed_cols_width = 70 + 128 + 32 + 32  # Student ID + Name + Present + % (removed Absent)
         num_date_cols = len(attendance_dates)
         date_col_width = max(22, (available_width - fixed_cols_width) / num_date_cols) if num_date_cols > 0 else 25
         
-        col_widths = [70, 128] + [date_col_width] * len(attendance_dates) + [32, 32, 32]
+        col_widths = [70, 128] + [date_col_width] * len(attendance_dates) + [32, 32]
         
         # Create table with adjusted column widths
         table = Table(table_data, colWidths=col_widths, repeatRows=1)
@@ -6386,8 +6483,12 @@ def export_blank_attendance_pdf(request):
             ('ROWHEIGHT', (0, 0), (-1, 0), 50),
             ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-            ('FONTSIZE', (0, 1), (-1, -1), 7),
-            ('FONTSIZE', (1, 1), (1, -1), 6),  # Smaller font for Name column
+            ('FONTSIZE', (0, 1), (0, -1), 9),  # Larger font for Student ID column (bold)
+            ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),  # Bold for Student ID
+            ('FONTSIZE', (1, 1), (1, -1), 7),  # Font for Name column (bold)
+            ('FONTNAME', (1, 1), (1, -1), 'Helvetica-Bold'),  # Bold for Name
+            ('ALIGN', (1, 1), (1, -1), 'LEFT'),  # Left align Name column
+            ('FONTSIZE', (2, 1), (-1, -1), 7),  # Regular font size for other columns
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
             ('LEFTPADDING', (0, 0), (-1, -1), 4),
             ('RIGHTPADDING', (0, 0), (-1, -1), 4),
@@ -6397,19 +6498,10 @@ def export_blank_attendance_pdf(request):
         
         elements.append(table)
         
-        # Add footer with signatures
+        # Add footer with signature
         elements.append(Spacer(1, 40))
         signature_style = ParagraphStyle(
             'SignatureStyle',
-            fontName='Helvetica',
-            fontSize=10,
-            alignment=TA_RIGHT,
-            leading=6,
-            spaceBefore=0,
-            spaceAfter=0,
-        )
-        signature_style_left = ParagraphStyle(
-            'SignatureStyleLeft',
             fontName='Helvetica',
             fontSize=10,
             alignment=0,
@@ -6417,51 +6509,109 @@ def export_blank_attendance_pdf(request):
             spaceBefore=0,
             spaceAfter=0,
         )
-        dean_line = Paragraph("Dean", signature_style)
-        school_line = Paragraph("School of Science and Technology", signature_style)
-        bou_line = Paragraph("Bangladesh Open University", signature_style)
-        coordinator_line = Paragraph("Program Co-ordinator", signature_style_left)
-        school_line_left = Paragraph("School of Science and Technology", signature_style_left)
-        bou_line_left = Paragraph("Bangladesh Open University", signature_style_left)
+        # Create a table with title and signature line on the same row, full width
+        teacher_signature_text = Paragraph("Signature and Name of Course Teacher", signature_style)
+        signature_line = Paragraph("", signature_style)  # Empty cell for the line
+        # Text column width (approximate width for the text), signature line fills the rest
+        text_col_width = 200
+        signature_col_width = available_width - text_col_width
         signature_data = [
-            [dean_line],
-            [school_line],
-            [bou_line]
+            [teacher_signature_text, signature_line]
         ]
-        signature_data_left = [
-            [coordinator_line],
-            [school_line_left],
-            [bou_line_left]
-        ]
-        signature_table_width = 250
-        signature_table = Table(signature_data, colWidths=[signature_table_width])
+        signature_table = Table(signature_data, colWidths=[text_col_width, signature_col_width])
         signature_table.setStyle(TableStyle([
-            ('ALIGN', (0,0), (-1,-1), 'RIGHT'),
-            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
-            ('TOPPADDING', (0,0), (0,0), 4),
-        ]))
-        signature_table_left = Table(signature_data_left, colWidths=[signature_table_width])
-        signature_table_left.setStyle(TableStyle([
-            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
-            ('TOPPADDING', (0,0), (0,0), 4),
-        ]))
-        wrapper_col_widths = [available_width - signature_table_width * 2, signature_table_width, signature_table_width]
-        signature_wrapper_table = Table([[signature_table_left, '', signature_table]], colWidths=wrapper_col_widths)
-        signature_wrapper_table.setStyle(TableStyle([
             ('ALIGN', (0,0), (0,0), 'LEFT'),
-            ('ALIGN', (2,0), (2,0), 'RIGHT'),
-            ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
+            ('ALIGN', (1,0), (1,0), 'LEFT'),
+            ('LINEBELOW', (1,0), (1,0), 1, colors.black),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('TOPPADDING', (0,0), (-1,-1), 0),
+            ('BOTTOMPADDING', (0,0), (0,0), 4),
+            ('BOTTOMPADDING', (1,0), (1,0), 4),
             ('LEFTPADDING', (0,0), (-1,-1), 0),
             ('RIGHTPADDING', (0,0), (-1,-1), 0),
-            ('TOPPADDING', (0,0), (-1,-1), 0),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 0),
         ]))
-        elements.append(signature_wrapper_table)
+        elements.append(signature_table)
         
-        # Build PDF
-        doc.build(elements)
-        buffer.seek(0)
+        # Build PDF with page numbers - two pass approach
+        # First pass: build to temp buffer to count pages
+        temp_buffer = io.BytesIO()
+        temp_doc = SimpleDocTemplate(
+            temp_buffer,
+            pagesize=landscape(A4),
+            rightMargin=54,
+            leftMargin=54,
+            topMargin=34,
+            bottomMargin=34
+        )
+        # Build without page numbers to count pages
+        temp_doc.build(elements)
+        temp_buffer.seek(0)
+        
+        # Count pages using PyPDF2/pypdf
+        total_pages = 1
+        try:
+            try:
+                from PyPDF2 import PdfWriter, PdfReader
+            except ImportError:
+                from pypdf import PdfWriter, PdfReader
+            
+            reader = PdfReader(temp_buffer)
+            total_pages = len(reader.pages)
+            
+            # Create overlay with page numbers
+            from reportlab.pdfgen import canvas as reportlab_canvas
+            overlay_buffer = io.BytesIO()
+            overlay_canvas = reportlab_canvas.Canvas(overlay_buffer, pagesize=landscape(A4))
+            
+            for page_num in range(1, total_pages + 1):
+                overlay_canvas.setFont('Helvetica', 9)
+                page_width, page_height = landscape(A4)
+                text = f"{page_num}-{total_pages}"
+                overlay_canvas.drawCentredString(page_width / 2.0, 20, text)
+                overlay_canvas.showPage()
+            
+            overlay_canvas.save()
+            overlay_buffer.seek(0)
+            overlay_reader = PdfReader(overlay_buffer)
+            temp_buffer.seek(0)
+            reader = PdfReader(temp_buffer)
+            
+            # Merge original PDF with page number overlay
+            writer = PdfWriter()
+            for i in range(total_pages):
+                page = reader.pages[i]
+                overlay_page = overlay_reader.pages[i]
+                page.merge_page(overlay_page)
+                writer.add_page(page)
+            
+            # Write to final buffer
+            writer.write(buffer)
+            buffer.seek(0)
+            
+        except (ImportError, Exception) as e:
+            # If PyPDF2/pypdf not available or error, build with canvas callbacks using estimation
+            total_pages = max(1, len(students) // 12 + 1)
+            
+            def add_page_number(canvas, doc):
+                """Add page numbers in format '1-5', '2-5', etc."""
+                page_num = canvas.getPageNumber()
+                text = f"{page_num}-{total_pages}"
+                canvas.saveState()
+                canvas.setFont('Helvetica', 9)
+                page_width, page_height = landscape(A4)
+                canvas.drawCentredString(page_width / 2.0, 20, text)
+                canvas.restoreState()
+            
+            def on_first_page(canvas, doc):
+                add_page_number(canvas, doc)
+            
+            def on_later_pages(canvas, doc):
+                add_page_number(canvas, doc)
+            
+            # Use temp buffer as source, but we can't rebuild elements
+            # So just use temp buffer without page numbers if PyPDF2 fails
+            buffer = temp_buffer
+            buffer.seek(0)
         
         response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
         filename = f"Blank_Attendance_{course.code}_{semester.name}.pdf"

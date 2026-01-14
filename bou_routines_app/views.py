@@ -5826,7 +5826,9 @@ def export_attendance_pdf(request):
             fontSize=9,  # Increased font size for Student ID
             fontName='Helvetica-Bold',
             alignment=TA_CENTER,
-            leading=9,
+            leading=9,  # Tight leading to minimize gaps
+            spaceBefore=0,  # No space before
+            spaceAfter=0,  # No space after
         )
         student_name_style = ParagraphStyle(
             'StudentNameStyle',
@@ -5834,7 +5836,9 @@ def export_attendance_pdf(request):
             fontSize=7,
             fontName='Helvetica-Bold',
             alignment=0,  # Left align
-            leading=7,
+            leading=7,  # Tight leading to minimize gaps
+            spaceBefore=0,  # No space before
+            spaceAfter=0,  # No space after
         )
         
         header = ['Student ID', 'Name']
@@ -5847,10 +5851,9 @@ def export_attendance_pdf(request):
         
         # Data rows
         for student in students:
-            # Use Paragraph for Student ID and Name to make them bold
-            student_id_para = Paragraph(student.id, student_id_style)
-            student_name_para = Paragraph(student.name.upper(), student_name_style)
-            row = [student_id_para, student_name_para]
+            # Use plain strings - bold styling will be applied via table style
+            # This eliminates paragraph spacing that causes gaps
+            row = [student.id, student.name.upper()]
             for date in attendance_dates:
                 if date in attendance_matrix[student.id]['attendance']:
                     status = 'P' if attendance_matrix[student.id]['attendance'][date] else 'A'
@@ -5904,12 +5907,21 @@ def export_attendance_pdf(request):
             ('FONTSIZE', (1, 1), (1, -1), 7),  # Font for Name column (bold)
             ('FONTNAME', (1, 1), (1, -1), 'Helvetica-Bold'),  # Bold for Name
             ('ALIGN', (1, 1), (1, -1), 'LEFT'),  # Left align Name column
+            ('VALIGN', (1, 1), (1, -1), 'MIDDLE'),  # Explicitly set vertical center for Name column
             ('FONTSIZE', (2, 1), (-1, -1), 7),  # Regular font size for other columns
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
             ('LEFTPADDING', (0, 0), (-1, -1), 4),
             ('RIGHTPADDING', (0, 0), (-1, -1), 4),
-            ('TOPPADDING', (0, 1), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+            # Reduce padding for Student ID and Name columns to make them compact
+            ('TOPPADDING', (0, 1), (0, -1), 0),  # No top padding for Student ID
+            ('BOTTOMPADDING', (0, 1), (0, -1), 0),  # No bottom padding for Student ID
+            ('TOPPADDING', (1, 1), (1, -1), 0),  # No top padding for Name
+            ('BOTTOMPADDING', (1, 1), (1, -1), -2),  # More negative bottom padding to compensate for extra space
+            # Keep padding for other columns
+            ('TOPPADDING', (2, 1), (-1, -1), 4),
+            ('BOTTOMPADDING', (2, 1), (-1, -1), 4),
+            # Set compact row height for data rows - uniform height just enough for 9pt font
+            ('ROWHEIGHT', (0, 1), (-1, -1), 10),  # Uniform row height (9pt font + 1pt for centering)
         ]))
         
         elements.append(table)
@@ -6459,7 +6471,9 @@ def export_blank_attendance_pdf(request):
             fontSize=9,  # Increased font size for Student ID
             fontName='Helvetica-Bold',
             alignment=TA_CENTER,
-            leading=9,
+            leading=9,  # Tight leading to minimize gaps
+            spaceBefore=0,  # No space before
+            spaceAfter=0,  # No space after
         )
         student_name_style = ParagraphStyle(
             'StudentNameStyle',
@@ -6467,7 +6481,9 @@ def export_blank_attendance_pdf(request):
             fontSize=7,
             fontName='Helvetica-Bold',
             alignment=0,  # Left align
-            leading=7,
+            leading=7,  # Tight leading to minimize gaps
+            spaceBefore=0,  # No space before
+            spaceAfter=0,  # No space after
         )
         
         header = ['Student ID', 'Name']
@@ -6480,10 +6496,9 @@ def export_blank_attendance_pdf(request):
         
         # Data rows - only Student ID and Name filled, all other cells blank
         for student in students:
-            # Use Paragraph for Student ID and Name to make them bold
-            student_id_para = Paragraph(student.id, student_id_style)
-            student_name_para = Paragraph(student.name.upper(), student_name_style)
-            row = [student_id_para, student_name_para]
+            # Use plain strings - bold styling will be applied via table style
+            # This eliminates paragraph spacing that causes gaps
+            row = [student.id, student.name.upper()]
             # Add blank cells for all dates
             for date in attendance_dates:
                 row.append('')  # Blank cell
@@ -6528,12 +6543,21 @@ def export_blank_attendance_pdf(request):
             ('FONTSIZE', (1, 1), (1, -1), 7),  # Font for Name column (bold)
             ('FONTNAME', (1, 1), (1, -1), 'Helvetica-Bold'),  # Bold for Name
             ('ALIGN', (1, 1), (1, -1), 'LEFT'),  # Left align Name column
+            ('VALIGN', (1, 1), (1, -1), 'MIDDLE'),  # Explicitly set vertical center for Name column
             ('FONTSIZE', (2, 1), (-1, -1), 7),  # Regular font size for other columns
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
             ('LEFTPADDING', (0, 0), (-1, -1), 4),
             ('RIGHTPADDING', (0, 0), (-1, -1), 4),
-            ('TOPPADDING', (0, 1), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+            # Reduce padding for Student ID and Name columns to make them compact
+            ('TOPPADDING', (0, 1), (0, -1), 0),  # No top padding for Student ID
+            ('BOTTOMPADDING', (0, 1), (0, -1), 0),  # No bottom padding for Student ID
+            ('TOPPADDING', (1, 1), (1, -1), 0),  # No top padding for Name
+            ('BOTTOMPADDING', (1, 1), (1, -1), -2),  # More negative bottom padding to compensate for extra space
+            # Keep padding for other columns
+            ('TOPPADDING', (2, 1), (-1, -1), 4),
+            ('BOTTOMPADDING', (2, 1), (-1, -1), 4),
+            # Set compact row height for data rows - uniform height just enough for 9pt font
+            ('ROWHEIGHT', (0, 1), (-1, -1), 10),  # Uniform row height (9pt font + 1pt for centering)
         ]))
         
         elements.append(table)

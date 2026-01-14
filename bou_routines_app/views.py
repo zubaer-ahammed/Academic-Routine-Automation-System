@@ -5871,12 +5871,12 @@ def export_attendance_pdf(request):
         # Adjust date column width based on available space
         # Minimum width of 25pt for compact layout (using <br/> ensures vertical rendering works)
         # Use the same available_width as header and footer for consistency
-        # Column widths: Student ID (70), Name (128), date columns (variable), Present (32), % (32)
-        fixed_cols_width = 70 + 128 + 32 + 32  # Student ID + Name + Present + % (removed Absent)
+        # Column widths: Student ID (70), Name (153), date columns (variable), Present (32), % (32)
+        fixed_cols_width = 70 + 153 + 32 + 32  # Student ID + Name + Present + % (removed Absent)
         num_date_cols = len(attendance_dates)
         date_col_width = max(22, (available_width - fixed_cols_width) / num_date_cols) if num_date_cols > 0 else 25
         
-        col_widths = [70, 128] + [date_col_width] * len(attendance_dates) + [32, 32]
+        col_widths = [70, 153] + [date_col_width] * len(attendance_dates) + [32, 32]
         
         # Ensure total width equals available_width exactly
         total_width = sum(col_widths)
@@ -6508,12 +6508,12 @@ def export_blank_attendance_pdf(request):
         
         # Calculate column widths dynamically for landscape orientation
         # Use the same available_width as header and footer for consistency
-        # Column widths: Student ID (70), Name (128), date columns (variable), Present (32), % (32)
-        fixed_cols_width = 70 + 128 + 32 + 32  # Student ID + Name + Present + % (removed Absent)
+        # Column widths: Student ID (70), Name (153), date columns (variable), Present (32), % (32)
+        fixed_cols_width = 70 + 153 + 32 + 32  # Student ID + Name + Present + % (removed Absent)
         num_date_cols = len(attendance_dates)
         date_col_width = max(22, (available_width - fixed_cols_width) / num_date_cols) if num_date_cols > 0 else 25
         
-        col_widths = [70, 128] + [date_col_width] * len(attendance_dates) + [32, 32]
+        col_widths = [70, 153] + [date_col_width] * len(attendance_dates) + [32, 32]
         
         # Ensure total width equals available_width exactly
         total_width = sum(col_widths)

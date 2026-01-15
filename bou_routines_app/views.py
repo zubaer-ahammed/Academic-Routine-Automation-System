@@ -5703,7 +5703,7 @@ def export_attendance_pdf(request):
                     teacher_name = semester_course.teacher.name
         # Only show teacher if found
         if teacher_name:
-            left_content.append(Paragraph(f'<b>Teacher:</b> {teacher_name}', header_style_normal))
+            left_content.append(Paragraph(f'<b>Faculty:</b> {teacher_name}', header_style_normal))
         if centre_name:
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
         
@@ -5907,7 +5907,7 @@ def export_attendance_pdf(request):
         for date in attendance_dates:
             header.append(make_date_header(date))
         # Add Present and % columns (horizontal) - removed Absent
-        header.extend(['Present', '%'])
+        header.extend(['Total\nPresent', '%'])
         table_data.append(header)
         
         # Data rows
@@ -5957,10 +5957,10 @@ def export_attendance_pdf(request):
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 8),  # Slightly larger header font for landscape
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-            ('TOPPADDING', (0, 0), (-1, 0), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
+            ('TOPPADDING', (0, 0), (-1, 0), 4),
             # Increase row height for header to accommodate vertical date text
-            ('ROWHEIGHT', (0, 0), (-1, 0), 50),  # Increased height for vertical date headers
+            ('ROWHEIGHT', (0, 0), (-1, 0), 40),  # Reduced height for header row
             ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
             ('FONTSIZE', (0, 1), (0, -1), 9),  # Larger font for Student ID column (bold)
@@ -5979,48 +5979,47 @@ def export_attendance_pdf(request):
             ('BOTTOMPADDING', (0, 1), (0, -1), 0),  # No bottom padding for Student ID
             ('TOPPADDING', (1, 1), (1, -1), 0),  # No top padding for Name
             ('BOTTOMPADDING', (1, 1), (1, -1), -2),  # More negative bottom padding to compensate for extra space
-            # Keep padding for other columns - slightly increased
-            ('TOPPADDING', (2, 1), (-1, -1), 2.5),
-            ('BOTTOMPADDING', (2, 1), (-1, -1), 2.5),
-            # Set compact row height for data rows - slightly increased
-            ('ROWHEIGHT', (0, 1), (-1, -1), 10),  # Slightly increased row height
+            # Keep padding for other columns - reduced to fit signature
+            ('TOPPADDING', (2, 1), (-1, -1), 2),
+            ('BOTTOMPADDING', (2, 1), (-1, -1), 2),
+            # Set compact row height for data rows - reduced to fit signature
+            ('ROWHEIGHT', (0, 1), (-1, -1), 8.5),  # Reduced row height
         ]))
         
         elements.append(table)
         
-        # Add footer with signature
+        # Add footer with signature (same style as routine PDF export, but only left signature)
         elements.append(Spacer(1, 40))  # Increased from 24 to 40 for more space above signature
-        signature_style = ParagraphStyle(
-            'SignatureStyle',
+        signature_style_left = ParagraphStyle(
+            'SignatureStyleLeft',
             fontName='Helvetica',
             fontSize=10,
-            alignment=0,
+            alignment=0,  # Left alignment
             leading=6,
             spaceBefore=0,
             spaceAfter=0,
         )
-        # Create a table with title and signature line on the same row, full width
-        teacher_signature_text = Paragraph("Signature and Name of Course Teacher", signature_style)
-        signature_line = Paragraph("", signature_style)  # Empty cell for the line
-        # Text column width (approximate width for the text), signature line fills the rest
-        text_col_width = 200
-        signature_col_width = available_width - text_col_width
-        signature_data = [
-            [teacher_signature_text, signature_line]
+        
+        # Get teacher name for signature (reuse teacher_name from header if available)
+        teacher_name_for_signature = teacher_name if teacher_name else "Teacher Name"
+        
+        # Create signature data (same format as routine PDF export, but only left signature)
+        faculty_line = Paragraph(f"Faculty: {teacher_name_for_signature}", signature_style_left)
+        school_line_left = Paragraph("School of Science and Technology", signature_style_left)
+        bou_line_left = Paragraph("Bangladesh Open University", signature_style_left)
+        signature_data_left = [
+            [faculty_line],
+            [school_line_left],
+            [bou_line_left]
         ]
-        signature_table = Table(signature_data, colWidths=[text_col_width, signature_col_width])
-        signature_table.setStyle(TableStyle([
-            ('ALIGN', (0,0), (0,0), 'LEFT'),
-            ('ALIGN', (1,0), (1,0), 'LEFT'),
-            ('LINEBELOW', (1,0), (1,0), 1, colors.black),
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('TOPPADDING', (0,0), (-1,-1), 0),
-            ('BOTTOMPADDING', (0,0), (0,0), 4),
-            ('BOTTOMPADDING', (1,0), (1,0), 4),
-            ('LEFTPADDING', (0,0), (-1,-1), 0),
-            ('RIGHTPADDING', (0,0), (-1,-1), 0),
+        signature_table_width = 250  # Same as routine PDF export
+        signature_table_left = Table(signature_data_left, colWidths=[signature_table_width], hAlign='LEFT')
+        signature_table_left.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
+            ('TOPPADDING', (0,0), (0,0), 4),
         ]))
-        elements.append(signature_table)
+        elements.append(signature_table_left)
         
         # Build PDF with page numbers - two pass approach
         # First pass: build to temp buffer to count pages
@@ -6348,7 +6347,7 @@ def export_blank_attendance_pdf(request):
                     teacher_name = semester_course.teacher.name
         # Only show teacher if found
         if teacher_name:
-            left_content.append(Paragraph(f'<b>Teacher:</b> {teacher_name}', header_style_normal))
+            left_content.append(Paragraph(f'<b>Faculty:</b> {teacher_name}', header_style_normal))
         if centre_name:
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
         
@@ -6550,7 +6549,7 @@ def export_blank_attendance_pdf(request):
         for date in attendance_dates:
             header.append(make_date_header(date))
         # Add Present and % columns (horizontal) - removed Absent
-        header.extend(['Present', '%'])
+        header.extend(['Total\nPresent', '%'])
         table_data.append(header)
         
         # Data rows - only Student ID and Name filled, all other cells blank
@@ -6592,9 +6591,9 @@ def export_blank_attendance_pdf(request):
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-            ('TOPPADDING', (0, 0), (-1, 0), 8),
-            ('ROWHEIGHT', (0, 0), (-1, 0), 50),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
+            ('TOPPADDING', (0, 0), (-1, 0), 4),
+            ('ROWHEIGHT', (0, 0), (-1, 0), 40),  # Reduced height for header row
             ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
             ('FONTSIZE', (0, 1), (0, -1), 9),  # Larger font for Student ID column (bold)
@@ -6613,48 +6612,47 @@ def export_blank_attendance_pdf(request):
             ('BOTTOMPADDING', (0, 1), (0, -1), 0),  # No bottom padding for Student ID
             ('TOPPADDING', (1, 1), (1, -1), 0),  # No top padding for Name
             ('BOTTOMPADDING', (1, 1), (1, -1), -2),  # More negative bottom padding to compensate for extra space
-            # Keep padding for other columns - slightly increased
-            ('TOPPADDING', (2, 1), (-1, -1), 2.5),
-            ('BOTTOMPADDING', (2, 1), (-1, -1), 2.5),
-            # Set compact row height for data rows - slightly increased
-            ('ROWHEIGHT', (0, 1), (-1, -1), 10),  # Slightly increased row height
+            # Keep padding for other columns - reduced to fit signature
+            ('TOPPADDING', (2, 1), (-1, -1), 2),
+            ('BOTTOMPADDING', (2, 1), (-1, -1), 2),
+            # Set compact row height for data rows - reduced to fit signature
+            ('ROWHEIGHT', (0, 1), (-1, -1), 8.5),  # Reduced row height
         ]))
         
         elements.append(table)
         
-        # Add footer with signature
+        # Add footer with signature (same style as routine PDF export, but only left signature)
         elements.append(Spacer(1, 40))
-        signature_style = ParagraphStyle(
-            'SignatureStyle',
+        signature_style_left = ParagraphStyle(
+            'SignatureStyleLeft',
             fontName='Helvetica',
             fontSize=10,
-            alignment=0,
+            alignment=0,  # Left alignment
             leading=6,
             spaceBefore=0,
             spaceAfter=0,
         )
-        # Create a table with title and signature line on the same row, full width
-        teacher_signature_text = Paragraph("Signature and Name of Course Teacher", signature_style)
-        signature_line = Paragraph("", signature_style)  # Empty cell for the line
-        # Text column width (approximate width for the text), signature line fills the rest
-        text_col_width = 200
-        signature_col_width = available_width - text_col_width
-        signature_data = [
-            [teacher_signature_text, signature_line]
+        
+        # Get teacher name for signature (reuse teacher_name from header if available)
+        teacher_name_for_signature = teacher_name if teacher_name else "Teacher Name"
+        
+        # Create signature data (same format as routine PDF export, but only left signature)
+        faculty_line = Paragraph(f"Faculty: {teacher_name_for_signature}", signature_style_left)
+        school_line_left = Paragraph("School of Science and Technology", signature_style_left)
+        bou_line_left = Paragraph("Bangladesh Open University", signature_style_left)
+        signature_data_left = [
+            [faculty_line],
+            [school_line_left],
+            [bou_line_left]
         ]
-        signature_table = Table(signature_data, colWidths=[text_col_width, signature_col_width])
-        signature_table.setStyle(TableStyle([
-            ('ALIGN', (0,0), (0,0), 'LEFT'),
-            ('ALIGN', (1,0), (1,0), 'LEFT'),
-            ('LINEBELOW', (1,0), (1,0), 1, colors.black),
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('TOPPADDING', (0,0), (-1,-1), 0),
-            ('BOTTOMPADDING', (0,0), (0,0), 4),
-            ('BOTTOMPADDING', (1,0), (1,0), 4),
-            ('LEFTPADDING', (0,0), (-1,-1), 0),
-            ('RIGHTPADDING', (0,0), (-1,-1), 0),
+        signature_table_width = 250  # Same as routine PDF export
+        signature_table_left = Table(signature_data_left, colWidths=[signature_table_width], hAlign='LEFT')
+        signature_table_left.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
+            ('TOPPADDING', (0,0), (0,0), 4),
         ]))
-        elements.append(signature_table)
+        elements.append(signature_table_left)
         
         # Build PDF with page numbers - two pass approach
         # First pass: build to temp buffer to count pages
@@ -7060,7 +7058,7 @@ def export_ca_marks_pdf(request):
                 pass
         # Only show teacher if found
         if teacher_name:
-            left_content.append(Paragraph(f'<b>Teacher:</b> {teacher_name}', header_style_normal))
+            left_content.append(Paragraph(f'<b>Faculty:</b> {teacher_name}', header_style_normal))
         if not centre_name:
             first_sc = SemesterCourse.objects.filter(semester=semester).select_related('centre').first()
             if first_sc and first_sc.centre:
@@ -7682,7 +7680,7 @@ def export_blank_ca_marks_pdf(request):
                 pass
         # Only show teacher if found
         if teacher_name:
-            left_content.append(Paragraph(f'<b>Teacher:</b> {teacher_name}', header_style_normal))
+            left_content.append(Paragraph(f'<b>Faculty:</b> {teacher_name}', header_style_normal))
         if not centre_name:
             first_sc = SemesterCourse.objects.filter(semester=semester).select_related('centre').first()
             if first_sc and first_sc.centre:

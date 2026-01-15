@@ -5482,88 +5482,66 @@ def export_attendance_pdf(request):
             }
         ).order_by('-first_two_digits', 'last_three_digits')
         
-        # Generate semester dates based on course schedule (same logic as attendance_calendar)
+        # Get dates from actual routine entries (same logic as routine PDF export)
         from datetime import timedelta, datetime
         from bou_routines_app.models import NewRoutine
         
-        # Get the course's scheduled days from NewRoutine table
+        # Get actual routine dates for this course (same as routine PDF export)
+        # Get unique dates from routine entries
+        routine_dates = set(NewRoutine.objects.filter(
+            course=course,
+            semester=semester
+        ).values_list('class_date', flat=True).distinct())
+        
+        # Get the course's scheduled days from NewRoutine table (for filtering makeup dates)
         course_routines = NewRoutine.objects.filter(
             course=course,
             semester=semester
         ).values_list('day', flat=True).distinct()
         
-        # Generate dates based on semester start/end dates and course schedule
-        semester_dates = []
-        if semester.start_date and semester.end_date:
-            current_date = semester.start_date
-            end_date = semester.end_date
-            
-            # Get holidays for this semester
-            holiday_dates = set()
-            if semester.holidays:
-                for date_str in semester.holidays.split(','):
-                    if date_str.strip():
-                        try:
-                            holiday_date = datetime.strptime(date_str.strip(), "%Y-%m-%d").date()
-                            holiday_dates.add(holiday_date)
-                        except ValueError:
-                            pass
-            
-            # Get makeup dates from semester
-            makeup_dates = []
-            if semester.makeup_dates:
-                for date_str in semester.makeup_dates.split(','):
-                    if date_str.strip():
-                        try:
-                            makeup_date = datetime.strptime(date_str.strip(), "%Y-%m-%d").date()
-                            makeup_dates.append(makeup_date)
-                        except ValueError:
-                            pass
-            
-            # Determine which days to show based on course routine
-            days_to_show = []
-            if 'Friday' in course_routines and 'Saturday' in course_routines:
-                days_to_show = ['Friday', 'Saturday']
-            elif 'Friday' in course_routines:
-                days_to_show = ['Friday']
-            elif 'Saturday' in course_routines:
-                days_to_show = ['Saturday']
-            else:
-                # Fallback: show Friday and Saturday if no specific schedule found
-                days_to_show = ['Friday', 'Saturday']
-            
-            # Generate dates based on the determined days to show
-            while current_date <= end_date:
-                day_name = current_date.strftime('%A')
-                if day_name in days_to_show:
-                    # Only add if not a holiday
-                    if current_date not in holiday_dates:
-                        semester_dates.append(current_date)
-                current_date += timedelta(days=1)
-            
-            # Filter makeup dates based on course's scheduled day
-            # If course is on Friday only, keep only Friday makeup dates
-            # If course is on Saturday only, keep only Saturday makeup dates
-            filtered_makeup_dates = []
-            for makeup_date in makeup_dates:
-                makeup_day = makeup_date.strftime('%A')
-                # Only include makeup dates that match the course's scheduled day
-                if makeup_day in days_to_show:
-                    filtered_makeup_dates.append(makeup_date)
-            
-            # Add filtered makeup dates to the semester dates
-            for makeup_date in filtered_makeup_dates:
-                if makeup_date not in semester_dates:
-                    semester_dates.append(makeup_date)
-            
-            # Sort all dates chronologically
-            semester_dates.sort()
+        # Get makeup dates from semester
+        makeup_dates = []
+        if semester.makeup_dates:
+            for date_str in semester.makeup_dates.split(','):
+                if date_str.strip():
+                    try:
+                        makeup_date = datetime.strptime(date_str.strip(), "%Y-%m-%d").date()
+                        makeup_dates.append(makeup_date)
+                    except ValueError:
+                        pass
         
-        # Use semester_dates to match web page (fallback to attendance_dates if no schedule)
-        attendance_dates = semester_dates if semester_dates else list(Attendance.objects.filter(
-            course=course,
-            semester=semester
-        ).values_list('attendance_date', flat=True).distinct().order_by('attendance_date'))
+        # Determine which days to show based on course routine (for filtering makeup dates)
+        days_to_show = []
+        if 'Friday' in course_routines and 'Saturday' in course_routines:
+            days_to_show = ['Friday', 'Saturday']
+        elif 'Friday' in course_routines:
+            days_to_show = ['Friday']
+        elif 'Saturday' in course_routines:
+            days_to_show = ['Saturday']
+        else:
+            # Fallback: show Friday and Saturday if no specific schedule found
+            days_to_show = ['Friday', 'Saturday']
+        
+        # Filter makeup dates based on course's scheduled day
+        # If course is on Friday only, keep only Friday makeup dates
+        # If course is on Saturday only, keep only Saturday makeup dates
+        filtered_makeup_dates = []
+        for makeup_date in makeup_dates:
+            makeup_day = makeup_date.strftime('%A')
+            # Only include makeup dates that match the course's scheduled day
+            if makeup_day in days_to_show:
+                filtered_makeup_dates.append(makeup_date)
+        
+        # Combine routine dates and filtered makeup dates (same as routine PDF export)
+        all_dates = set(routine_dates) | set(filtered_makeup_dates)
+        attendance_dates = sorted(all_dates)
+        
+        # Fallback: if no routine dates found, use attendance records
+        if not attendance_dates:
+            attendance_dates = list(Attendance.objects.filter(
+                course=course,
+                semester=semester
+            ).values_list('attendance_date', flat=True).distinct().order_by('attendance_date'))
         
         # Create attendance matrix
         attendance_matrix = {}
@@ -6186,81 +6164,56 @@ def export_blank_attendance_pdf(request):
         from datetime import timedelta, datetime
         from bou_routines_app.models import NewRoutine
         
-        # Get the course's scheduled days from NewRoutine table
+        # Get dates from actual routine entries (same logic as routine PDF export)
+        # Get actual routine dates for this course (same as routine PDF export)
+        # Get unique dates from routine entries
+        routine_dates = set(NewRoutine.objects.filter(
+            course=course,
+            semester=semester
+        ).values_list('class_date', flat=True).distinct())
+        
+        # Get the course's scheduled days from NewRoutine table (for filtering makeup dates)
         course_routines = NewRoutine.objects.filter(
             course=course,
             semester=semester
         ).values_list('day', flat=True).distinct()
         
-        # Generate dates based on semester start/end dates and course schedule
-        semester_dates = []
-        if semester.start_date and semester.end_date:
-            current_date = semester.start_date
-            end_date = semester.end_date
-            
-            # Get holidays for this semester
-            holiday_dates = set()
-            if semester.holidays:
-                for date_str in semester.holidays.split(','):
-                    if date_str.strip():
-                        try:
-                            holiday_date = datetime.strptime(date_str.strip(), "%Y-%m-%d").date()
-                            holiday_dates.add(holiday_date)
-                        except ValueError:
-                            pass
-            
-            # Get makeup dates from semester
-            makeup_dates = []
-            if semester.makeup_dates:
-                for date_str in semester.makeup_dates.split(','):
-                    if date_str.strip():
-                        try:
-                            makeup_date = datetime.strptime(date_str.strip(), "%Y-%m-%d").date()
-                            makeup_dates.append(makeup_date)
-                        except ValueError:
-                            pass
-            
-            # Determine which days to show based on course routine
-            days_to_show = []
-            if 'Friday' in course_routines and 'Saturday' in course_routines:
-                days_to_show = ['Friday', 'Saturday']
-            elif 'Friday' in course_routines:
-                days_to_show = ['Friday']
-            elif 'Saturday' in course_routines:
-                days_to_show = ['Saturday']
-            else:
-                # Fallback: show Friday and Saturday if no specific schedule found
-                days_to_show = ['Friday', 'Saturday']
-            
-            # Generate dates based on the determined days to show
-            while current_date <= end_date:
-                day_name = current_date.strftime('%A')
-                if day_name in days_to_show:
-                    # Only add if not a holiday
-                    if current_date not in holiday_dates:
-                        semester_dates.append(current_date)
-                current_date += timedelta(days=1)
-            
-            # Filter makeup dates based on course's scheduled day
-            # If course is on Friday only, keep only Friday makeup dates
-            # If course is on Saturday only, keep only Saturday makeup dates
-            filtered_makeup_dates = []
-            for makeup_date in makeup_dates:
-                makeup_day = makeup_date.strftime('%A')
-                # Only include makeup dates that match the course's scheduled day
-                if makeup_day in days_to_show:
-                    filtered_makeup_dates.append(makeup_date)
-            
-            # Add filtered makeup dates to the semester dates
-            for makeup_date in filtered_makeup_dates:
-                if makeup_date not in semester_dates:
-                    semester_dates.append(makeup_date)
-            
-            # Sort all dates chronologically
-            semester_dates.sort()
+        # Get makeup dates from semester
+        makeup_dates = []
+        if semester.makeup_dates:
+            for date_str in semester.makeup_dates.split(','):
+                if date_str.strip():
+                    try:
+                        makeup_date = datetime.strptime(date_str.strip(), "%Y-%m-%d").date()
+                        makeup_dates.append(makeup_date)
+                    except ValueError:
+                        pass
         
-        # Use semester_dates (fallback to empty list if no schedule)
-        attendance_dates = semester_dates if semester_dates else []
+        # Determine which days to show based on course routine (for filtering makeup dates)
+        days_to_show = []
+        if 'Friday' in course_routines and 'Saturday' in course_routines:
+            days_to_show = ['Friday', 'Saturday']
+        elif 'Friday' in course_routines:
+            days_to_show = ['Friday']
+        elif 'Saturday' in course_routines:
+            days_to_show = ['Saturday']
+        else:
+            # Fallback: show Friday and Saturday if no specific schedule found
+            days_to_show = ['Friday', 'Saturday']
+        
+        # Filter makeup dates based on course's scheduled day
+        # If course is on Friday only, keep only Friday makeup dates
+        # If course is on Saturday only, keep only Saturday makeup dates
+        filtered_makeup_dates = []
+        for makeup_date in makeup_dates:
+            makeup_day = makeup_date.strftime('%A')
+            # Only include makeup dates that match the course's scheduled day
+            if makeup_day in days_to_show:
+                filtered_makeup_dates.append(makeup_date)
+        
+        # Combine routine dates and filtered makeup dates (same as routine PDF export)
+        all_dates = set(routine_dates) | set(filtered_makeup_dates)
+        attendance_dates = sorted(all_dates)
         
         # Get centre name for header
         centre_name = None

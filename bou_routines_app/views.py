@@ -6001,11 +6001,11 @@ def export_attendance_pdf(request):
             ('BOTTOMPADDING', (0, 1), (0, -1), 0),  # No bottom padding for Student ID
             ('TOPPADDING', (1, 1), (1, -1), 0),  # No top padding for Name
             ('BOTTOMPADDING', (1, 1), (1, -1), -2),  # More negative bottom padding to compensate for extra space
-            # Keep padding for other columns - slightly reduced
-            ('TOPPADDING', (2, 1), (-1, -1), 1.5),
-            ('BOTTOMPADDING', (2, 1), (-1, -1), 1.5),
-            # Set compact row height for data rows - slightly reduced
-            ('ROWHEIGHT', (0, 1), (-1, -1), 8.5),  # Slightly reduced row height
+            # Keep padding for other columns - slightly increased
+            ('TOPPADDING', (2, 1), (-1, -1), 2.5),
+            ('BOTTOMPADDING', (2, 1), (-1, -1), 2.5),
+            # Set compact row height for data rows - slightly increased
+            ('ROWHEIGHT', (0, 1), (-1, -1), 10),  # Slightly increased row height
         ]))
         
         elements.append(table)
@@ -6660,11 +6660,11 @@ def export_blank_attendance_pdf(request):
             ('BOTTOMPADDING', (0, 1), (0, -1), 0),  # No bottom padding for Student ID
             ('TOPPADDING', (1, 1), (1, -1), 0),  # No top padding for Name
             ('BOTTOMPADDING', (1, 1), (1, -1), -2),  # More negative bottom padding to compensate for extra space
-            # Keep padding for other columns - slightly reduced
-            ('TOPPADDING', (2, 1), (-1, -1), 1.5),
-            ('BOTTOMPADDING', (2, 1), (-1, -1), 1.5),
-            # Set compact row height for data rows - slightly reduced
-            ('ROWHEIGHT', (0, 1), (-1, -1), 8.5),  # Slightly reduced row height
+            # Keep padding for other columns - slightly increased
+            ('TOPPADDING', (2, 1), (-1, -1), 2.5),
+            ('BOTTOMPADDING', (2, 1), (-1, -1), 2.5),
+            # Set compact row height for data rows - slightly increased
+            ('ROWHEIGHT', (0, 1), (-1, -1), 10),  # Slightly increased row height
         ]))
         
         elements.append(table)

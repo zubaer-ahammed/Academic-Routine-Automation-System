@@ -698,7 +698,43 @@ class TeacherAdmin(admin.ModelAdmin):
     ordering = ('name',)
     
     fields = ('user', 'name', 'short_name', 'centre', 'address', 'phone', 'designation', 'department', 'join_date')
-    readonly_fields = ('user',)
+    
+    def save_model(self, request, obj, form, change):
+        """Override save to handle user linking/unlinking for OneToOne relationship"""
+        if change:
+            # Get the original teacher from database to compare
+            try:
+                original_teacher = Teacher.objects.get(pk=obj.pk)
+                old_user = original_teacher.user
+                new_user = obj.user
+                
+                # If user is being changed
+                if old_user != new_user:
+                    # If there was an old user, we don't need to do anything - 
+                    # Django will handle unlinking when we set obj.user
+                    
+                    # If a new user is being set, unlink that user from any existing teacher
+                    if new_user:
+                        try:
+                            existing_teacher = new_user.teacher
+                            if existing_teacher and existing_teacher != obj:
+                                existing_teacher.user = None
+                                existing_teacher.save()
+                        except Teacher.DoesNotExist:
+                            pass
+            except Teacher.DoesNotExist:
+                # New teacher being created
+                if obj.user:
+                    # Unlink the new user from any existing teacher
+                    try:
+                        existing_teacher = obj.user.teacher
+                        if existing_teacher:
+                            existing_teacher.user = None
+                            existing_teacher.save()
+                    except Teacher.DoesNotExist:
+                        pass
+        
+        super().save_model(request, obj, form, change)
     
     def username(self, obj):
         return obj.user.username if obj.user else ""

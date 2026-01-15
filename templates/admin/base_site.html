@@ -348,6 +348,43 @@
     border-color: #adb5bd !important;
   }
   
+  /* Fix search box height to match form fields */
+  #changelist-search input[type="text"],
+  #changelist-search input[type="search"],
+  #changelist-search input[type="text"][name="q"] {
+    height: 38px !important;
+    padding: 8px 12px !important;
+    padding-left: 40px !important;
+    line-height: 1.5 !important;
+    box-sizing: border-box !important;
+  }
+  
+  /* Align search icon properly */
+  #changelist-search {
+    position: relative !important;
+  }
+  
+  #changelist-search svg,
+  #changelist-search .search-icon,
+  #changelist-search [class*="icon"] {
+    position: absolute !important;
+    left: 12px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 16px !important;
+    height: 16px !important;
+    pointer-events: none !important;
+    z-index: 1 !important;
+  }
+  
+  /* Ensure search icon container is properly positioned */
+  #changelist-search > div,
+  #changelist-search > form > div {
+    position: relative !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+  
   /* Style search button if present */
   #changelist-search input[type="submit"],
   button[type="submit"][name="search"] {
@@ -446,24 +483,30 @@
     
     // Force light mode
     function forceLightMode() {
-      // Remove dark mode classes
-      document.documentElement.classList.remove('dark');
-      document.body.classList.remove('dark');
+      // Remove dark mode classes - check if elements exist first
+      if (document.documentElement && document.documentElement.classList) {
+        document.documentElement.classList.remove('dark');
+      }
+      if (document.body && document.body.classList) {
+        document.body.classList.remove('dark');
+      }
       
       // Set color scheme to light
-      if (document.documentElement.style) {
+      if (document.documentElement && document.documentElement.style) {
         document.documentElement.style.colorScheme = 'light';
       }
       
       // Override any dark mode styles
-      var style = document.createElement('style');
-      style.textContent = `
-        :root { color-scheme: light !important; }
-        body { background-color: #fff !important; color: #212529 !important; }
-        #content { background-color: #fff !important; color: #212529 !important; }
-        #content-main { background-color: #fff !important; color: #212529 !important; }
-      `;
-      document.head.appendChild(style);
+      if (document.head) {
+        var style = document.createElement('style');
+        style.textContent = `
+          :root { color-scheme: light !important; }
+          body { background-color: #fff !important; color: #212529 !important; }
+          #content { background-color: #fff !important; color: #212529 !important; }
+          #content-main { background-color: #fff !important; color: #212529 !important; }
+        `;
+        document.head.appendChild(style);
+      }
     }
     
     // Run immediately
@@ -488,14 +531,16 @@
     }, 100);
     
     // Watch for theme toggle being added dynamically
-    var observer = new MutationObserver(function(mutations) {
-      removeThemeToggle();
-    });
-    
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
+    if (document.body) {
+      var observer = new MutationObserver(function(mutations) {
+        removeThemeToggle();
+      });
+      
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true
+      });
+    }
   })();
 </script>
 {% endblock %}

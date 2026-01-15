@@ -1,10 +1,14 @@
 from django.contrib import admin
-from django.contrib.auth.admin import UserAdmin
+from django.contrib.auth.admin import UserAdmin, AdminPasswordChangeForm
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 from django import forms
 from django.contrib import messages
 from django.shortcuts import redirect
+from django.urls import path, reverse
+from django.http import HttpResponseRedirect, Http404
+from django.contrib.auth import update_session_auth_hash, logout
+from django.template.response import TemplateResponse
 from .models import Teacher, Semester, Course, CurrentRoutine, NewRoutine, SemesterCourse, LoginLog, Student, Attendance, Curriculum, CAMark, FinalExamMark, Centre, ProgramCoordinator
 
 @admin.register(CurrentRoutine)
@@ -451,9 +455,79 @@ class TeacherUserAdminChangeForm(UserChangeForm, BaseTeacherUserAdminForm):
         
         return user
 
+class WeakPasswordAdminPasswordChangeForm(AdminPasswordChangeForm):
+    """Custom password change form that allows weak passwords with confirmation"""
+    
+    allow_weak_password = forms.BooleanField(
+        required=False,
+        initial=False,
+        label='Allow weak password anyway',
+        help_text='Check this box to set a weak password despite validation warnings.'
+    )
+    
+    class Media:
+        js = ('admin/js/weak_password_handler.js',)
+    
+    def __init__(self, user, *args, **kwargs):
+        # Extract request if provided
+        self.request = kwargs.pop('request', None)
+        super().__init__(user, *args, **kwargs)
+        # Disable password validators if we're allowing weak passwords
+        # We'll handle this in clean() instead
+    
+    def clean(self):
+        # Check if user wants to allow weak password BEFORE calling super().clean()
+        allow_weak = (
+            self.data.get('allow_weak_password') == 'on' or
+            self.data.get('allow_weak_password') == True
+        )
+        
+        # Get password values from form data before validation
+        password1_raw = self.data.get('password1', '')
+        password2_raw = self.data.get('password2', '')
+        
+        # Call parent clean() which will run validation
+        cleaned_data = super().clean()
+        
+        # If user explicitly allows weak password, clear validation errors
+        if allow_weak and password1_raw and password2_raw and password1_raw == password2_raw:
+            # Clear all password-related validation errors
+            for field_name in ['password1', 'password2', 'new_password1', 'new_password2']:
+                if field_name in self._errors:
+                    del self._errors[field_name]
+            
+            # Clear non-field errors that might be password-related
+            if self._errors.get('__all__'):
+                self._errors['__all__'] = [e for e in self._errors['__all__'] 
+                                         if 'password' not in str(e).lower() and 
+                                            'similar' not in str(e).lower() and
+                                            'too' not in str(e).lower()]
+            
+            # Ensure passwords are in cleaned_data
+            cleaned_data['password1'] = password1_raw
+            cleaned_data['password2'] = password2_raw
+            cleaned_data['allow_weak_password'] = True
+        
+        return cleaned_data
+    
+    def save(self, commit=True):
+        user = self.user
+        # Get password from cleaned_data - try both field name variations
+        password = self.cleaned_data.get("password1") or self.cleaned_data.get("new_password1")
+        if password:
+            user.set_password(password)
+            if commit:
+                user.save()
+                # Updating the password logs out all other sessions for the user
+                # except the current one if update_session_auth_hash is used
+                if self.request:
+                    update_session_auth_hash(self.request, user)
+        return user
+
 class TeacherUserAdmin(UserAdmin):
     form = TeacherUserAdminChangeForm
     add_form = TeacherUserAdminAddForm
+    change_password_form = WeakPasswordAdminPasswordChangeForm
     list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'get_user_type', 'get_profile_name')
     list_filter = ('is_staff', 'is_superuser', 'is_active', 'date_joined')
     
@@ -464,6 +538,101 @@ class TeacherUserAdmin(UserAdmin):
             'fields': ('username', 'password1', 'password2'),
         }),
     )
+    
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                '<id>/password/',
+                self.admin_site.admin_view(self.user_change_password),
+                name='auth_user_password_change',
+            ),
+        ]
+        return custom_urls + urls
+    
+    def user_change_password(self, request, id, form_url=''):
+        user = self.get_object(request, id)
+        if user is None:
+            raise Http404('User object not found.')
+        if request.method == 'POST':
+            form = self.change_password_form(user, request.POST, request=request)
+            if form.is_valid():
+                form.save()
+                change_message = self.construct_change_message(request, form, None)
+                self.log_change(request, user, change_message)
+                msg = 'Password changed successfully.'
+                messages.success(request, msg)
+                return HttpResponseRedirect(
+                    reverse(
+                        '%s:%s_%s_change' % (
+                            self.admin_site.name,
+                            user._meta.app_label,
+                            user._meta.model_name,
+                        ),
+                        args=(user.pk,),
+                    )
+                )
+        else:
+            form = self.change_password_form(user, request=request)
+        
+        # Include the allow_weak_password field in fieldsets
+        # Get all fields from the form
+        form_fields = list(form.base_fields.keys())
+        # Ensure allow_weak_password is included
+        if 'allow_weak_password' not in form_fields:
+            form_fields.append('allow_weak_password')
+        # Create fieldsets - put allow_weak_password after password fields
+        password_fields = [f for f in form_fields if f.startswith('password')]
+        other_fields = [f for f in form_fields if f not in password_fields and f != 'allow_weak_password']
+        ordered_fields = password_fields + ['allow_weak_password'] + other_fields
+        fieldsets = [(None, {'fields': ordered_fields})]
+        adminForm = admin.helpers.AdminForm(form, fieldsets, {})
+        
+        # IS_POPUP_VAR is just the string '_popup' in Django
+        IS_POPUP_VAR = '_popup'
+        context = {
+            'title': 'Change password: %s' % user.get_username(),
+            'adminForm': adminForm,
+            'form_url': form_url,
+            'form': form,
+            'is_popup': (IS_POPUP_VAR in request.POST or
+                        IS_POPUP_VAR in request.GET),
+            'is_popup_var': IS_POPUP_VAR,
+            'add': False,
+            'change': True,
+            'has_add_permission': False,
+            'has_delete_permission': False,
+            'has_change_permission': True,
+            'has_view_permission': True,
+            'has_absolute_url': False,
+            'opts': self.model._meta,
+            'original': user,
+            'save_as': False,
+            'show_save': True,
+            'show_save_and_add_another': False,
+            'show_save_and_continue': False,
+            'show_delete_link': False,
+            'inline_admin_formsets': [],
+            'inline_admin_formset_extra': 0,
+            **self.admin_site.each_context(request),
+        }
+        
+        # Add form media to context to ensure JavaScript loads
+        context['media'] = form.media
+        # Also ensure the media includes our script
+        if 'admin/js/weak_password_handler.js' not in str(context['media']):
+            from django.forms import Media
+            context['media'] = form.media + Media(js=['admin/js/weak_password_handler.js'])
+        
+        request.current_app = self.admin_site.name
+        
+        # Use custom template if it exists, otherwise use default
+        template_name = 'admin/auth/user/change_password.html'
+        return TemplateResponse(
+            request,
+            template_name,
+            context,
+        )
     
     def get_fieldsets(self, request, obj=None):
         """Override to get fieldsets without custom fields"""
@@ -507,7 +676,15 @@ class TeacherUserAdmin(UserAdmin):
         return super().get_fieldsets(request, obj)
     
     class Media:
-        js = ('admin/js/user_type_handler.js',)
+        js = ('admin/js/user_type_handler.js', 'admin/js/weak_password_handler.js',)
+
+# Custom logout view that redirects to home
+def admin_logout_view(request):
+    logout(request)
+    return redirect('home')
+
+# Override admin logout URL
+admin.site.logout = admin_logout_view
 
 # Unregister the default User admin and register our custom one
 admin.site.unregister(User)

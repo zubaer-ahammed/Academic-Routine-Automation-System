@@ -125,5 +125,21 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Authentication backends - allow login with username or email
+AUTHENTICATION_BACKENDS = [
+    'bou_routines_app.backends.EmailOrUsernameModelBackend',  # Custom backend for email/username login
+    'django.contrib.auth.backends.ModelBackend',  # Default backend as fallback
+]
+
 LOGIN_REDIRECT_URL = '/'
 LOGIN_URL = '/accounts/login/'
+
+# Email Configuration
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'mail.bousst.edu.bd'
+EMAIL_PORT = 465
+EMAIL_USE_SSL = True  # Use SSL for port 465
+EMAIL_HOST_USER = 'support@bousst.edu.bd'
+EMAIL_HOST_PASSWORD = 'LnSeXN?V=[2hBc&%'
+DEFAULT_FROM_EMAIL = 'support@bousst.edu.bd'
+SERVER_EMAIL = 'support@bousst.edu.bd'

@@ -5711,8 +5711,11 @@ def export_attendance_pdf(request):
                 ).select_related('teacher').first()
                 if semester_course and semester_course.teacher:
                     teacher_name = semester_course.teacher.name
-        # Only show teacher if found
-        if teacher_name:
+        # Check if hide_faculty parameter is set
+        hide_faculty = request.GET.get('hide_faculty') == '1'
+        
+        # Only show teacher if found and hide_faculty is not set
+        if teacher_name and not hide_faculty:
             left_content.append(Paragraph(f'<b>Faculty:</b> {teacher_name}', header_style_normal))
         if centre_name:
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
@@ -6010,11 +6013,18 @@ def export_attendance_pdf(request):
             spaceAfter=0,
         )
         
+        # Check if hide_faculty parameter is set
+        hide_faculty = request.GET.get('hide_faculty') == '1'
+        
         # Get teacher name for signature (reuse teacher_name from header if available)
         teacher_name_for_signature = teacher_name if teacher_name else "Teacher Name"
         
         # Create signature data (only Faculty line, no school/university)
-        faculty_line = Paragraph(f"Faculty: {teacher_name_for_signature}", signature_style_left)
+        # If hide_faculty is set, show only "Faculty:" without the name
+        if hide_faculty:
+            faculty_line = Paragraph("Faculty:", signature_style_left)
+        else:
+            faculty_line = Paragraph(f"Faculty: {teacher_name_for_signature}", signature_style_left)
         signature_data_left = [
             [faculty_line]
         ]
@@ -6351,8 +6361,11 @@ def export_blank_attendance_pdf(request):
                 ).select_related('teacher').first()
                 if semester_course and semester_course.teacher:
                     teacher_name = semester_course.teacher.name
-        # Only show teacher if found
-        if teacher_name:
+        # Check if hide_faculty parameter is set
+        hide_faculty = request.GET.get('hide_faculty') == '1'
+        
+        # Only show teacher if found and hide_faculty is not set
+        if teacher_name and not hide_faculty:
             left_content.append(Paragraph(f'<b>Faculty:</b> {teacher_name}', header_style_normal))
         if centre_name:
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
@@ -6639,11 +6652,18 @@ def export_blank_attendance_pdf(request):
             spaceAfter=0,
         )
         
+        # Check if hide_faculty parameter is set
+        hide_faculty = request.GET.get('hide_faculty') == '1'
+        
         # Get teacher name for signature (reuse teacher_name from header if available)
         teacher_name_for_signature = teacher_name if teacher_name else "Teacher Name"
         
         # Create signature data (only Faculty line, no school/university)
-        faculty_line = Paragraph(f"Faculty: {teacher_name_for_signature}", signature_style_left)
+        # If hide_faculty is set, show only "Faculty:" without the name
+        if hide_faculty:
+            faculty_line = Paragraph("Faculty:", signature_style_left)
+        else:
+            faculty_line = Paragraph(f"Faculty: {teacher_name_for_signature}", signature_style_left)
         signature_data_left = [
             [faculty_line]
         ]

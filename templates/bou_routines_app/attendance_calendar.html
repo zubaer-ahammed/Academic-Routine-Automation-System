@@ -1498,21 +1498,21 @@
                                     </button>
                                     <ul class="dropdown-menu" aria-labelledby="exportDropdown">
                                         <li>
-                                            <a class="dropdown-item" href="{% url 'export-attendance-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}">
+                                            <a class="dropdown-item export-link" data-export-type="pdf" data-url="{% url 'export-attendance-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}">
                                                 <i class="fas fa-file-pdf text-danger"></i> PDF
                                             </a>
                                         </li>
                                         {% if user.is_superuser or user.is_staff %}
                                         <li>
-                                            <a class="dropdown-item" href="{% url 'export-blank-attendance-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}">
+                                            <a class="dropdown-item export-link" data-export-type="blank-pdf" data-url="{% url 'export-blank-attendance-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}">
                                                 <i class="fas fa-file-pdf text-danger"></i> Blank PDF
                                             </a>
                                         </li>
                                         {% endif %}
                                         <li>
-                                            <a class="dropdown-item" href="{% url 'export-attendance-excel' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}">
+                                            <a class="dropdown-item export-link" data-export-type="excel" data-url="{% url 'export-attendance-excel' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}">
                                                 <i class="fas fa-file-excel text-success"></i> Excel
-                                </a>
+                                            </a>
                                         </li>
                                     </ul>
                                 </div>
@@ -1521,6 +1521,20 @@
                     </div>
                 </div>
             </div>
+            {% if selected_semester_id and selected_course_id %}
+                {% if user.is_superuser or user.is_staff %}
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="form-check" style="margin-top: 10px;">
+                            <input class="form-check-input" type="checkbox" id="hideFacultyCheckbox" style="margin-top: 0;">
+                            <label class="form-check-label" for="hideFacultyCheckbox" style="margin-left: 5px; white-space: nowrap;">
+                                Hide Faculty/Teacher Name during export
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            {% endif %}
                     </form>
 
     {% if not selected_semester_id or not selected_course_id %}
@@ -2550,6 +2564,33 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize header drag scroll
     setupHeaderDragScroll();
+    
+    // Handle export links with hide_faculty parameter
+    const hideFacultyCheckbox = document.getElementById('hideFacultyCheckbox');
+    const exportLinks = document.querySelectorAll('.export-link');
+    
+    if (hideFacultyCheckbox && exportLinks.length > 0) {
+        exportLinks.forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                let url = this.getAttribute('data-url');
+                
+                // Only add hide_faculty parameter for PDF exports
+                const exportType = this.getAttribute('data-export-type');
+                if ((exportType === 'pdf' || exportType === 'blank-pdf') && hideFacultyCheckbox.checked) {
+                    // Add or update hide_faculty parameter
+                    if (url.includes('?')) {
+                        url += '&hide_faculty=1';
+                    } else {
+                        url += '?hide_faculty=1';
+                    }
+                }
+                
+                // Navigate to the URL
+                window.location.href = url;
+            });
+        });
+    }
 });
 </script>
             </div>

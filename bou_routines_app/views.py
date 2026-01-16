@@ -4131,12 +4131,16 @@ def export_academic_calendar_pdf(request, semester_id):
                                                 calendar_style.append(
                                                     ('TEXTCOLOR', (day_col, row_idx), (day_col, row_idx), colors.HexColor('#FF0000'))
                                                 )
-                                            elif event_type in colors_dict and non_holiday_event_color is None:
+                                            elif event_type in colors_dict:
                                                 # For non-holiday events, store color for row highlighting
-                                                # Priority: class_test/mid_term_exam > assignment > other events
-                                                if event_type == 'class_test' or event_type == 'mid_term_exam':
+                                                # Priority: final_exam > class_test/mid_term_exam > assignment > other events
+                                                if event_type == 'final_exam':
+                                                    # Final exam has highest priority - always use final_exam color
                                                     non_holiday_event_color = colors_dict[event_type]
-                                                elif event_type == 'assignment' and non_holiday_event_color not in [colors_dict.get('class_test'), colors_dict.get('mid_term_exam')]:
+                                                    has_exam_event = True
+                                                elif (event_type == 'class_test' or event_type == 'mid_term_exam') and non_holiday_event_color != colors_dict.get('final_exam'):
+                                                    non_holiday_event_color = colors_dict[event_type]
+                                                elif event_type == 'assignment' and non_holiday_event_color not in [colors_dict.get('class_test'), colors_dict.get('mid_term_exam'), colors_dict.get('final_exam')]:
                                                     non_holiday_event_color = colors_dict[event_type]
                                                 elif non_holiday_event_color is None:
                                                     non_holiday_event_color = colors_dict[event_type]
@@ -4267,6 +4271,7 @@ def export_academic_calendar_pdf(request, semester_id):
                             )
             
             # Track and merge cells for 4-week final exam period in Exams column
+            # Also ensure all columns in final exam rows have the same background color
             final_exam_rows = []
             current_year = datetime.now().year  # Default fallback
             current_month = 1  # Default fallback
@@ -4296,6 +4301,11 @@ def export_academic_calendar_pdf(request, semester_id):
                     exams_column = row_data[4] if len(row_data) > 4 else ''
                     if exams_column and 'Semester-end Final Examination (Tentative)' in str(exams_column):
                         final_exam_rows.append(row_idx)
+                        # Apply final exam background color to ALL columns in this row (columns 1-4: Friday, Saturday, Events, Exams)
+                        # This ensures all columns have the same grey color
+                        calendar_style.append(
+                            ('BACKGROUND', (1, row_idx), (-1, row_idx), colors_dict['final_exam'])
+                        )
             
             # Apply cell spanning for final exam period in Exams column (column 4)
             if len(final_exam_rows) > 1:

@@ -6013,14 +6013,10 @@ def export_attendance_pdf(request):
         # Get teacher name for signature (reuse teacher_name from header if available)
         teacher_name_for_signature = teacher_name if teacher_name else "Teacher Name"
         
-        # Create signature data (same format as routine PDF export, but only left signature)
+        # Create signature data (only Faculty line, no school/university)
         faculty_line = Paragraph(f"Faculty: {teacher_name_for_signature}", signature_style_left)
-        school_line_left = Paragraph("School of Science and Technology", signature_style_left)
-        bou_line_left = Paragraph("Bangladesh Open University", signature_style_left)
         signature_data_left = [
-            [faculty_line],
-            [school_line_left],
-            [bou_line_left]
+            [faculty_line]
         ]
         signature_table_width = 250  # Same as routine PDF export
         signature_table_left = Table(signature_data_left, colWidths=[signature_table_width], hAlign='LEFT')
@@ -6646,14 +6642,10 @@ def export_blank_attendance_pdf(request):
         # Get teacher name for signature (reuse teacher_name from header if available)
         teacher_name_for_signature = teacher_name if teacher_name else "Teacher Name"
         
-        # Create signature data (same format as routine PDF export, but only left signature)
+        # Create signature data (only Faculty line, no school/university)
         faculty_line = Paragraph(f"Faculty: {teacher_name_for_signature}", signature_style_left)
-        school_line_left = Paragraph("School of Science and Technology", signature_style_left)
-        bou_line_left = Paragraph("Bangladesh Open University", signature_style_left)
         signature_data_left = [
-            [faculty_line],
-            [school_line_left],
-            [bou_line_left]
+            [faculty_line]
         ]
         signature_table_width = 250  # Same as routine PDF export
         signature_table_left = Table(signature_data_left, colWidths=[signature_table_width], hAlign='LEFT')

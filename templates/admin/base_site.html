@@ -469,8 +469,26 @@
   }
 </style>
 <script>
-  // Force light mode and remove theme toggle
+  // Force light mode and remove theme toggle - run immediately before any other scripts
   (function() {
+    // Set theme preference in localStorage immediately (before Django admin initializes)
+    try {
+      if (typeof(Storage) !== "undefined") {
+        // Django 4.2+ uses 'django-admin-theme' key
+        localStorage.setItem('django-admin-theme', 'light');
+        // Also set common variations
+        localStorage.setItem('admin-theme', 'light');
+        localStorage.setItem('theme', 'light');
+        // Remove any 'auto' or 'dark' preferences
+        if (localStorage.getItem('django-admin-theme') === 'auto' || 
+            localStorage.getItem('django-admin-theme') === 'dark') {
+          localStorage.setItem('django-admin-theme', 'light');
+        }
+      }
+    } catch(e) {
+      // Storage might not be available
+    }
+    
     // Remove theme toggle button immediately
     function removeThemeToggle() {
       var themeToggle = document.querySelector('.theme-toggle, button.theme-toggle');
@@ -483,12 +501,25 @@
     
     // Force light mode
     function forceLightMode() {
+      // Ensure localStorage is set to light
+      try {
+        if (typeof(Storage) !== "undefined") {
+          localStorage.setItem('django-admin-theme', 'light');
+          localStorage.setItem('admin-theme', 'light');
+          localStorage.setItem('theme', 'light');
+        }
+      } catch(e) {
+        // Storage might not be available
+      }
+      
       // Remove dark mode classes - check if elements exist first
       if (document.documentElement && document.documentElement.classList) {
         document.documentElement.classList.remove('dark');
+        document.documentElement.setAttribute('data-theme', 'light');
       }
       if (document.body && document.body.classList) {
         document.body.classList.remove('dark');
+        document.body.setAttribute('data-theme', 'light');
       }
       
       // Set color scheme to light
@@ -499,12 +530,18 @@
       // Override any dark mode styles
       if (document.head) {
         var style = document.createElement('style');
+        style.id = 'forced-light-mode';
         style.textContent = `
           :root { color-scheme: light !important; }
           body { background-color: #fff !important; color: #212529 !important; }
           #content { background-color: #fff !important; color: #212529 !important; }
           #content-main { background-color: #fff !important; color: #212529 !important; }
         `;
+        // Remove existing style if present
+        var existingStyle = document.getElementById('forced-light-mode');
+        if (existingStyle) {
+          existingStyle.remove();
+        }
         document.head.appendChild(style);
       }
     }
@@ -530,10 +567,17 @@
       forceLightMode();
     }, 100);
     
+    // Run again after a longer delay to ensure it overrides Django's initialization
+    setTimeout(function() {
+      removeThemeToggle();
+      forceLightMode();
+    }, 500);
+    
     // Watch for theme toggle being added dynamically
     if (document.body) {
       var observer = new MutationObserver(function(mutations) {
         removeThemeToggle();
+        forceLightMode();
       });
       
       observer.observe(document.body, {

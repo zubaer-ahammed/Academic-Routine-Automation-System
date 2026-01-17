@@ -3966,7 +3966,9 @@ def export_academic_calendar_pdf(request, semester_id):
                                     elif event_type in ['class_test', 'mid_term_exam', 'final_exam']:
                                         # Add admit card note for final exam
                                         if event_type == 'final_exam':
-                                            description_with_note = f"{description}\nAdmit Card Required - NO Admit, NO Exam"
+                                            # Create styled text with bold and red color for "NO Admit, NO Exam"
+                                            # Only make "Admit Card Required - NO Admit, NO Exam" bold, not the description
+                                            description_with_note = f"{description}\n<b>Admit Card Required - <font color='red'>NO Admit, NO Exam</font></b>"
                                             exams_set.add(description_with_note)
                                         else:
                                             exams_set.add(description)
@@ -4010,7 +4012,27 @@ def export_academic_calendar_pdf(request, semester_id):
                     
                     # Convert sets to comma-separated strings
                     remarks = ', '.join(sorted(remarks_set)) if remarks_set else ''
-                    exams = ', '.join(sorted(exams_set)) if exams_set else ''
+                    # For exams, check if any contain HTML formatting and create Paragraph objects
+                    exams_list = sorted(exams_set) if exams_set else []
+                    if exams_list:
+                        # Check if any exam text contains HTML tags (from final exam with styled text)
+                        has_html = any('<' in exam and '>' in exam for exam in exams_list)
+                        if has_html:
+                            # Create a Paragraph with HTML formatting
+                            exams_text = ', '.join(exams_list)
+                            styles = getSampleStyleSheet()
+                            exams = Paragraph(exams_text, ParagraphStyle(
+                                'ExamStyle',
+                                parent=styles['Normal'],
+                                fontSize=9,
+                                leading=11,
+                                alignment=TA_CENTER
+                            ))
+                        else:
+                            # Plain text, join normally
+                            exams = ', '.join(exams_list)
+                    else:
+                        exams = ''
                     
                     week_data.extend([remarks, exams])
                     months_data.append([week_data])
@@ -4126,8 +4148,13 @@ def export_academic_calendar_pdf(request, semester_id):
                     
                     # Check if this row has exam events by looking at the exams column (index 4)
                     exams_column = row_data[4] if len(row_data) > 4 else ''
-                    if exams_column and exams_column.strip():
-                        has_exam_event = True
+                    # Handle both string and Paragraph objects
+                    if exams_column:
+                        if isinstance(exams_column, str) and exams_column.strip():
+                            has_exam_event = True
+                        elif hasattr(exams_column, '__class__') and 'Paragraph' in str(type(exams_column)):
+                            # It's a Paragraph object, which means there's exam content
+                            has_exam_event = True
                     
                     # Extract month and year for this row
                     current_year = datetime.now().year  # Default fallback

@@ -3668,27 +3668,19 @@ def export_academic_calendar_pdf(request, semester_id):
                             if calendar_start <= mid_term_date <= calendar_end:
                                 add_event_to_calendar(mid_term_date, 'mid_term_exam', 'Mid-Term Exam')
                 else:
-                    # For old curriculum: Add class tests as before
-                    # First Class Test (6th week) - mark both Friday and Saturday
-                    first_test_week = semester_start + timedelta(weeks=6)
+                    # For old curriculum: Add class tests using valid week counting (same as assignments)
+                    # First Class Test (6th valid week) - mark both Friday and Saturday
+                    first_test_week = find_nth_valid_week(semester_start, semester_end, holiday_dates_set, 6)
                     if first_test_week <= semester_end:
                         friday, saturday = get_friday_saturday_of_week(first_test_week)
-                        # If both days are holidays, find next available week
-                        if friday in holiday_dates_set and saturday in holiday_dates_set:
-                            first_test_week = find_next_available_week(first_test_week, holiday_dates_set, semester_end)
-                            friday, saturday = get_friday_saturday_of_week(first_test_week)
                         # Set class test (even if date is a holiday, we'll show both markers in rendering)
                         add_event_to_calendar(friday, 'class_test', 'First Class Test')
                         add_event_to_calendar(saturday, 'class_test', 'First Class Test')
                     
-                    # Second Class Test (10th week) - mark both Friday and Saturday
-                    second_test_week = semester_start + timedelta(weeks=10)
+                    # Second Class Test (10th valid week) - mark both Friday and Saturday
+                    second_test_week = find_nth_valid_week(semester_start, semester_end, holiday_dates_set, 10)
                     if second_test_week <= semester_end:
                         friday, saturday = get_friday_saturday_of_week(second_test_week)
-                        # If both days are holidays, find next available week
-                        if friday in holiday_dates_set and saturday in holiday_dates_set:
-                            second_test_week = find_next_available_week(second_test_week, holiday_dates_set, semester_end)
-                            friday, saturday = get_friday_saturday_of_week(second_test_week)
                         # Set class test (even if date is a holiday, we'll show both markers in rendering)
                         add_event_to_calendar(friday, 'class_test', 'Second Class Test')
                         add_event_to_calendar(saturday, 'class_test', 'Second Class Test')

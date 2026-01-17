@@ -278,9 +278,11 @@
                                 <a href="{% url 'export-to-pdf' semester_data.semester.id %}?teacher_short_name_newline={% if semester_data.semester.teacher_short_name_newline %}1{% else %}0{% endif %}&hide_teacher_name_in_pdf={% if semester_data.semester.hide_teacher_name_in_pdf %}1{% else %}0{% endif %}{% if semester_data.centre_id %}&centre={{ semester_data.centre_id }}{% endif %}" class="btn btn-danger btn-sm">
                                     <i class="bi bi-file-earmark-pdf"></i> PDF
                                 </a>
+                                {% if user.is_superuser or not user.teacher %}
                                 <a href="{% url 'generate-routine' %}?semester={{ semester_data.semester.id }}" class="btn btn-primary btn-sm">
                                     <i class="bi bi-pencil-square"></i> Edit
                                 </a>
+                                {% endif %}
                                 <button type="button" class="btn btn-secondary btn-sm view-toggle-btn" data-bs-toggle="collapse" data-bs-target="#routine-table-{{ semester_data.semester.id }}" aria-expanded="false" aria-controls="routine-table-{{ semester_data.semester.id }}">
                                     <span class="toggle-text">View</span>
                                 </button>

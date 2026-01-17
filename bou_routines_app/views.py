@@ -4725,9 +4725,11 @@ def attendance_calendar(request):
             
             print(f"DEBUG: Course {course.name} is scheduled on days: {list(course_routines)}")
             
-            semester_dates = []
-            current_date = semester.start_date
-            end_date = semester.end_date
+            # Get actual routine dates from NewRoutine table (same logic as PDF export)
+            routine_dates = set(NewRoutine.objects.filter(
+                course=course,
+                semester=semester
+            ).values_list('class_date', flat=True).distinct())
             
             # Parse holiday dates from semester
             holiday_dates = set()
@@ -4741,28 +4743,25 @@ def attendance_calendar(request):
                             pass  # Skip invalid date formats
             
             # Parse makeup dates from semester
-            makeup_dates = set()
+            makeup_dates = []
             if semester.makeup_dates:
                 for date_str in semester.makeup_dates.split(','):
                     if date_str.strip():
                         try:
                             makeup_date = datetime.strptime(date_str.strip(), "%Y-%m-%d").date()
-                            makeup_dates.add(makeup_date)
+                            makeup_dates.append(makeup_date)
                         except ValueError:
                             pass  # Skip invalid date formats
             
-            # Determine which days to show based on course schedule
+            # Determine which days to show based on course routine (for filtering makeup dates)
             days_to_show = []
             if 'Friday' in course_routines and 'Saturday' in course_routines:
-                # Course has both Friday and Saturday classes - show all dates
                 days_to_show = ['Friday', 'Saturday']
                 print(f"DEBUG: Course has both Friday and Saturday classes - showing all dates")
             elif 'Friday' in course_routines:
-                # Course has only Friday classes - show all Friday dates
                 days_to_show = ['Friday']
                 print(f"DEBUG: Course has only Friday classes - showing Friday dates only")
             elif 'Saturday' in course_routines:
-                # Course has only Saturday classes - show all Saturday dates
                 days_to_show = ['Saturday']
                 print(f"DEBUG: Course has only Saturday classes - showing Saturday dates only")
             else:
@@ -4770,24 +4769,46 @@ def attendance_calendar(request):
                 days_to_show = ['Friday', 'Saturday']
                 print(f"DEBUG: No specific schedule found - showing both Friday and Saturday dates")
             
-            # Generate dates based on the determined days to show
-            while current_date <= end_date:
-                # Check if it's one of the days to show
-                day_name = current_date.strftime('%A')  # Get day name (Monday, Tuesday, etc.)
-                if day_name in days_to_show:
-                    # Only add if not a holiday
-                    if current_date not in holiday_dates:
-                        semester_dates.append(current_date)
-                current_date += timedelta(days=1)
-            
-            # Add makeup dates to the semester dates
+            # Filter makeup dates based on course's scheduled day
+            # If course is on Friday only, keep only Friday makeup dates
+            # If course is on Saturday only, keep only Saturday makeup dates
+            filtered_makeup_dates = []
             for makeup_date in makeup_dates:
-                # Allow makeup dates both within and outside semester range (makeup classes can extend beyond normal semester)
-                if makeup_date not in semester_dates:
-                    semester_dates.append(makeup_date)
+                makeup_day = makeup_date.strftime('%A')
+                # Only include makeup dates that match the course's scheduled day
+                if makeup_day in days_to_show:
+                    filtered_makeup_dates.append(makeup_date)
             
-            # Sort all dates chronologically
-            semester_dates.sort()
+            # Get mid-term exam dates (only for new curriculum) - these should be excluded
+            mid_term_exam_dates = set()
+            if semester.mid_term_exam_dates and semester.curriculum and semester.curriculum.code != 'OLD':
+                for date_str in semester.mid_term_exam_dates.split(','):
+                    if date_str.strip():
+                        try:
+                            mid_term_date = datetime.strptime(date_str.strip(), "%Y-%m-%d").date()
+                            mid_term_exam_dates.add(mid_term_date)
+                        except ValueError:
+                            pass  # Skip invalid date formats
+            
+            # Combine routine dates and filtered makeup dates (same as PDF export)
+            all_dates = set(routine_dates) | set(filtered_makeup_dates)
+            # Exclude mid-term exam dates
+            all_dates = all_dates - mid_term_exam_dates
+            semester_dates = sorted(all_dates)
+            
+            # Filter out dates that are in the past (only show today and future dates)
+            # Makeup dates can be shown even if in the past (for makeup classes that may have been scheduled)
+            today = datetime.now().date()
+            filtered_semester_dates = []
+            for date in semester_dates:
+                # Always include makeup dates (they may be scheduled for past dates)
+                if date in filtered_makeup_dates:
+                    filtered_semester_dates.append(date)
+                # For regular routine dates, only show if today or future
+                elif date >= today:
+                    filtered_semester_dates.append(date)
+            
+            semester_dates = sorted(filtered_semester_dates)
             
             print(f"DEBUG: Generated {len(semester_dates)} dates for course {course.name}")
             print(f"DEBUG: Days to show: {days_to_show}")

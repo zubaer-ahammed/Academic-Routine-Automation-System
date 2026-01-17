@@ -1831,8 +1831,35 @@ def update_routine_course(request):
                     routine.course = new_course
                     routine.save()
                     
+                    # Get centre from request (if available)
+                    centre_id = request.POST.get('centre_id')
+                    selected_centre = None
+                    if centre_id:
+                        try:
+                            selected_centre = Centre.objects.get(id=centre_id)
+                        except Centre.DoesNotExist:
+                            pass
+                    
                     # Get teacher from SemesterCourse
-                    teacher = routine.teacher
+                    teacher = None
+                    if selected_centre:
+                        semester_course = SemesterCourse.objects.filter(
+                            semester=routine.semester,
+                            course=new_course,
+                            centre=selected_centre
+                        ).select_related('teacher').first()
+                        if semester_course:
+                            teacher = semester_course.effective_teacher
+                    
+                    # Fallback: try to get any SemesterCourse for this course/semester
+                    if not teacher:
+                        semester_course = SemesterCourse.objects.filter(
+                            semester=routine.semester,
+                            course=new_course
+                        ).select_related('teacher').first()
+                        if semester_course:
+                            teacher = semester_course.effective_teacher
+                    
                     teacher_name = teacher.name if teacher else 'N/A'
                     teacher_short_name = teacher.short_name if teacher and teacher.short_name else teacher_name
                     
@@ -1864,6 +1891,25 @@ def update_routine_course(request):
                     start_time = datetime.strptime(start_time_str, '%H:%M').time()
                     end_time = datetime.strptime(end_time_str, '%H:%M').time()
                     
+                    # Get centre from request (if available)
+                    centre_id = request.POST.get('centre_id')
+                    selected_centre = None
+                    if centre_id:
+                        try:
+                            selected_centre = Centre.objects.get(id=centre_id)
+                        except Centre.DoesNotExist:
+                            pass
+                    
+                    # If no centre provided, try to get from semester or use first available
+                    if not selected_centre:
+                        # Try to get centre from SemesterCourse if available
+                        semester_course = SemesterCourse.objects.filter(
+                            semester=semester,
+                            course=new_course
+                        ).first()
+                        if semester_course:
+                            selected_centre = semester_course.centre
+                    
                     # Create new routine entry
                     new_routine = NewRoutine.objects.create(
                         semester=semester,
@@ -1875,7 +1921,25 @@ def update_routine_course(request):
                     )
                     
                     # Get teacher from SemesterCourse
-                    teacher = new_routine.teacher
+                    teacher = None
+                    if selected_centre:
+                        semester_course = SemesterCourse.objects.filter(
+                            semester=semester,
+                            course=new_course,
+                            centre=selected_centre
+                        ).select_related('teacher').first()
+                        if semester_course:
+                            teacher = semester_course.effective_teacher
+                    
+                    # Fallback: try to get any SemesterCourse for this course/semester
+                    if not teacher:
+                        semester_course = SemesterCourse.objects.filter(
+                            semester=semester,
+                            course=new_course
+                        ).select_related('teacher').first()
+                        if semester_course:
+                            teacher = semester_course.effective_teacher
+                    
                     teacher_name = teacher.name if teacher else 'N/A'
                     teacher_short_name = teacher.short_name if teacher and teacher.short_name else teacher_name
                     

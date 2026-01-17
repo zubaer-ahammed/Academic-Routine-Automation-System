@@ -1966,6 +1966,12 @@
                     'csrfmiddlewaretoken': $('[name=csrfmiddlewaretoken]').val()
                 };
                 
+                // Add centre_id if available
+                const centreId = $('#centre').val();
+                if (centreId) {
+                    ajaxData['centre_id'] = centreId;
+                }
+                
                 if (isEmptyCell) {
                     // Creating new entry
                     ajaxData['date'] = cell.data('date');

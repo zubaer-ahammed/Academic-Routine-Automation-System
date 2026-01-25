@@ -4647,14 +4647,20 @@ def attendance_calendar(request):
             selected_centre = None
             selected_centre_id = None
     
-    # If no centre selected, default to DRC BEFORE filtering semesters
+    # If no centre selected, default to teacher's centre (if teacher), otherwise DRC
     if not selected_centre:
-        try:
-            selected_centre = Centre.objects.get(code='DRC')
+        if teacher and teacher.centre:
+            # Use teacher's associated centre
+            selected_centre = teacher.centre
             selected_centre_id = selected_centre.id
-        except Centre.DoesNotExist:
-            selected_centre = None
-            selected_centre_id = None
+        else:
+            # Fallback to DRC for admin users or teachers without a centre
+            try:
+                selected_centre = Centre.objects.get(code='DRC')
+                selected_centre_id = selected_centre.id
+            except Centre.DoesNotExist:
+                selected_centre = None
+                selected_centre_id = None
     
     # Filter semesters by selected curriculum
     # Note: Semesters are now shared across centres. Centre-specific filtering happens at SemesterCourse level.

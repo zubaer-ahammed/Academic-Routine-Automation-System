@@ -4885,19 +4885,9 @@ def attendance_calendar(request):
             all_dates = all_dates - mid_term_exam_dates
             semester_dates = sorted(all_dates)
             
-            # Filter out dates that are in the past (only show today and future dates)
-            # Makeup dates can be shown even if in the past (for makeup classes that may have been scheduled)
+            # Show all dates (including past dates) so teachers can view and manage attendance
+            # for classes that have already occurred
             today = datetime.now().date()
-            filtered_semester_dates = []
-            for date in semester_dates:
-                # Always include makeup dates (they may be scheduled for past dates)
-                if date in filtered_makeup_dates:
-                    filtered_semester_dates.append(date)
-                # For regular routine dates, only show if today or future
-                elif date >= today:
-                    filtered_semester_dates.append(date)
-            
-            semester_dates = sorted(filtered_semester_dates)
             
             print(f"DEBUG: Generated {len(semester_dates)} dates for course {course.name}")
             print(f"DEBUG: Days to show: {days_to_show}")

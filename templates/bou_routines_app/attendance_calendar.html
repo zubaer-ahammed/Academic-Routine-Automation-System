@@ -1860,89 +1860,186 @@ function autoScrollToWeekContext() {
             if (studentIdColumn) stickyColumnsWidth += studentIdColumn.offsetWidth;
             if (studentNameColumn) stickyColumnsWidth += studentNameColumn.offsetWidth;
             
-            // Get all date columns
-            const allDateColumns = Array.from(document.querySelectorAll('.date-column[data-date]'));
-            const today = new Date('{{ today|date:"Y-m-d" }}');
-            
-            console.log('=== AUTO-SCROLL TO WEEK CONTEXT ===');
-            console.log('Today:', today.toDateString());
-            console.log('Total date columns:', allDateColumns.length);
-            
+            // First, try to find the current week column (marked with "Current" label)
+            const currentWeekColumn = document.querySelector('.current-week-column');
             let targetScrollPosition = 0;
             
-            // Find the closest upcoming date to today
-            let closestUpcomingIndex = -1;
-            let minDistance = Infinity;
-            
-            allDateColumns.forEach((column, index) => {
-                const dateStr = column.getAttribute('data-date');
-                if (dateStr) {
-                    const columnDate = new Date(dateStr);
-                    const distance = columnDate.getTime() - today.getTime();
-                    
-                    // Find the closest future date (including today)
-                    if (distance >= 0 && distance < minDistance) {
-                        minDistance = distance;
-                        closestUpcomingIndex = index;
-                    }
-                }
-            });
-            
-            if (closestUpcomingIndex >= 0) {
-                const targetColumn = allDateColumns[closestUpcomingIndex];
-                const columnOffset = targetColumn.offsetLeft;
-                const viewportWidth = mainContainer.clientWidth - stickyColumnsWidth;
+            if (currentWeekColumn) {
+                // Scroll to the current week column
+                // Reset scroll to 0 first to get accurate measurements
+                const originalScrollLeft = mainContainer.scrollLeft;
+                mainContainer.scrollLeft = 0;
                 
-                // Estimate column width
-                const estimatedColumnWidth = (attendanceTable.scrollWidth - stickyColumnsWidth) / allDateColumns.length;
+                // Force a reflow to ensure measurements are accurate
+                void mainContainer.offsetHeight;
+                void currentWeekColumn.offsetLeft;
                 
-                console.log('Closest upcoming date at index:', closestUpcomingIndex);
-                console.log('Column offset:', columnOffset);
-                console.log('Estimated column width:', Math.round(estimatedColumnWidth));
+                // Get the column's position relative to the table container
+                // offsetLeft gives position relative to offsetParent
+                const columnOffset = currentWeekColumn.offsetLeft;
                 
-                // Strategy: Show 2-3 previous columns + current/upcoming + future columns
-                const previousColumnsToShow = Math.min(3, closestUpcomingIndex); // Show up to 3 previous columns
-                const previousWidth = previousColumnsToShow * estimatedColumnWidth;
+                // Calculate the scroll position needed
+                // We want the column to be fully visible after the sticky columns
+                // The column should start at: stickyColumnsWidth + padding
+                const padding = 15; // Padding to ensure column is fully visible
+                targetScrollPosition = Math.max(0, columnOffset - stickyColumnsWidth - padding);
                 
-                // Position so that we show previous context + current date
-                targetScrollPosition = Math.max(0, columnOffset - stickyColumnsWidth - previousWidth);
+                // Restore original scroll temporarily (will be set to targetScrollPosition below)
+                mainContainer.scrollLeft = originalScrollLeft;
                 
-                // Ensure we don't scroll past the beginning
-                targetScrollPosition = Math.max(0, targetScrollPosition);
-                
-                console.log('Previous columns to show:', previousColumnsToShow);
-                console.log('Previous width:', Math.round(previousWidth));
-                console.log('Target scroll position:', Math.round(targetScrollPosition));
-                
+                console.log('=== AUTO-SCROLL TO CURRENT WEEK ===');
+                console.log('Current week column found');
+                console.log('Column offsetLeft:', Math.round(columnOffset));
+                console.log('Sticky columns width:', stickyColumnsWidth);
+                console.log('Calculated scroll position:', Math.round(targetScrollPosition));
+                console.log('Container width:', mainContainer.clientWidth);
             } else {
-                // Fallback: scroll to show recent dates (last 25% of the semester)
-                const maxScrollLeft = attendanceTable.scrollWidth - mainContainer.clientWidth;
-                targetScrollPosition = Math.max(0, maxScrollLeft * 0.75);
-                console.log('No upcoming dates found, using fallback position:', Math.round(targetScrollPosition));
+                // Fallback: Find the closest upcoming date to today
+                const allDateColumns = Array.from(document.querySelectorAll('.date-column[data-date]'));
+                const today = new Date('{{ today|date:"Y-m-d" }}');
+                
+                console.log('=== AUTO-SCROLL TO CLOSEST DATE ===');
+                console.log('Today:', today.toDateString());
+                console.log('Total date columns:', allDateColumns.length);
+                
+                let closestUpcomingIndex = -1;
+                let minDistance = Infinity;
+                
+                allDateColumns.forEach((column, index) => {
+                    const dateStr = column.getAttribute('data-date');
+                    if (dateStr) {
+                        const columnDate = new Date(dateStr);
+                        const distance = columnDate.getTime() - today.getTime();
+                        
+                        // Find the closest future date (including today)
+                        if (distance >= 0 && distance < minDistance) {
+                            minDistance = distance;
+                            closestUpcomingIndex = index;
+                        }
+                    }
+                });
+                
+                if (closestUpcomingIndex >= 0) {
+                    const targetColumn = allDateColumns[closestUpcomingIndex];
+                    const columnOffset = targetColumn.offsetLeft;
+                    const viewportWidth = mainContainer.clientWidth - stickyColumnsWidth;
+                    
+                    // Estimate column width
+                    const estimatedColumnWidth = (attendanceTable.scrollWidth - stickyColumnsWidth) / allDateColumns.length;
+                    
+                    // Strategy: Show 2-3 previous columns + current/upcoming + future columns
+                    const previousColumnsToShow = Math.min(3, closestUpcomingIndex);
+                    const previousWidth = previousColumnsToShow * estimatedColumnWidth;
+                    
+                    // Position so that we show previous context + current date
+                    targetScrollPosition = Math.max(0, columnOffset - stickyColumnsWidth - previousWidth);
+                    
+                    console.log('Closest upcoming date at index:', closestUpcomingIndex);
+                    console.log('Target scroll position:', Math.round(targetScrollPosition));
+                } else {
+                    // Fallback: scroll to show recent dates (last 25% of the semester)
+                    const maxScrollLeft = attendanceTable.scrollWidth - mainContainer.clientWidth;
+                    targetScrollPosition = Math.max(0, maxScrollLeft * 0.75);
+                    console.log('No upcoming dates found, using fallback position:', Math.round(targetScrollPosition));
+                }
             }
             
-            // Apply the scroll position
+            // Apply the scroll position with multiple attempts to ensure it sticks
             if (targetScrollPosition >= 0) {
+                // Mark that we're doing an auto-scroll to prevent interference
+                mainContainer._autoScrolling = true;
+                
+                // First attempt: immediate scroll
                 mainContainer.scrollLeft = targetScrollPosition;
                 if (topScrollbar) {
                     topScrollbar.scrollLeft = targetScrollPosition;
                 }
-                console.log('Auto-scrolled to show week context at position:', Math.round(targetScrollPosition));
+                console.log('Auto-scrolled to position (attempt 1):', Math.round(targetScrollPosition));
+                
+                // Second attempt: after a frame to ensure layout is complete
+                requestAnimationFrame(() => {
+                    mainContainer.scrollLeft = targetScrollPosition;
+                    if (topScrollbar) {
+                        topScrollbar.scrollLeft = targetScrollPosition;
+                    }
+                    console.log('Auto-scrolled to position (attempt 2):', Math.round(targetScrollPosition));
+                    
+                    // Third attempt: after a short delay to ensure it stuck
+                    setTimeout(() => {
+                        if (Math.abs(mainContainer.scrollLeft - targetScrollPosition) > 5) {
+                            console.log('Scroll position drifted, correcting (attempt 3)...');
+                            mainContainer.scrollLeft = targetScrollPosition;
+                            if (topScrollbar) {
+                                topScrollbar.scrollLeft = targetScrollPosition;
+                            }
+                        } else {
+                            console.log('Scroll position confirmed:', Math.round(mainContainer.scrollLeft));
+                        }
+                        // Clear the flag after a delay
+                        setTimeout(() => {
+                            mainContainer._autoScrolling = false;
+                        }, 500);
+                    }, 200);
+                });
             }
             
         } catch (error) {
             console.error('Error in auto-scroll to week context:', error);
         }
-    }, 800); // Wait for table to be fully rendered
+    }, 1200); // Increased delay to ensure table is fully rendered and styled
     
-    // Backup scroll after longer delay
+    // Backup scroll after longer delay - only if we haven't already scrolled
     setTimeout(() => {
         try {
             const mainContainer = document.getElementById('main-table-container');
             const topScrollbar = document.getElementById('top-scrollbar');
+            const currentWeekColumn = document.querySelector('.current-week-column');
             
-            if (mainContainer && Math.abs(mainContainer.scrollLeft) < 50) {
-                // If still at the beginning, apply a small scroll to show some context
+            // Don't interfere if we're already auto-scrolling or if scroll position is not at 0
+            if (mainContainer && !mainContainer._autoScrolling && Math.abs(mainContainer.scrollLeft) < 50) {
+                if (currentWeekColumn) {
+                    // If we have a current week column but scroll is still at 0, force scroll again
+                    console.log('Backup: Current week column exists but scroll is at 0, forcing scroll...');
+                    const studentIdColumn = document.querySelector('.student-id-column');
+                    const studentNameColumn = document.querySelector('.student-name-column');
+                    
+                    let stickyColumnsWidth = 0;
+                    if (studentIdColumn) stickyColumnsWidth += studentIdColumn.offsetWidth;
+                    if (studentNameColumn) stickyColumnsWidth += studentNameColumn.offsetWidth;
+                    
+                    mainContainer.scrollLeft = 0;
+                    void mainContainer.offsetHeight;
+                    
+                    const columnOffset = currentWeekColumn.offsetLeft;
+                    const padding = 15;
+                    const targetPosition = Math.max(0, columnOffset - stickyColumnsWidth - padding);
+                    
+                    mainContainer.scrollLeft = targetPosition;
+                    if (topScrollbar) {
+                        topScrollbar.scrollLeft = targetPosition;
+                    }
+                    console.log('Backup: Forced scroll to current week column:', Math.round(targetPosition));
+                } else {
+                    // No current week column, apply small default scroll
+                    const studentIdColumn = document.querySelector('.student-id-column');
+                    const studentNameColumn = document.querySelector('.student-name-column');
+                    
+                    let stickyColumnsWidth = 0;
+                    if (studentIdColumn) stickyColumnsWidth += studentIdColumn.offsetWidth;
+                    if (studentNameColumn) stickyColumnsWidth += studentNameColumn.offsetWidth;
+                    
+                    // Small scroll to show some context
+                    const smallScrollAmount = 200; // pixels
+                    const targetPosition = Math.max(0, smallScrollAmount);
+                    
+                    mainContainer.scrollLeft = targetPosition;
+                    if (topScrollbar) {
+                        topScrollbar.scrollLeft = targetPosition;
+                    }
+                    console.log('Backup: Applied default scroll:', Math.round(targetPosition));
+                }
+            } else if (mainContainer && Math.abs(mainContainer.scrollLeft) < 50 && !currentWeekColumn) {
+                // If still at the beginning and no current week column, apply a small scroll
                 const studentIdColumn = document.querySelector('.student-id-column');
                 const studentNameColumn = document.querySelector('.student-name-column');
                 
@@ -1950,7 +2047,7 @@ function autoScrollToWeekContext() {
                 if (studentIdColumn) stickyColumnsWidth += studentIdColumn.offsetWidth;
                 if (studentNameColumn) stickyColumnsWidth += studentNameColumn.offsetWidth;
                 
-                // Small scroll to show previous week context
+                // Small scroll to show some context
                 const smallScrollAmount = 200; // pixels
                 const targetPosition = Math.max(0, smallScrollAmount);
                 
@@ -1959,11 +2056,33 @@ function autoScrollToWeekContext() {
                     topScrollbar.scrollLeft = targetPosition;
                 }
                 console.log('Backup auto-scroll applied:', Math.round(targetPosition));
+            } else if (currentWeekColumn && Math.abs(mainContainer.scrollLeft) < 50) {
+                // If we have a current week column but scroll is still at 0, force scroll again
+                console.log('Current week column exists but scroll is at 0, forcing scroll...');
+                const studentIdColumn = document.querySelector('.student-id-column');
+                const studentNameColumn = document.querySelector('.student-name-column');
+                
+                let stickyColumnsWidth = 0;
+                if (studentIdColumn) stickyColumnsWidth += studentIdColumn.offsetWidth;
+                if (studentNameColumn) stickyColumnsWidth += studentNameColumn.offsetWidth;
+                
+                mainContainer.scrollLeft = 0;
+                void mainContainer.offsetHeight;
+                
+                const columnOffset = currentWeekColumn.offsetLeft;
+                const padding = 15;
+                const targetPosition = Math.max(0, columnOffset - stickyColumnsWidth - padding);
+                
+                mainContainer.scrollLeft = targetPosition;
+                if (topScrollbar) {
+                    topScrollbar.scrollLeft = targetPosition;
+                }
+                console.log('Forced scroll to current week column:', Math.round(targetPosition));
             }
         } catch (error) {
             console.error('Error in backup auto-scroll:', error);
         }
-    }, 2000);
+    }, 2500);
 }
 
 function setupHeaderDragScroll() {

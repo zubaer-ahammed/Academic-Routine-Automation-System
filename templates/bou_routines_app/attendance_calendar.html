@@ -1144,18 +1144,6 @@
         margin-top: 2px;
     }
 
-    .quick-actions {
-        margin-top: 20px;
-        padding: 15px;
-        background: #f8f9fa;
-        border-radius: 8px;
-        text-align: center;
-    }
-
-    .quick-actions .btn {
-        margin: 0 5px;
-    }
-
     .alert {
         padding: 10px 15px;
         margin-bottom: 15px;
@@ -1671,19 +1659,6 @@
                         {% endfor %}
                     </tbody>
                 </table>
-            </div>
-            
-            <!-- Quick Actions -->
-            <div class="quick-actions">
-                <button type="button" class="btn btn-success" id="mark-all-present-date">
-                    <i class="fas fa-check"></i> Mark All Present for Selected Date
-                </button>
-                <button type="button" class="btn btn-warning" id="mark-all-absent-date">
-                    <i class="fas fa-times"></i> Mark All Absent for Selected Date
-                </button>
-                <button type="button" class="btn btn-info" id="clear-date">
-                    <i class="fas fa-eraser"></i> Clear Selected Date
-                </button>
             </div>
             
             <!-- Hidden Form for AJAX Submission -->
@@ -2339,66 +2314,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Mark all present for selected date
-    document.getElementById('mark-all-present-date').addEventListener('click', function() {
-        if (!selectedDate) {
-            alert('Please select a date by clicking on any attendance cell.');
-            return;
-        }
-        
-        if (confirm(`Mark all students present for ${selectedDate}?`)) {
-            markAttendanceForDate(selectedDate, true);
-        }
-    });
-    
-    // Mark all absent for selected date
-    document.getElementById('mark-all-absent-date').addEventListener('click', function() {
-        if (!selectedDate) {
-            alert('Please select a date by clicking on any attendance cell.');
-            return;
-        }
-        
-        if (confirm(`Mark all students absent for ${selectedDate}?`)) {
-            markAttendanceForDate(selectedDate, false);
-        }
-    });
-    
-    // Clear selected date
-    document.getElementById('clear-date').addEventListener('click', function() {
-        clearSelection();
-        selectedDate = null;
-        selectedStudent = null;
-    });
-    
     function clearSelection() {
         document.querySelectorAll('.attendance-cell.selected').forEach(cell => {
             cell.classList.remove('selected');
         });
-    }
-    
-    function markAttendanceForDate(date, isPresent) {
-        const form = document.getElementById('attendance-form');
-        const dateInput = document.getElementById('form-attendance-date');
-        const inputsContainer = document.getElementById('attendance-inputs');
-        
-        // Clear previous inputs
-        inputsContainer.innerHTML = '';
-        
-        // Set the date
-        dateInput.value = date;
-        
-        // Add student inputs
-        document.querySelectorAll('.student-row').forEach(row => {
-            const studentId = row.dataset.studentId;
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = `student_${studentId}`;
-            input.value = isPresent ? 'on' : '';
-            inputsContainer.appendChild(input);
-        });
-        
-        // Submit form
-        form.submit();
     }
     
     function markIndividualAttendance(checkbox) {

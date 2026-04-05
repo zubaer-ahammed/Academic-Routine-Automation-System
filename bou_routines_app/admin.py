@@ -897,15 +897,15 @@ class FinalExamMarkAdmin(admin.ModelAdmin):
         }),
         ('Theory Course - Teacher 1 Evaluation', {
             'fields': ('teacher1_q1', 'teacher1_q2', 'teacher1_q3', 'teacher1_q4', 'teacher1_q5', 'teacher1_q6', 'teacher1_q7', 'teacher1_total', 'teacher1_evaluator'),
-            'description': 'First evaluator marks (max 14 per set, max 5 sets)'
+            'description': 'First examiner marks (max 14 per set, max 5 sets)'
         }),
         ('Theory Course - Teacher 2 Evaluation', {
             'fields': ('teacher2_q1', 'teacher2_q2', 'teacher2_q3', 'teacher2_q4', 'teacher2_q5', 'teacher2_q6', 'teacher2_q7', 'teacher2_total', 'teacher2_evaluator'),
-            'description': 'Second evaluator marks (max 14 per set, max 5 sets)'
+            'description': 'Second examiner marks (max 14 per set, max 5 sets)'
         }),
         ('Theory Course - Teacher 3 Evaluation', {
             'fields': ('teacher3_q1', 'teacher3_q2', 'teacher3_q3', 'teacher3_q4', 'teacher3_q5', 'teacher3_q6', 'teacher3_q7', 'teacher3_total', 'teacher3_evaluator'),
-            'description': 'Third evaluator marks (required if difference > 20% or > 14 marks)'
+            'description': 'Third examiner marks (required if difference > 20% or > 14 marks)'
         }),
         ('Lab Course Final Exam', {
             'fields': ('lab_final_exam_mark',),

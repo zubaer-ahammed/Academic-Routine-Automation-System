@@ -62,6 +62,20 @@ def routine_entry(request):
         'routines': routines
     })
 
+def filter_students_queryset_by_centre(students_qs, centre_id):
+    """
+    Restrict a Student queryset to the selected study centre when centre_id is valid.
+    Matches attendance / routine exports: only students with Student.centre set to that centre.
+    """
+    if centre_id is None or centre_id == '':
+        return students_qs
+    try:
+        centre = Centre.objects.get(id=int(centre_id))
+        return students_qs.filter(centre=centre)
+    except (Centre.DoesNotExist, ValueError, TypeError):
+        return students_qs
+
+
 def time_overlap(start1, end1, start2, end2):
     # Two time ranges overlap if:
     # 1. The start time of one range is less than the end time of the other range
@@ -7043,6 +7057,7 @@ def export_ca_marks_pdf(request):
                 'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
             }
         ).order_by('-first_two_digits', 'last_three_digits')
+        students = filter_students_queryset_by_centre(students, centre_id)
         
         # Get existing CA marks
         existing_marks = CAMark.objects.filter(
@@ -7687,6 +7702,7 @@ def export_blank_ca_marks_pdf(request):
                 'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
             }
         ).order_by('-first_two_digits', 'last_three_digits')
+        students = filter_students_queryset_by_centre(students, centre_id)
         
         # Create PDF
         buffer = io.BytesIO()
@@ -8229,6 +8245,7 @@ def export_ca_marks_excel(request):
                 'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
             }
         ).order_by('-first_two_digits', 'last_three_digits')
+        students = filter_students_queryset_by_centre(students, centre_id)
         
         # Get existing CA marks
         existing_marks = CAMark.objects.filter(
@@ -8387,6 +8404,7 @@ def export_final_exam_pdf(request):
                 'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
             }
         ).order_by('-first_two_digits', 'last_three_digits')
+        students = filter_students_queryset_by_centre(students, centre_id)
         
         # Get existing Final Exam marks
         existing_marks = FinalExamMark.objects.filter(
@@ -8519,7 +8537,7 @@ def export_final_exam_pdf(request):
             duet_centre = Centre.objects.filter(code='DUET').first()
             
             if teacher_role == 'teacher1' and drc_centre:
-                # Teacher 1 (First Evaluator) from DRC centre
+                # Teacher 1 (First Examiner) from DRC centre
                 drc_semester_course = SemesterCourse.objects.filter(
                     semester=semester,
                     course=course,
@@ -8528,7 +8546,7 @@ def export_final_exam_pdf(request):
                 if drc_semester_course and drc_semester_course.teacher:
                     teacher_name = drc_semester_course.teacher.name
             elif teacher_role == 'teacher2' and duet_centre:
-                # Teacher 2 (Second Evaluator) from DUET centre
+                # Teacher 2 (Second Examiner) from DUET centre
                 duet_semester_course = SemesterCourse.objects.filter(
                     semester=semester,
                     course=course,
@@ -8543,7 +8561,7 @@ def export_final_exam_pdf(request):
         
         # Only show teacher if found
         if teacher_name:
-            left_content.append(Paragraph(f'<b>Evaluator:</b> {teacher_name}', header_style_normal))
+            left_content.append(Paragraph(f'<b>Examiner:</b> {teacher_name}', header_style_normal))
         if centre_name:
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
         
@@ -8909,6 +8927,7 @@ def export_blank_final_exam_pdf(request):
                 'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
             }
         ).order_by('-first_two_digits', 'last_three_digits')
+        students = filter_students_queryset_by_centre(students, centre_id)
         
         # Create PDF
         buffer = io.BytesIO()
@@ -9032,7 +9051,7 @@ def export_blank_final_exam_pdf(request):
             duet_centre = Centre.objects.filter(code='DUET').first()
             
             if teacher_role == 'teacher1' and drc_centre:
-                # Teacher 1 (First Evaluator) from DRC centre
+                # Teacher 1 (First Examiner) from DRC centre
                 drc_semester_course = SemesterCourse.objects.filter(
                     semester=semester,
                     course=course,
@@ -9041,7 +9060,7 @@ def export_blank_final_exam_pdf(request):
                 if drc_semester_course and drc_semester_course.teacher:
                     teacher_name = drc_semester_course.teacher.name
             elif teacher_role == 'teacher2' and duet_centre:
-                # Teacher 2 (Second Evaluator) from DUET centre
+                # Teacher 2 (Second Examiner) from DUET centre
                 duet_semester_course = SemesterCourse.objects.filter(
                     semester=semester,
                     course=course,
@@ -9056,7 +9075,7 @@ def export_blank_final_exam_pdf(request):
         
         # Only show teacher if found
         if teacher_name:
-            left_content.append(Paragraph(f'<b>Evaluator:</b> {teacher_name}', header_style_normal))
+            left_content.append(Paragraph(f'<b>Examiner:</b> {teacher_name}', header_style_normal))
         if not centre_name:
             first_sc = SemesterCourse.objects.filter(semester=semester).select_related('centre').first()
             if first_sc and first_sc.centre:
@@ -9353,6 +9372,7 @@ def export_final_exam_excel(request):
                 'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
             }
         ).order_by('-first_two_digits', 'last_three_digits')
+        students = filter_students_queryset_by_centre(students, centre_id)
         
         # Get existing Final Exam marks
         existing_marks = FinalExamMark.objects.filter(
@@ -9401,7 +9421,7 @@ def export_final_exam_excel(request):
         worksheet.merge_range(0, 0, 0, len(headers) - 1, f"Final Exam Marks Report - {semester.name}", title_format)
         worksheet.write(1, 0, f"Course: {course.code} - {course.name}", cell_format)
         worksheet.write(1, 1, f"Course Type: {'Lab Course' if course.is_lab else 'Theory Course'}", cell_format)
-        worksheet.write(1, 2, f"Evaluator: {teacher_role.replace('teacher', 'Teacher ').title()}", cell_format)
+        worksheet.write(1, 2, f"Examiner: {teacher_role.replace('teacher', 'Teacher ').title()}", cell_format)
         
         # Header row
         row = 3
@@ -9727,7 +9747,9 @@ def ca_management(request):
                     'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
                 }
             ).order_by('-first_two_digits', 'last_three_digits')
-            
+            if selected_centre:
+                students = students.filter(centre=selected_centre)
+
             # Get existing CA marks for these students
             existing_marks = CAMark.objects.filter(
                 student__in=students,
@@ -9910,7 +9932,7 @@ def ca_management(request):
             drc_centre = Centre.objects.filter(code='DRC').first()
             duet_centre = Centre.objects.filter(code='DUET').first()
             
-            # Get Teacher 1 (First Evaluator) from SemesterCourse for DRC centre if not manually assigned
+            # Get Teacher 1 (First Examiner) from SemesterCourse for DRC centre if not manually assigned
             if not teacher1_evaluator_obj and drc_centre:
                 drc_semester_course = SemesterCourse.objects.filter(
                     semester=semester,
@@ -9921,7 +9943,7 @@ def ca_management(request):
                 if drc_semester_course and drc_semester_course.teacher:
                     teacher1_evaluator_obj = drc_semester_course.teacher
             
-            # Get Teacher 2 (Second Evaluator) from SemesterCourse for DUET centre if not manually assigned
+            # Get Teacher 2 (Second Examiner) from SemesterCourse for DUET centre if not manually assigned
             if not teacher2_evaluator_obj and duet_centre:
                 duet_semester_course = SemesterCourse.objects.filter(
                     semester=semester,
@@ -10120,6 +10142,19 @@ def save_ca_marks(request):
                     all_students_count = Student.objects.count()
                     logger.error(f"CA marks save: Total students in DB: {all_students_count}")
                     raise Student.DoesNotExist(f"Student with ID '{student_id_clean}' not found")
+
+                centre_id_post = request.POST.get('centre_id')
+                if centre_id_post:
+                    try:
+                        expected_centre = Centre.objects.get(id=int(centre_id_post))
+                        if student.centre_id != expected_centre.id:
+                            logger.warning(
+                                f"CA marks save: skipping {student_id_clean} (student centre "
+                                f"{student.centre_id} != selected centre {expected_centre.id})"
+                            )
+                            continue
+                    except (Centre.DoesNotExist, ValueError, TypeError):
+                        pass
                 
                 # Get or create CA mark record
                 # Get or create CA mark record
@@ -10346,6 +10381,15 @@ def save_final_exam_marks(request):
             for student_id, marks_data in students_marks.items():
                 try:
                     student = Student.objects.get(id=student_id)
+
+                    centre_id_post = request.POST.get('centre_id')
+                    if centre_id_post:
+                        try:
+                            expected_centre = Centre.objects.get(id=int(centre_id_post))
+                            if student.centre_id != expected_centre.id:
+                                continue
+                        except (Centre.DoesNotExist, ValueError, TypeError):
+                            pass
                     
                     # Get or create Final Exam mark record
                     final_mark, created = FinalExamMark.objects.get_or_create(
@@ -10436,10 +10480,11 @@ def assign_evaluator(request):
         evaluator_number = int(evaluator_number)
         
         if evaluator_number not in [1, 2, 3]:
-            return JsonResponse({'error': 'Invalid evaluator number'}, status=400)
+            return JsonResponse({'error': 'Invalid examiner number'}, status=400)
         
-        # Get all students enrolled in this semester
+        # Students in this semester at the selected study centre (matches CA / final marks tables)
         students = Student.objects.filter(semesters=semester)
+        students = filter_students_queryset_by_centre(students, request.POST.get('centre_id'))
         
         # Get teacher from user for marked_by field (admin can use any teacher, but we need one)
         # For admin users, use the assigned evaluator as marked_by, or get first available teacher
@@ -10480,7 +10525,7 @@ def assign_evaluator(request):
         
         return JsonResponse({
             'success': True,
-            'message': f'Evaluator {evaluator_number} assigned successfully to {updated_count} student(s)',
+            'message': f'Examiner {evaluator_number} assigned successfully to {updated_count} student(s)',
             'teacher_name': teacher.name
         })
         

@@ -4713,7 +4713,6 @@ def attendance_calendar(request):
             ).distinct()
     
     # Initialize allowed_date_range in base context (will be updated when semester/course selected)
-    # For teachers, restrict all dates by default until semester/course is selected
     allowed_date_range = None
     is_admin = request.user.is_superuser or request.user.is_staff
     
@@ -4996,49 +4995,15 @@ def attendance_calendar(request):
             
             print(f"DEBUG: Current week date selected: {current_week_date}")
 
-            # Calculate allowed date range for teachers (current week ± 1 week)
-            # IMPORTANT: If user has a teacher profile, treat them as a teacher (not admin)
-            # Only users without teacher profile who are staff/superuser are admins
+            # Allowed marking dates: full semester class schedule (same for teachers and admins).
+            # Teacher-only "current week ± 1 week" restriction is disabled.
             allowed_start_date = None
             allowed_end_date = None
-            # User is admin only if they are superuser OR (staff AND no teacher profile)
-            is_admin = request.user.is_superuser or (request.user.is_staff and not teacher)
-            
-            # For teachers (users with teacher profile), always calculate the restricted range
-            if teacher:
-                # For teachers, restrict to current week ± 1 week
-                from datetime import timedelta
-                # Get Monday of current week
-                days_since_monday = today.weekday()
-                monday_of_current_week = today - timedelta(days=days_since_monday)
-                # Start date: Monday of previous week (1 week before current week)
-                allowed_start_date = monday_of_current_week - timedelta(days=7)
-                # End date: Sunday of next week (1 week after current week)
-                allowed_end_date = monday_of_current_week + timedelta(days=13)  # Monday + 13 days = Sunday of next week
-                print(f"DEBUG: Teacher date restriction - Allowed range: {allowed_start_date} to {allowed_end_date}")
-
-            # Prepare date range tuple for template filter
-            # For admins: set to a very wide range (all semester dates)
-            # For teachers: set to the calculated restricted range
-            if is_admin:
-                # For admins, allow all dates by setting a very wide range
-                # Use semester start and end dates if available, otherwise use a wide range
-                if semester_dates:
-                    allowed_date_range = (semester_dates[0], semester_dates[-1])
-                else:
-                    # Fallback: use a very wide range (10 years)
-                    from datetime import timedelta
-                    allowed_date_range = (today - timedelta(days=3650), today + timedelta(days=3650))
-            elif teacher and allowed_start_date and allowed_end_date:
-                # For teachers, use the calculated restricted range
-                allowed_date_range = (allowed_start_date, allowed_end_date)
-                print(f"DEBUG: Setting allowed_date_range for teacher: {allowed_date_range}")
-                print(f"DEBUG: Teacher user: {request.user.username}, is_admin: {is_admin}, teacher object: {teacher}")
+            from datetime import timedelta
+            if semester_dates:
+                allowed_date_range = (semester_dates[0], semester_dates[-1])
             else:
-                # Fallback: if teacher but range not calculated, restrict all dates (safety)
-                allowed_date_range = None
-                print(f"DEBUG: WARNING - allowed_date_range is None. teacher={teacher}, is_admin={is_admin}, allowed_start_date={allowed_start_date}, allowed_end_date={allowed_end_date}")
-                print(f"DEBUG: User: {request.user.username}, is_superuser: {request.user.is_superuser}, is_staff: {request.user.is_staff}")
+                allowed_date_range = (today - timedelta(days=3650), today + timedelta(days=3650))
 
             context.update({
                 'semester': semester,
@@ -5199,36 +5164,12 @@ def mark_individual_attendance(request):
         else:
             course = Course.objects.get(id=course_id)
         
-        # Server-side date validation for teachers (current week ± 1 week)
-        # IMPORTANT: If user has a teacher profile, treat them as a teacher (not admin)
-        # Only users without teacher profile who are staff/superuser are admins
-        is_admin_user = request.user.is_superuser or (request.user.is_staff and not teacher_user)
-        if teacher_user:
-            from datetime import date, timedelta, datetime
-            today = date.today()
-            # Get Monday of current week
-            days_since_monday = today.weekday()
-            monday_of_current_week = today - timedelta(days=days_since_monday)
-            # Start date: Monday of previous week (1 week before current week)
-            allowed_start_date = monday_of_current_week - timedelta(days=7)
-            # End date: Sunday of next week (1 week after current week)
-            allowed_end_date = monday_of_current_week + timedelta(days=13)
-            
-            # Parse attendance_date
-            try:
-                attendance_date_obj = datetime.strptime(attendance_date, "%Y-%m-%d").date()
-                if attendance_date_obj < allowed_start_date or attendance_date_obj > allowed_end_date:
-                    print(f"DEBUG mark_individual_attendance: BLOCKED - Date {attendance_date_obj} outside range {allowed_start_date} to {allowed_end_date}")
-                    print(f"DEBUG: User {request.user.username}, is_superuser: {request.user.is_superuser}, is_staff: {request.user.is_staff}, teacher_user: {teacher_user}")
-                    return JsonResponse({
-                        'error': f'You can only mark attendance for dates between {allowed_start_date} and {allowed_end_date}.'
-                    }, status=403)
-                else:
-                    print(f"DEBUG mark_individual_attendance: ALLOWED - Date {attendance_date_obj} within range {allowed_start_date} to {allowed_end_date}")
-            except ValueError:
-                return JsonResponse({'error': 'Invalid date format'}, status=400)
-        elif teacher_user and is_admin_user:
-            print(f"DEBUG mark_individual_attendance: Admin user {request.user.username} bypassing date restriction")
+        # Validate date format (teacher ±1 week window disabled — same as admins)
+        from datetime import datetime as dt_module
+        try:
+            dt_module.strptime(attendance_date, "%Y-%m-%d").date()
+        except ValueError:
+            return JsonResponse({'error': 'Invalid date format'}, status=400)
         
         # Create or update attendance record
         # Use teacher_user if available, otherwise use teacher (for admin fallback)
@@ -5323,30 +5264,12 @@ def mark_attendance(request):
                 if semester_course:
                     selected_centre = semester_course.centre
         
-        # Server-side date validation for teachers (current week ± 1 week)
-        # IMPORTANT: If user has a teacher profile, treat them as a teacher (not admin)
-        is_admin_user = request.user.is_superuser or (request.user.is_staff and not teacher_user)
-        if teacher_user:
-            from datetime import date, timedelta, datetime
-            today = date.today()
-            # Get Monday of current week
-            days_since_monday = today.weekday()
-            monday_of_current_week = today - timedelta(days=days_since_monday)
-            # Start date: Monday of previous week (1 week before current week)
-            allowed_start_date = monday_of_current_week - timedelta(days=7)
-            # End date: Sunday of next week (1 week after current week)
-            allowed_end_date = monday_of_current_week + timedelta(days=13)
-            
-            # Parse attendance_date
-            try:
-                attendance_date_obj = datetime.strptime(attendance_date, "%Y-%m-%d").date()
-                if attendance_date_obj < allowed_start_date or attendance_date_obj > allowed_end_date:
-                    return JsonResponse({
-                        'success': False,
-                        'message': f'You can only mark attendance for dates between {allowed_start_date} and {allowed_end_date}.'
-                    })
-            except ValueError:
-                return JsonResponse({'success': False, 'message': 'Invalid date format'})
+        # Validate date format only (teacher ±1 week restriction disabled)
+        from datetime import datetime as dt_module
+        try:
+            dt_module.strptime(attendance_date, "%Y-%m-%d").date()
+        except ValueError:
+            return JsonResponse({'success': False, 'message': 'Invalid date format'})
         
         # Get all students for this semester and selected centre with custom sorting
         # Sort by first two digits (descending), then last three digits (ascending)

@@ -714,7 +714,10 @@ class FinalExamMark(models.Model):
     
     # Flag to indicate if there's a discrepancy requiring third teacher
     requires_third_teacher = models.BooleanField(default=False, help_text="True if difference between teacher1 and teacher2 > 20% or > 14 marks")
-    
+
+    # Student absent for the final exam — UI shows "AB"; numeric totals are cleared
+    exam_absent = models.BooleanField(default=False)
+
     class Meta:
         unique_together = ('student', 'course', 'semester')
         ordering = ['student__id']
@@ -722,9 +725,19 @@ class FinalExamMark(models.Model):
     def __str__(self):
         return f"{self.student.id} - {self.course.code} - Final: {self.final_exam_total}"
     
+    def clear_numeric_exam_fields(self):
+        """Clear all entered marks (used when marking the student absent)."""
+        for i in range(1, 8):
+            setattr(self, f'teacher1_q{i}', None)
+            setattr(self, f'teacher2_q{i}', None)
+            setattr(self, f'teacher3_q{i}', None)
+        self.lab_final_exam_mark = None
+
     def calculate_teacher_total(self, teacher_num):
         """Calculate total for a specific teacher (1, 2, or 3)"""
         from decimal import Decimal
+        if getattr(self, 'exam_absent', False):
+            return Decimal('0')
         total = Decimal('0')
         for i in range(1, 8):
             field_name = f'teacher{teacher_num}_q{i}'
@@ -735,6 +748,8 @@ class FinalExamMark(models.Model):
     
     def check_discrepancy(self):
         """Check if difference between teacher1 and teacher2 is > 20% or > 14 marks"""
+        if getattr(self, 'exam_absent', False):
+            return False
         if not self.course.is_lab:
             teacher1_total = float(self.teacher1_total or 0)
             teacher2_total = float(self.teacher2_total or 0)
@@ -758,6 +773,8 @@ class FinalExamMark(models.Model):
     @property
     def discrepancy_reason(self):
         """Get the reason for discrepancy as a formatted string"""
+        if getattr(self, 'exam_absent', False):
+            return "Absent (AB)"
         if not self.course.is_lab:
             teacher1_total = float(self.teacher1_total or 0)
             teacher2_total = float(self.teacher2_total or 0)
@@ -787,6 +804,9 @@ class FinalExamMark(models.Model):
     def calculate_final_total(self):
         """Calculate final exam total based on course type"""
         from decimal import Decimal
+
+        if getattr(self, 'exam_absent', False):
+            return Decimal('0')
         
         if self.course.is_lab:
             # Lab course: use single field
@@ -821,6 +841,9 @@ class FinalExamMark(models.Model):
     
     def save(self, *args, **kwargs):
         from decimal import Decimal
+
+        if getattr(self, 'exam_absent', False):
+            self.requires_third_teacher = False
         
         if not self.course.is_lab:
             # Theory course: calculate totals for each teacher

@@ -8658,7 +8658,12 @@ def export_final_exam_pdf(request):
         for student in students:
             mark = final_exam_marks.get(student.id)
             if mark:
-                if course.is_lab:
+                if getattr(mark, 'exam_absent', False):
+                    if course.is_lab:
+                        row = [student.id, student.name.upper(), 'AB', 'AB']
+                    else:
+                        row = [student.id, student.name.upper(), 'AB', 'AB', 'AB', 'AB', 'AB', 'AB', 'AB', 'AB']
+                elif course.is_lab:
                     row = [
                         student.id,
                         student.name.upper(),
@@ -9364,7 +9369,21 @@ def export_final_exam_excel(request):
             col += 1
             
             if mark:
-                if course.is_lab:
+                if getattr(mark, 'exam_absent', False):
+                    if course.is_lab:
+                        worksheet.write(row, col, 'AB', cell_format)
+                        col += 1
+                        worksheet.write(row, col, 'AB', cell_format)
+                        col += 1
+                        worksheet.write(row, col, mark.notes or '', cell_format)
+                    else:
+                        for _ in range(7):
+                            worksheet.write(row, col, 'AB', cell_format)
+                            col += 1
+                        worksheet.write(row, col, 'AB', cell_format)
+                        col += 1
+                        worksheet.write(row, col, mark.notes or '', cell_format)
+                elif course.is_lab:
                     worksheet.write(row, col, mark.lab_final_exam_mark or 0.00, cell_format)
                     col += 1
                     worksheet.write(row, col, mark.calculate_final_total(), cell_format)
@@ -9915,6 +9934,54 @@ def ca_management(request):
     
     context['show_final_exam_tab'] = show_final_exam_tab
     
+    # Read-only "Final Exam Summary" tab: examiner totals, variation, consolidated mark
+    examiner_summary_rows = []
+    if (
+        show_final_exam_tab
+        and selected_semester
+        and selected_course
+        and students
+    ):
+        for idx, student in enumerate(students, start=1):
+            fm = final_exam_marks.get(student.id)
+            if selected_course.is_lab:
+                lab_val = None
+                if fm and fm.lab_final_exam_mark is not None:
+                    lab_val = float(fm.lab_final_exam_mark)
+                mo = float(fm.final_exam_total or 0) if fm else 0.0
+                examiner_summary_rows.append({
+                    'sl': idx,
+                    'student': student,
+                    'final_mark': fm,
+                    'is_lab': True,
+                    'lab_mark': lab_val,
+                    'marks_obtained': mo,
+                    'notes': (fm.notes or '') if fm else '',
+                })
+            else:
+                t1 = float(fm.teacher1_total or 0) if fm else 0.0
+                t2 = float(fm.teacher2_total or 0) if fm else 0.0
+                t3 = float(fm.teacher3_total or 0) if fm else 0.0
+                diff_abs = abs(t1 - t2)
+                avg_12 = (t1 + t2) / 2.0 if (t1 or t2) else 0.0
+                diff_pct = (diff_abs / avg_12 * 100.0) if avg_12 > 0 else 0.0
+                mo = float(fm.final_exam_total or 0) if fm else 0.0
+                examiner_summary_rows.append({
+                    'sl': idx,
+                    'student': student,
+                    'final_mark': fm,
+                    'is_lab': False,
+                    't1': t1,
+                    't2': t2,
+                    't3': t3,
+                    'diff_abs': diff_abs,
+                    'diff_pct': diff_pct,
+                    'marks_obtained': mo,
+                    'requires_third': fm.requires_third_teacher if fm else False,
+                    'notes': (fm.notes or '') if fm else '',
+                })
+    context['examiner_summary_rows'] = examiner_summary_rows
+    
     # Get all teachers for admin to select from (only for admins)
     if is_admin:
         all_teachers = Teacher.objects.all().order_by('name')
@@ -10296,6 +10363,7 @@ def save_final_exam_marks(request):
             return JsonResponse({'error': 'Teacher not found'}, status=400)
         
         # Process each student's marks
+        notes_only_request = request.POST.get('notes_only') == '1'
         students_data = request.POST.get('students_data')
         if students_data:
             import json
@@ -10321,43 +10389,61 @@ def save_final_exam_marks(request):
                         semester=semester,
                         defaults={'marked_by': teacher}
                     )
-                    
-                    # Update marks based on course type
-                    if course.is_lab:
-                        # Lab course: single field
-                        final_mark.lab_final_exam_mark = float(marks_data.get('lab_final_exam_mark', 0))
+
+                    if notes_only_request:
+                        if 'notes' in marks_data:
+                            final_mark.notes = marks_data.get('notes', '') or ''
+                        final_mark.save()
+                        continue
+
+                    def _post_exam_absent(val):
+                        if val is True or val == 'true' or val == '1' or val == 1:
+                            return True
+                        return False
+
+                    if 'exam_absent' in marks_data:
+                        final_mark.exam_absent = _post_exam_absent(marks_data.get('exam_absent'))
+                    exam_absent = final_mark.exam_absent
+                    if exam_absent:
+                        final_mark.clear_numeric_exam_fields()
                         final_mark.marked_by = teacher
                     else:
-                        # Theory course: 7 question sets
-                        if teacher_role == 'teacher1':
-                            final_mark.teacher1_q1 = float(marks_data.get('q1', 0)) if marks_data.get('q1') else None
-                            final_mark.teacher1_q2 = float(marks_data.get('q2', 0)) if marks_data.get('q2') else None
-                            final_mark.teacher1_q3 = float(marks_data.get('q3', 0)) if marks_data.get('q3') else None
-                            final_mark.teacher1_q4 = float(marks_data.get('q4', 0)) if marks_data.get('q4') else None
-                            final_mark.teacher1_q5 = float(marks_data.get('q5', 0)) if marks_data.get('q5') else None
-                            final_mark.teacher1_q6 = float(marks_data.get('q6', 0)) if marks_data.get('q6') else None
-                            final_mark.teacher1_q7 = float(marks_data.get('q7', 0)) if marks_data.get('q7') else None
-                            final_mark.teacher1_evaluator = teacher
-                        elif teacher_role == 'teacher2':
-                            final_mark.teacher2_q1 = float(marks_data.get('q1', 0)) if marks_data.get('q1') else None
-                            final_mark.teacher2_q2 = float(marks_data.get('q2', 0)) if marks_data.get('q2') else None
-                            final_mark.teacher2_q3 = float(marks_data.get('q3', 0)) if marks_data.get('q3') else None
-                            final_mark.teacher2_q4 = float(marks_data.get('q4', 0)) if marks_data.get('q4') else None
-                            final_mark.teacher2_q5 = float(marks_data.get('q5', 0)) if marks_data.get('q5') else None
-                            final_mark.teacher2_q6 = float(marks_data.get('q6', 0)) if marks_data.get('q6') else None
-                            final_mark.teacher2_q7 = float(marks_data.get('q7', 0)) if marks_data.get('q7') else None
-                            final_mark.teacher2_evaluator = teacher
-                        elif teacher_role == 'teacher3':
-                            final_mark.teacher3_q1 = float(marks_data.get('q1', 0)) if marks_data.get('q1') else None
-                            final_mark.teacher3_q2 = float(marks_data.get('q2', 0)) if marks_data.get('q2') else None
-                            final_mark.teacher3_q3 = float(marks_data.get('q3', 0)) if marks_data.get('q3') else None
-                            final_mark.teacher3_q4 = float(marks_data.get('q4', 0)) if marks_data.get('q4') else None
-                            final_mark.teacher3_q5 = float(marks_data.get('q5', 0)) if marks_data.get('q5') else None
-                            final_mark.teacher3_q6 = float(marks_data.get('q6', 0)) if marks_data.get('q6') else None
-                            final_mark.teacher3_q7 = float(marks_data.get('q7', 0)) if marks_data.get('q7') else None
-                            final_mark.teacher3_evaluator = teacher
-                        
-                        final_mark.marked_by = teacher
+                        # Update marks based on course type
+                        if course.is_lab:
+                            # Lab course: single field
+                            final_mark.lab_final_exam_mark = float(marks_data.get('lab_final_exam_mark', 0))
+                            final_mark.marked_by = teacher
+                        else:
+                            # Theory course: 7 question sets
+                            if teacher_role == 'teacher1':
+                                final_mark.teacher1_q1 = float(marks_data.get('q1', 0)) if marks_data.get('q1') else None
+                                final_mark.teacher1_q2 = float(marks_data.get('q2', 0)) if marks_data.get('q2') else None
+                                final_mark.teacher1_q3 = float(marks_data.get('q3', 0)) if marks_data.get('q3') else None
+                                final_mark.teacher1_q4 = float(marks_data.get('q4', 0)) if marks_data.get('q4') else None
+                                final_mark.teacher1_q5 = float(marks_data.get('q5', 0)) if marks_data.get('q5') else None
+                                final_mark.teacher1_q6 = float(marks_data.get('q6', 0)) if marks_data.get('q6') else None
+                                final_mark.teacher1_q7 = float(marks_data.get('q7', 0)) if marks_data.get('q7') else None
+                                final_mark.teacher1_evaluator = teacher
+                            elif teacher_role == 'teacher2':
+                                final_mark.teacher2_q1 = float(marks_data.get('q1', 0)) if marks_data.get('q1') else None
+                                final_mark.teacher2_q2 = float(marks_data.get('q2', 0)) if marks_data.get('q2') else None
+                                final_mark.teacher2_q3 = float(marks_data.get('q3', 0)) if marks_data.get('q3') else None
+                                final_mark.teacher2_q4 = float(marks_data.get('q4', 0)) if marks_data.get('q4') else None
+                                final_mark.teacher2_q5 = float(marks_data.get('q5', 0)) if marks_data.get('q5') else None
+                                final_mark.teacher2_q6 = float(marks_data.get('q6', 0)) if marks_data.get('q6') else None
+                                final_mark.teacher2_q7 = float(marks_data.get('q7', 0)) if marks_data.get('q7') else None
+                                final_mark.teacher2_evaluator = teacher
+                            elif teacher_role == 'teacher3':
+                                final_mark.teacher3_q1 = float(marks_data.get('q1', 0)) if marks_data.get('q1') else None
+                                final_mark.teacher3_q2 = float(marks_data.get('q2', 0)) if marks_data.get('q2') else None
+                                final_mark.teacher3_q3 = float(marks_data.get('q3', 0)) if marks_data.get('q3') else None
+                                final_mark.teacher3_q4 = float(marks_data.get('q4', 0)) if marks_data.get('q4') else None
+                                final_mark.teacher3_q5 = float(marks_data.get('q5', 0)) if marks_data.get('q5') else None
+                                final_mark.teacher3_q6 = float(marks_data.get('q6', 0)) if marks_data.get('q6') else None
+                                final_mark.teacher3_q7 = float(marks_data.get('q7', 0)) if marks_data.get('q7') else None
+                                final_mark.teacher3_evaluator = teacher
+
+                            final_mark.marked_by = teacher
                     
                     # Update notes if provided
                     if 'notes' in marks_data:
@@ -10371,7 +10457,8 @@ def save_final_exam_marks(request):
                 except (ValueError, TypeError) as e:
                     continue
         
-        return JsonResponse({'success': True, 'message': 'Final exam marks saved successfully'})
+        msg = 'Remarks saved successfully' if notes_only_request else 'Final exam marks saved successfully'
+        return JsonResponse({'success': True, 'message': msg})
         
     except (Semester.DoesNotExist, Course.DoesNotExist):
         return JsonResponse({'error': 'Invalid semester or course'}, status=400)

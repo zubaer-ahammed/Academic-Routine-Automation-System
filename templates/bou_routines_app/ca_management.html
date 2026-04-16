@@ -357,6 +357,33 @@
         padding-top: 20px;
     }
 
+    .examiner-summary-table {
+        font-size: 0.9rem;
+    }
+    .examiner-summary-table th,
+    .examiner-summary-table td {
+        border: 1px solid #212529 !important;
+        vertical-align: middle;
+        text-align: center;
+        padding: 0.5rem 0.4rem;
+    }
+    .examiner-summary-table thead th {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+        font-weight: 600;
+        border: 1px solid #dee2e6;
+    }
+    .examiner-summary-table .cell-student-id,
+    .examiner-summary-table .cell-name {
+        text-align: left;
+    }
+    .examiner-summary-table .variation-sub {
+        display: block;
+        font-size: 0.75rem;
+        color: #6c757d;
+        font-weight: normal;
+    }
+
     .form-group label {
         font-weight: 600;
         color: #495057;
@@ -920,6 +947,11 @@
                                     <i class="fas fa-file-alt"></i> Semester Final Marks
                                 </button>
                             </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="examiner-summary-tab" data-bs-toggle="tab" data-bs-target="#examiner-summary" type="button" role="tab" aria-controls="examiner-summary" aria-selected="false">
+                                    <i class="fas fa-list-alt"></i> Final Exam Summary
+                                </button>
+                            </li>
                             {% endif %}
                         </ul>
 
@@ -1416,8 +1448,6 @@
                                                 {% else %}
                                                     <th colspan="9">Theory Course Final Exam (Total: 70 marks)</th>
                                                 {% endif %}
-                                                <th rowspan="2">Total</th>
-                                                <th rowspan="2">Notes</th>
                                             </tr>
                                             {% if selected_course.is_lab %}
                                                 <tr>
@@ -1575,19 +1605,6 @@
                                                             {% endif %}
                                                         </td>
                                                     {% endif %}
-                                                    
-                                                    <td class="total-mark">
-                                                        <span id="final-exam-total-{{ student.id }}">
-                                                            {% if final_mark %}{{ final_mark.final_exam_total|floatformat:2 }}{% else %}0.00{% endif %}
-                                                        </span>
-                                                    </td>
-                                                    <td>
-                                                        <input type="text" 
-                                                               name="students_data[{{ student.id }}][notes]"
-                                                               value="{% if final_mark %}{{ final_mark.notes }}{% endif %}"
-                                                               placeholder="Enter notes..."
-                                                               style="width: 100px; padding: 4px; border: 1px solid #ced4da; border-radius: 4px;">
-                                                    </td>
                                                 </tr>
                                                 {% endwith %}
                                             {% endfor %}
@@ -1601,6 +1618,119 @@
                                             <i class="fas fa-save"></i> Save Final Exam Marks
                                         </button>
                                     </div>
+                                </div>
+                            </div>
+
+                            <div class="tab-pane fade" id="examiner-summary" role="tabpanel" aria-labelledby="examiner-summary-tab">
+                                <div class="examiner-summary-section ca-table-section">
+                                    <div class="table-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                        <h4><i class="fas fa-list-alt"></i> Final Exam Summary</h4>
+                                        {% if examiner_summary_rows %}
+                                        <div class="d-flex align-items-center gap-2">
+                                            <button type="button" class="btn btn-success" onclick="saveExaminerSummaryRemarks()">
+                                                <i class="fas fa-save"></i> Save remarks
+                                            </button>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    <p class="text-muted small mb-3">
+                                        Consolidated view of examiner totals. <strong>Variation</strong> is the absolute difference between the first and second examiner totals;
+                                        <strong>% of avg</strong> is that difference as a percentage of the average of those two totals.
+                                        <strong>Marks obtained</strong> matches the stored final exam total (average of first and second; if a third evaluation is required and entered, it is included in the average).
+                                        Edit remarks in the table and use <strong>Save remarks</strong> above.
+                                    </p>
+                                    {% if selected_course.is_lab %}
+                                    <div class="table-responsive">
+                                        <table class="table examiner-summary-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>SL.</th>
+                                                    <th>Student ID</th>
+                                                    <th>Name</th>
+                                                    <th>Lab final (max 60)</th>
+                                                    <th>Marks obtained</th>
+                                                    <th>Remarks</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for row in examiner_summary_rows %}
+                                                <tr>
+                                                    <td>{{ row.sl }}</td>
+                                                    <td class="cell-student-id">{{ row.student.id }}</td>
+                                                    <td class="cell-name">{{ row.student.name }}</td>
+                                                    <td>{% if row.final_mark and row.final_mark.exam_absent %}AB{% elif row.lab_mark is not None %}{{ row.lab_mark|floatformat:2 }}{% else %}—{% endif %}</td>
+                                                    <td>{% if row.final_mark and row.final_mark.exam_absent %}AB{% elif row.final_mark %}{{ row.marks_obtained|floatformat:2 }}{% else %}—{% endif %}</td>
+                                                    <td class="cell-name">
+                                                        <input type="text" class="examiner-remarks-input form-control form-control-sm" data-student-id="{{ row.student.id }}" value="{{ row.notes|default:''|escape }}" placeholder="Remarks" aria-label="Remarks for {{ row.student.id }}">
+                                                    </td>
+                                                </tr>
+                                                {% empty %}
+                                                <tr><td colspan="6" class="text-center text-muted">No students.</td></tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    {% else %}
+                                    <div class="table-responsive">
+                                        <table class="table examiner-summary-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>SL.</th>
+                                                    <th>Student ID</th>
+                                                    <th>Name</th>
+                                                    <th>First examiner (70)</th>
+                                                    <th>Second examiner (70)</th>
+                                                    <th>Variation<br><span class="variation-sub">|Diff| / % of avg</span></th>
+                                                    <th>Third examiner (70)</th>
+                                                    <th>Marks obtained</th>
+                                                    <th>Remarks</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for row in examiner_summary_rows %}
+                                                <tr>
+                                                    <td>{{ row.sl }}</td>
+                                                    <td class="cell-student-id">{{ row.student.id }}</td>
+                                                    <td class="cell-name">{{ row.student.name }}</td>
+                                                    <td>{% if row.final_mark and row.final_mark.exam_absent %}AB{% elif row.final_mark %}{{ row.t1|floatformat:2 }}{% else %}—{% endif %}</td>
+                                                    <td>{% if row.final_mark and row.final_mark.exam_absent %}AB{% elif row.final_mark %}{{ row.t2|floatformat:2 }}{% else %}—{% endif %}</td>
+                                                    <td>
+                                                        {% if row.final_mark and row.final_mark.exam_absent %}
+                                                            AB
+                                                        {% elif row.final_mark %}
+                                                            {{ row.diff_abs|floatformat:2 }}
+                                                            {% if row.t1 or row.t2 %}
+                                                            <span class="variation-sub">{{ row.diff_pct|floatformat:1 }}% of avg</span>
+                                                            {% endif %}
+                                                        {% else %}
+                                                            —
+                                                        {% endif %}
+                                                    </td>
+                                                    <td>
+                                                        {% if row.final_mark and row.final_mark.exam_absent %}
+                                                            AB
+                                                        {% elif row.final_mark %}
+                                                            {% if row.requires_third or row.t3 > 0 %}
+                                                                {{ row.t3|floatformat:2 }}
+                                                            {% else %}
+                                                                —
+                                                            {% endif %}
+                                                        {% else %}
+                                                            —
+                                                        {% endif %}
+                                                    </td>
+                                                    <td>{% if row.final_mark and row.final_mark.exam_absent %}AB{% elif row.final_mark %}{{ row.marks_obtained|floatformat:2 }}{% else %}—{% endif %}</td>
+                                                    <td class="cell-name text-start">
+                                                        <input type="text" class="examiner-remarks-input form-control form-control-sm" data-student-id="{{ row.student.id }}" value="{{ row.notes|default:''|escape }}" placeholder="Remarks" aria-label="Remarks for {{ row.student.id }}">
+                                                    </td>
+                                                </tr>
+                                                {% empty %}
+                                                <tr><td colspan="9" class="text-center text-muted">No students.</td></tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    {% endif %}
                                 </div>
                             </div>
                             {% endif %}
@@ -1629,26 +1759,52 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // If tab parameter exists, activate that tab
     if (activeTab === 'final-exam') {
-        // Remove active class from CA Marks tab
         const caMarksTab = document.getElementById('ca-marks-tab');
         const caMarksPane = document.getElementById('ca-marks');
         const finalExamTab = document.getElementById('final-exam-tab');
         const finalExamPane = document.getElementById('final-exam');
+        const summaryTab = document.getElementById('examiner-summary-tab');
+        const summaryPane = document.getElementById('examiner-summary');
         
         if (caMarksTab && caMarksPane && finalExamTab && finalExamPane) {
             caMarksTab.classList.remove('active');
             caMarksTab.setAttribute('aria-selected', 'false');
             caMarksPane.classList.remove('show', 'active');
-            
+            if (summaryTab && summaryPane) {
+                summaryTab.classList.remove('active');
+                summaryTab.setAttribute('aria-selected', 'false');
+                summaryPane.classList.remove('show', 'active');
+            }
             finalExamTab.classList.add('active');
             finalExamTab.setAttribute('aria-selected', 'true');
             finalExamPane.classList.add('show', 'active');
+        }
+    } else if (activeTab === 'examiner-summary') {
+        const caMarksTab = document.getElementById('ca-marks-tab');
+        const caMarksPane = document.getElementById('ca-marks');
+        const finalExamTab = document.getElementById('final-exam-tab');
+        const finalExamPane = document.getElementById('final-exam');
+        const summaryTab = document.getElementById('examiner-summary-tab');
+        const summaryPane = document.getElementById('examiner-summary');
+        if (caMarksTab && caMarksPane && summaryTab && summaryPane) {
+            caMarksTab.classList.remove('active');
+            caMarksTab.setAttribute('aria-selected', 'false');
+            caMarksPane.classList.remove('show', 'active');
+            if (finalExamTab && finalExamPane) {
+                finalExamTab.classList.remove('active');
+                finalExamTab.setAttribute('aria-selected', 'false');
+                finalExamPane.classList.remove('show', 'active');
+            }
+            summaryTab.classList.add('active');
+            summaryTab.setAttribute('aria-selected', 'true');
+            summaryPane.classList.add('show', 'active');
         }
     }
     
     // Add event listeners to tabs to update URL when switched
     const caMarksTab = document.getElementById('ca-marks-tab');
     const finalExamTab = document.getElementById('final-exam-tab');
+    const examinerSummaryTab = document.getElementById('examiner-summary-tab');
     
     if (caMarksTab) {
         caMarksTab.addEventListener('shown.bs.tab', function() {
@@ -1659,6 +1815,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (finalExamTab) {
         finalExamTab.addEventListener('shown.bs.tab', function() {
             updateURLParameter('tab', 'final-exam');
+        });
+    }
+
+    if (examinerSummaryTab) {
+        examinerSummaryTab.addEventListener('shown.bs.tab', function() {
+            updateURLParameter('tab', 'examiner-summary');
         });
     }
 });
@@ -2477,12 +2639,7 @@ function saveFinalExamMarks() {
             return; // Skip this row if no student ID found
         }
         
-        const notesInput = row.querySelector('input[name$="[notes]"]');
-        const notes = notesInput ? notesInput.value : '';
-        
-        const marks = {
-            'notes': notes
-        };
+        const marks = {};
         
         if (isLabCourse) {
             marks['lab_final_exam_mark'] = parseFloat(row.querySelector('input[name$="[lab_final_exam_mark]"]').value) || 0;
@@ -2538,6 +2695,65 @@ function saveFinalExamMarks() {
     .catch(error => {
         console.error('Error saving final exam marks:', error);
         alert('An error occurred while saving final exam marks.');
+    });
+}
+
+function saveExaminerSummaryRemarks() {
+    const form = document.getElementById('final-exam-marks-form');
+    if (!form) {
+        alert('Please select a semester and course with final exam marks first.');
+        return;
+    }
+    const formData = new FormData(form);
+    const token = formData.get('csrfmiddlewaretoken');
+    if (!token) {
+        alert('Missing security token. Reload the page and try again.');
+        return;
+    }
+    const studentsData = {};
+    document.querySelectorAll('.examiner-remarks-input').forEach(function(inp) {
+        const sid = inp.getAttribute('data-student-id');
+        if (sid) {
+            studentsData[sid] = { notes: inp.value || '' };
+        }
+    });
+    const urlParamsFe = new URLSearchParams(window.location.search);
+    const centreSelectFe = document.getElementById('centre');
+    const centreIdFe = urlParamsFe.get('centre') || (centreSelectFe ? centreSelectFe.value : '');
+    const roleEl = document.getElementById('hidden-teacher-role');
+    const postData = {
+        'csrfmiddlewaretoken': token,
+        'semester_id': formData.get('semester_id'),
+        'course_id': formData.get('course_id'),
+        'teacher_role': roleEl ? roleEl.value : 'teacher1',
+        'notes_only': '1',
+        'students_data': JSON.stringify(studentsData)
+    };
+    if (centreIdFe) {
+        postData['centre_id'] = centreIdFe;
+    }
+    fetch('{% url "save-final-exam-marks" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': token
+        },
+        body: new URLSearchParams(postData).toString()
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+        if (data.success) {
+            alert(data.message || 'Remarks saved');
+            const u = new URL(window.location.href);
+            u.searchParams.set('tab', 'examiner-summary');
+            window.location.href = u.toString();
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(function(err) {
+        console.error(err);
+        alert('Failed to save remarks.');
     });
 }
 

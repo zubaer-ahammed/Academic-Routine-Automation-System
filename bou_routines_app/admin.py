@@ -162,8 +162,22 @@ class SemesterCourseAdmin(admin.ModelAdmin):
     list_filter = ('semester', 'centre', 'teacher', 'course__curriculum')
     search_fields = ('semester__name', 'course__code', 'course__name', 'teacher__name', 'centre__name')
     ordering = ('semester', 'course__code', 'centre')
-    fields = ('semester', 'course', 'centre', 'teacher', 'number_of_classes')
-    autocomplete_fields = ('teacher',)
+    fields = (
+        'semester',
+        'course',
+        'centre',
+        'teacher',
+        'final_exam_evaluator1',
+        'final_exam_evaluator2',
+        'final_exam_evaluator3',
+        'number_of_classes',
+    )
+    autocomplete_fields = (
+        'teacher',
+        'final_exam_evaluator1',
+        'final_exam_evaluator2',
+        'final_exam_evaluator3',
+    )
 
 class BaseTeacherUserAdminForm:
     """Base class with common fields for both add and change forms"""

@@ -344,6 +344,31 @@ class SemesterCourse(models.Model):
     centre = models.ForeignKey('Centre', on_delete=models.PROTECT, help_text="Study Centre this course is offered in for this semester (required)")
     teacher = models.ForeignKey(Teacher, on_delete=models.SET_NULL, null=True, blank=True, 
                                 help_text="Teacher for this course in this specific semester/centre.")
+    # Final exam: three evaluators for this semester/course/centre offering (canonical source)
+    final_exam_evaluator1 = models.ForeignKey(
+        Teacher,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='semester_courses_as_final_exam_evaluator1',
+        help_text="First examiner (e.g. DRC) for final exam marking",
+    )
+    final_exam_evaluator2 = models.ForeignKey(
+        Teacher,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='semester_courses_as_final_exam_evaluator2',
+        help_text="Second examiner (e.g. DUET) for final exam marking",
+    )
+    final_exam_evaluator3 = models.ForeignKey(
+        Teacher,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='semester_courses_as_final_exam_evaluator3',
+        help_text="Third examiner if required (large T1/T2 discrepancy)",
+    )
     number_of_classes = models.PositiveIntegerField(default=1)  # Default to 1 class
 
     class Meta:

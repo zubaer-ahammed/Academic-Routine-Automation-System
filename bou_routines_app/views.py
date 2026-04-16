@@ -76,6 +76,70 @@ def filter_students_queryset_by_centre(students_qs, centre_id):
         return students_qs
 
 
+def final_exam_mark_sample_for_scope(course, semester, centre_id):
+    """
+    One FinalExamMark row to read teacher1/2/3_evaluator for the UI.
+
+    When centre_id is set, only marks for students in that study centre are
+    considered — same scope as assign_evaluator / save marks. Without this,
+    .first() can pick another centre's row and the page shows stale examiners
+    after save/reload.
+    """
+    qs = FinalExamMark.objects.filter(
+        course=course,
+        semester=semester,
+    ).select_related(
+        'teacher1_evaluator',
+        'teacher2_evaluator',
+        'teacher3_evaluator',
+        'student',
+    )
+    if centre_id is not None and centre_id != '':
+        try:
+            centre = Centre.objects.get(id=int(centre_id))
+            qs = qs.filter(student__centre=centre)
+        except (Centre.DoesNotExist, ValueError, TypeError):
+            pass
+    return qs.order_by('student_id').first()
+
+
+def _sync_final_exam_evaluators_from_semester_course(semester, course, centre):
+    """
+    Copy final_exam_evaluator1–3 from SemesterCourse onto FinalExamMark rows for students
+    in that centre (keeps PDFs / exports that read FinalExamMark in sync).
+    """
+    sc = SemesterCourse.objects.filter(
+        semester=semester, course=course, centre=centre
+    ).first()
+    if not sc:
+        return
+    students = Student.objects.filter(semesters=semester)
+    students = filter_students_queryset_by_centre(students, str(centre.id))
+    marked_by = (
+        sc.final_exam_evaluator1
+        or sc.final_exam_evaluator2
+        or sc.final_exam_evaluator3
+        or sc.teacher
+    )
+    if not marked_by:
+        marked_by = Teacher.objects.first()
+    if not marked_by:
+        return
+    for student in students:
+        fm, _ = FinalExamMark.objects.get_or_create(
+            student=student,
+            course=course,
+            semester=semester,
+            defaults={'marked_by': marked_by},
+        )
+        fm.teacher1_evaluator = sc.final_exam_evaluator1
+        fm.teacher2_evaluator = sc.final_exam_evaluator2
+        fm.teacher3_evaluator = sc.final_exam_evaluator3
+        if not fm.marked_by:
+            fm.marked_by = marked_by
+        fm.save()
+
+
 def time_overlap(start1, end1, start2, end2):
     # Two time ranges overlap if:
     # 1. The start time of one range is less than the end time of the other range
@@ -9750,13 +9814,27 @@ def ca_management(request):
                 semester = Semester.objects.get(id=semester_id)
                 course = Course.objects.get(id=course_id)
                 
-                # First, check if teacher is assigned as any evaluator in existing marks
-                sample_mark = FinalExamMark.objects.filter(
-                    course=course,
-                    semester=semester
-                ).first()
-                
-                if sample_mark:
+                # Evaluator role: SemesterCourse (canonical), then FinalExamMark (legacy)
+                centre_for_sample = request.GET.get('centre') or request.POST.get('centre')
+                if centre_for_sample:
+                    try:
+                        centre_obj = Centre.objects.get(id=int(centre_for_sample))
+                        sc_role = SemesterCourse.objects.filter(
+                            semester=semester, course=course, centre=centre_obj
+                        ).first()
+                        if sc_role:
+                            if sc_role.final_exam_evaluator1_id == teacher.id:
+                                teacher_role = 'teacher1'
+                            elif sc_role.final_exam_evaluator2_id == teacher.id:
+                                teacher_role = 'teacher2'
+                            elif sc_role.final_exam_evaluator3_id == teacher.id:
+                                teacher_role = 'teacher3'
+                    except (Centre.DoesNotExist, ValueError, TypeError):
+                        pass
+
+                sample_mark = final_exam_mark_sample_for_scope(course, semester, centre_for_sample)
+
+                if not teacher_role and sample_mark:
                     if sample_mark.teacher1_evaluator == teacher:
                         teacher_role = 'teacher1'
                     elif sample_mark.teacher2_evaluator == teacher:
@@ -9853,46 +9931,58 @@ def ca_management(request):
             # Add effective teacher to context for template use
             context['course_teacher'] = course_teacher
             
-            # Find teachers for this course
-            # First check if evaluators are manually assigned in existing marks (admin can override)
-            # Then fall back to SemesterCourse for automatic assignment
-            sample_mark = FinalExamMark.objects.filter(
-                course=course,
-                semester=semester
-            ).first()
-            
-            # Check for manually assigned evaluators first
+            # Examiners: SemesterCourse.final_exam_evaluator1–3 (canonical), then FinalExamMark, then course teacher
+            centre_for_evaluators = centre_id or selected_centre_id
+            if centre_for_evaluators:
+                try:
+                    cev = Centre.objects.get(id=int(centre_for_evaluators))
+                    sc_ev = SemesterCourse.objects.filter(
+                        semester=semester, course=course, centre=cev
+                    ).select_related(
+                        'final_exam_evaluator1',
+                        'final_exam_evaluator2',
+                        'final_exam_evaluator3',
+                    ).first()
+                    if sc_ev:
+                        if sc_ev.final_exam_evaluator1:
+                            teacher1_evaluator_obj = sc_ev.final_exam_evaluator1
+                        if sc_ev.final_exam_evaluator2:
+                            teacher2_evaluator_obj = sc_ev.final_exam_evaluator2
+                        if sc_ev.final_exam_evaluator3:
+                            teacher3_evaluator_obj = sc_ev.final_exam_evaluator3
+                except (Centre.DoesNotExist, ValueError, TypeError):
+                    pass
+
+            sample_mark = final_exam_mark_sample_for_scope(course, semester, centre_for_evaluators)
+
             if sample_mark:
-                if sample_mark.teacher1_evaluator:
+                if not teacher1_evaluator_obj and sample_mark.teacher1_evaluator:
                     teacher1_evaluator_obj = sample_mark.teacher1_evaluator
-                if sample_mark.teacher2_evaluator:
+                if not teacher2_evaluator_obj and sample_mark.teacher2_evaluator:
                     teacher2_evaluator_obj = sample_mark.teacher2_evaluator
-                if sample_mark.teacher3_evaluator:
+                if not teacher3_evaluator_obj and sample_mark.teacher3_evaluator:
                     teacher3_evaluator_obj = sample_mark.teacher3_evaluator
-            
-            # If not manually assigned, get from SemesterCourse
+
             drc_centre = Centre.objects.filter(code='DRC').first()
             duet_centre = Centre.objects.filter(code='DUET').first()
-            
-            # Get Teacher 1 (First Examiner) from SemesterCourse for DRC centre if not manually assigned
+
             if not teacher1_evaluator_obj and drc_centre:
                 drc_semester_course = SemesterCourse.objects.filter(
                     semester=semester,
                     course=course,
-                    centre=drc_centre
+                    centre=drc_centre,
                 ).select_related('teacher').first()
-                
+
                 if drc_semester_course and drc_semester_course.teacher:
                     teacher1_evaluator_obj = drc_semester_course.teacher
-            
-            # Get Teacher 2 (Second Examiner) from SemesterCourse for DUET centre if not manually assigned
+
             if not teacher2_evaluator_obj and duet_centre:
                 duet_semester_course = SemesterCourse.objects.filter(
                     semester=semester,
                     course=course,
-                    centre=duet_centre
+                    centre=duet_centre,
                 ).select_related('teacher').first()
-                
+
                 if duet_semester_course and duet_semester_course.teacher:
                     teacher2_evaluator_obj = duet_semester_course.teacher
             
@@ -9908,27 +9998,34 @@ def ca_management(request):
     show_final_exam_tab = is_admin
     
     if not show_final_exam_tab and teacher and selected_semester and selected_course:
-        # Check if teacher is assigned as one of the evaluators
-        # First check manually assigned evaluators in FinalExamMark
-        sample_mark = FinalExamMark.objects.filter(
-            course=selected_course,
-            semester=selected_semester
-        ).first()
-        
-        if sample_mark:
-            # Check if teacher is assigned as any evaluator
-            if (sample_mark.teacher1_evaluator == teacher or 
-                sample_mark.teacher2_evaluator == teacher or 
-                sample_mark.teacher3_evaluator == teacher):
+        if selected_centre_id:
+            sc_tab = SemesterCourse.objects.filter(
+                semester=selected_semester,
+                course=selected_course,
+                centre_id=selected_centre_id,
+            ).first()
+            if sc_tab and (
+                sc_tab.final_exam_evaluator1 == teacher
+                or sc_tab.final_exam_evaluator2 == teacher
+                or sc_tab.final_exam_evaluator3 == teacher
+            ):
                 show_final_exam_tab = True
-        
-        # If not manually assigned, check default assignment from SemesterCourse
-        # Use the same logic as above to determine evaluators
+
         if not show_final_exam_tab:
-            # Check if teacher matches teacher1_evaluator (from DRC SemesterCourse)
+            sample_mark = final_exam_mark_sample_for_scope(
+                selected_course, selected_semester, selected_centre_id
+            )
+
+            if sample_mark and (
+                sample_mark.teacher1_evaluator == teacher
+                or sample_mark.teacher2_evaluator == teacher
+                or sample_mark.teacher3_evaluator == teacher
+            ):
+                show_final_exam_tab = True
+
+        if not show_final_exam_tab:
             if teacher1_evaluator_obj and teacher1_evaluator_obj == teacher:
                 show_final_exam_tab = True
-            # Check if teacher matches teacher2_evaluator (from DUET SemesterCourse)
             elif teacher2_evaluator_obj and teacher2_evaluator_obj == teacher:
                 show_final_exam_tab = True
     
@@ -10266,6 +10363,62 @@ def save_ca_marks(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+def _apply_final_exam_examiner_assignments_from_post(request, semester, course):
+    """
+    Persist Assign Examiners from POST onto SemesterCourse (canonical) for this
+    semester + course + study centre, then sync to FinalExamMark. Staff only.
+
+    Keys: assign_teacher1_id, assign_teacher2_id, assign_teacher3_id — empty string clears.
+    Returns None on success, or an error string for JsonResponse.
+    """
+    if not (request.user.is_superuser or request.user.is_staff):
+        return None
+
+    assign_keys = ('assign_teacher1_id', 'assign_teacher2_id', 'assign_teacher3_id')
+    if not any(k in request.POST for k in assign_keys):
+        return None
+
+    cid = (request.POST.get('centre_id') or request.POST.get('centre') or '').strip()
+    if not cid:
+        return 'Study centre is required to save examiners.'
+
+    try:
+        centre = Centre.objects.get(id=int(cid))
+    except (Centre.DoesNotExist, ValueError, TypeError):
+        return 'Invalid study centre.'
+
+    sc = SemesterCourse.objects.filter(
+        semester=semester, course=course, centre=centre
+    ).first()
+    if not sc:
+        return (
+            'No Semester course row for this semester, course, and study centre. '
+            'Add the offering in admin first.'
+        )
+
+    def _teacher_from_post(key):
+        if key not in request.POST:
+            return None
+        raw = (request.POST.get(key) or '').strip()
+        if not raw:
+            return None
+        try:
+            return Teacher.objects.get(id=int(raw))
+        except (ValueError, Teacher.DoesNotExist):
+            return None
+
+    if 'assign_teacher1_id' in request.POST:
+        sc.final_exam_evaluator1 = _teacher_from_post('assign_teacher1_id')
+    if 'assign_teacher2_id' in request.POST:
+        sc.final_exam_evaluator2 = _teacher_from_post('assign_teacher2_id')
+    if 'assign_teacher3_id' in request.POST:
+        sc.final_exam_evaluator3 = _teacher_from_post('assign_teacher3_id')
+    sc.save()
+
+    _sync_final_exam_evaluators_from_semester_course(semester, course, centre)
+    return None
+
+
 @login_required
 @require_POST
 def save_final_exam_marks(request):
@@ -10364,6 +10517,19 @@ def save_final_exam_marks(request):
         
         # Process each student's marks
         notes_only_request = request.POST.get('notes_only') == '1'
+        apply_assign_from_post = (
+            not notes_only_request
+            and (request.user.is_superuser or request.user.is_staff)
+            and any(
+                k in request.POST
+                for k in ('assign_teacher1_id', 'assign_teacher2_id', 'assign_teacher3_id')
+            )
+        )
+        if apply_assign_from_post:
+            assign_err = _apply_final_exam_examiner_assignments_from_post(request, semester, course)
+            if assign_err:
+                return JsonResponse({'error': assign_err}, status=400)
+
         students_data = request.POST.get('students_data')
         if students_data:
             import json
@@ -10423,7 +10589,8 @@ def save_final_exam_marks(request):
                                 final_mark.teacher1_q5 = float(marks_data.get('q5', 0)) if marks_data.get('q5') else None
                                 final_mark.teacher1_q6 = float(marks_data.get('q6', 0)) if marks_data.get('q6') else None
                                 final_mark.teacher1_q7 = float(marks_data.get('q7', 0)) if marks_data.get('q7') else None
-                                final_mark.teacher1_evaluator = teacher
+                                if not apply_assign_from_post:
+                                    final_mark.teacher1_evaluator = teacher
                             elif teacher_role == 'teacher2':
                                 final_mark.teacher2_q1 = float(marks_data.get('q1', 0)) if marks_data.get('q1') else None
                                 final_mark.teacher2_q2 = float(marks_data.get('q2', 0)) if marks_data.get('q2') else None
@@ -10432,7 +10599,8 @@ def save_final_exam_marks(request):
                                 final_mark.teacher2_q5 = float(marks_data.get('q5', 0)) if marks_data.get('q5') else None
                                 final_mark.teacher2_q6 = float(marks_data.get('q6', 0)) if marks_data.get('q6') else None
                                 final_mark.teacher2_q7 = float(marks_data.get('q7', 0)) if marks_data.get('q7') else None
-                                final_mark.teacher2_evaluator = teacher
+                                if not apply_assign_from_post:
+                                    final_mark.teacher2_evaluator = teacher
                             elif teacher_role == 'teacher3':
                                 final_mark.teacher3_q1 = float(marks_data.get('q1', 0)) if marks_data.get('q1') else None
                                 final_mark.teacher3_q2 = float(marks_data.get('q2', 0)) if marks_data.get('q2') else None
@@ -10441,7 +10609,8 @@ def save_final_exam_marks(request):
                                 final_mark.teacher3_q5 = float(marks_data.get('q5', 0)) if marks_data.get('q5') else None
                                 final_mark.teacher3_q6 = float(marks_data.get('q6', 0)) if marks_data.get('q6') else None
                                 final_mark.teacher3_q7 = float(marks_data.get('q7', 0)) if marks_data.get('q7') else None
-                                final_mark.teacher3_evaluator = teacher
+                                if not apply_assign_from_post:
+                                    final_mark.teacher3_evaluator = teacher
 
                             final_mark.marked_by = teacher
                     
@@ -10483,6 +10652,10 @@ def assign_evaluator(request):
         
         if not all([semester_id, course_id, evaluator_number, teacher_id]):
             return JsonResponse({'error': 'Missing required parameters'}, status=400)
+
+        cid = (request.POST.get('centre_id') or request.POST.get('centre') or '').strip()
+        if not cid:
+            return JsonResponse({'error': 'Study centre is required to assign examiners'}, status=400)
         
         semester = Semester.objects.get(id=semester_id)
         course = Course.objects.get(id=course_id)
@@ -10491,51 +10664,40 @@ def assign_evaluator(request):
         
         if evaluator_number not in [1, 2, 3]:
             return JsonResponse({'error': 'Invalid examiner number'}, status=400)
-        
-        # Students in this semester at the selected study centre (matches CA / final marks tables)
-        students = Student.objects.filter(semesters=semester)
-        students = filter_students_queryset_by_centre(students, request.POST.get('centre_id'))
-        
-        # Get teacher from user for marked_by field (admin can use any teacher, but we need one)
-        # For admin users, use the assigned evaluator as marked_by, or get first available teacher
-        marked_by_teacher = teacher  # Use the assigned evaluator as marked_by
-        if not marked_by_teacher:
-            # Fallback: get teacher from user if available
-            marked_by_teacher = get_teacher_from_user(request.user)
-            if not marked_by_teacher:
-                # Last resort: get first teacher from database
-                marked_by_teacher = Teacher.objects.first()
-                if not marked_by_teacher:
-                    return JsonResponse({'error': 'No teacher found in system'}, status=400)
-        
-        # Update or create FinalExamMark records for all students
-        updated_count = 0
-        for student in students:
-            final_mark, created = FinalExamMark.objects.get_or_create(
-                student=student,
-                course=course,
-                semester=semester,
-                defaults={'marked_by': marked_by_teacher}
+
+        try:
+            centre = Centre.objects.get(id=int(cid))
+        except (Centre.DoesNotExist, ValueError, TypeError):
+            return JsonResponse({'error': 'Invalid study centre'}, status=400)
+
+        sc = SemesterCourse.objects.filter(
+            semester=semester, course=course, centre=centre
+        ).first()
+        if not sc:
+            return JsonResponse(
+                {
+                    'error': 'No Semester course row for this semester, course, and study centre.',
+                },
+                status=400,
             )
-            
-            # Assign the evaluator based on evaluator_number
-            if evaluator_number == 1:
-                final_mark.teacher1_evaluator = teacher
-            elif evaluator_number == 2:
-                final_mark.teacher2_evaluator = teacher
-            elif evaluator_number == 3:
-                final_mark.teacher3_evaluator = teacher
-            
-            # Ensure marked_by is set (in case record already existed without it)
-            if not final_mark.marked_by:
-                final_mark.marked_by = marked_by_teacher
-            
-            final_mark.save()
-            updated_count += 1
-        
+
+        if evaluator_number == 1:
+            sc.final_exam_evaluator1 = teacher
+        elif evaluator_number == 2:
+            sc.final_exam_evaluator2 = teacher
+        else:
+            sc.final_exam_evaluator3 = teacher
+        sc.save()
+
+        _sync_final_exam_evaluators_from_semester_course(semester, course, centre)
+
+        students = Student.objects.filter(semesters=semester)
+        students = filter_students_queryset_by_centre(students, str(centre.id))
+        updated_count = students.count()
+
         return JsonResponse({
             'success': True,
-            'message': f'Examiner {evaluator_number} assigned successfully to {updated_count} student(s)',
+            'message': f'Examiner {evaluator_number} saved on Semester course and synced to {updated_count} student(s)',
             'teacher_name': teacher.name
         })
         

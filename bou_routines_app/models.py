@@ -646,6 +646,31 @@ class CAMark(models.Model):
     
     def save(self, *args, **kwargs):
         from decimal import Decimal
+
+        def _to_decimal(val):
+            if val is None:
+                return Decimal('0')
+            if isinstance(val, Decimal):
+                return val
+            # Handles float/int/str safely
+            return Decimal(str(val))
+
+        # Normalize numeric fields (POST assigns floats; calculations expect Decimals)
+        self.first_assignment_mark = _to_decimal(self.first_assignment_mark)
+        self.second_assignment_mark = _to_decimal(self.second_assignment_mark)
+        self.third_assignment_mark = _to_decimal(self.third_assignment_mark)
+        self.midterm_mark = _to_decimal(self.midterm_mark)
+        self.first_class_test_mark = _to_decimal(self.first_class_test_mark)
+        self.second_class_test_mark = _to_decimal(self.second_class_test_mark)
+
+        self.first_lab_assignment_mark = _to_decimal(self.first_lab_assignment_mark)
+        self.second_lab_assignment_mark = _to_decimal(self.second_lab_assignment_mark)
+        self.third_lab_assignment_mark = _to_decimal(self.third_lab_assignment_mark)
+        self.lab_practical_mark = _to_decimal(self.lab_practical_mark)
+
+        self.project_supervisor_mark = _to_decimal(self.project_supervisor_mark)
+        self.project_evaluation_mark = _to_decimal(self.project_evaluation_mark)
+        self.project_presentation_mark = _to_decimal(self.project_presentation_mark)
         
         # Auto-calculate attendance mark
         attendance_mark_float = self.calculate_attendance_mark()

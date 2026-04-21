@@ -10177,6 +10177,8 @@ def save_ca_marks(request):
         
         saved_count = 0
         failed_students = []
+        first_save_exception = None
+        first_save_traceback = None
         
         # Log first few student IDs being processed for debugging
         sample_ids = list(students_marks.keys())[:5]
@@ -10313,6 +10315,9 @@ def save_ca_marks(request):
                     logger.error(f"Full traceback:\n{error_traceback}")
                     logger.error(f"CA mark state: student={ca_mark.student.id}, course={ca_mark.course.code}, semester={ca_mark.semester.name}, marked_by={ca_mark.marked_by.id if ca_mark.marked_by else 'None'}")
                     logger.error(f"CA mark values: first_assignment={ca_mark.first_assignment_mark}, second_assignment={ca_mark.second_assignment_mark}, third_assignment={ca_mark.third_assignment_mark}")
+                    if first_save_exception is None:
+                        first_save_exception = str(save_ex)
+                        first_save_traceback = error_traceback
                     failed_students.append(student_id_clean)
                     continue
                 
@@ -10350,6 +10355,8 @@ def save_ca_marks(request):
                     error_msg += f'Sample student IDs not found: {", ".join(sample_ids)}'
                 if len(failed_students) > 5:
                     error_msg += f' (and {len(failed_students) - 5} more)'
+                if first_save_exception:
+                    error_msg += f' First error: {first_save_exception}'
             else:
                 error_msg += 'Possible reasons: Student IDs not found in database, or all marks failed validation.'
             logger.warning(f"CA marks save failed: {total_students} students processed, 0 saved. Failed IDs: {failed_students[:10]}")

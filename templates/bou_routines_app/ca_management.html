@@ -1,6 +1,7 @@
 {% extends 'bou_routines_app/base.html' %}
 {% load static %}
 {% load attendance_extras %}
+{% load marks_extras %}
 
 {% block title %}Marks Distribution{% endblock %}
 
@@ -1006,14 +1007,14 @@
                                                 <th rowspan="{% if selected_course.course_type == 'PROJECT' %}2{% else %}3{% endif %}" class="student-info">Student ID</th>
                                                 <th rowspan="{% if selected_course.course_type == 'PROJECT' %}2{% else %}3{% endif %}" class="student-info">Name</th>
                                                 {% if selected_course.course_type == 'PROJECT' %}
-                                                    <th colspan="3">Project Work CA (Total: {{ selected_course.effective_project_supervisor_weight|add:selected_course.effective_project_evaluation_weight|add:selected_course.effective_project_presentation_weight }}%)</th>
+                                                    <th colspan="3">Project Work CA (Total: {{ selected_course.effective_project_supervisor_weight|add:selected_course.effective_project_evaluation_weight|add:selected_course.effective_project_presentation_weight }})</th>
                                                 {% elif selected_course.is_lab %}
-                                                    <th colspan="6">Lab Course CA (Total: {{ selected_course.effective_lab_ca_attendance_weight|add:selected_course.effective_lab_ca_assignment_weight|add:selected_course.effective_lab_ca_practical_weight }}%)</th>
+                                                    <th colspan="6">Lab Course CA (Total: {{ selected_course.effective_lab_ca_attendance_weight|add:selected_course.effective_lab_ca_assignment_weight|add:selected_course.effective_lab_ca_practical_weight }})</th>
                                                 {% else %}
                                                     {% if selected_semester and selected_semester.curriculum and selected_semester.curriculum.code == 'OLD' %}
-                                                        <th colspan="8">Theory Course CA (Total: {{ selected_course.effective_ca_attendance_weight|add:selected_course.effective_ca_assignment_weight|add:selected_course.effective_ca_quiz_weight }}%)</th>
+                                                        <th colspan="8">Theory Course CA (Total: {{ selected_course.effective_ca_attendance_weight|add:selected_course.effective_ca_assignment_weight|add:selected_course.effective_ca_quiz_weight }})</th>
                                                     {% else %}
-                                                        <th colspan="6">Theory Course CA (Total: {{ selected_course.effective_ca_attendance_weight|add:selected_course.effective_ca_assignment_weight|add:selected_course.effective_ca_midterm_weight }}%)</th>
+                                                        <th colspan="6">Theory Course CA (Total: {{ selected_course.effective_ca_attendance_weight|add:selected_course.effective_ca_assignment_weight|add:selected_course.effective_ca_midterm_weight }})</th>
                                                 {% endif %}
                                                 {% endif %}
                                                 <th rowspan="{% if selected_course.course_type == 'PROJECT' %}2{% else %}3{% endif %}">Total CA Mark</th>
@@ -1021,22 +1022,22 @@
                                             </tr>
                                             {% if selected_course.course_type == 'PROJECT' %}
                                             <tr>
-                                                <th>Supervisor<br><small>({{ selected_course.effective_project_supervisor_weight }}%)</small></th>
-                                                <th>Evaluation<br><small>({{ selected_course.effective_project_evaluation_weight }}%)</small></th>
-                                                <th>Presentation<br><small>({{ selected_course.effective_project_presentation_weight }}%)</small></th>
+                                                <th>Supervisor<br><small>({{ selected_course.effective_project_supervisor_weight }})</small></th>
+                                                <th>Evaluation<br><small>({{ selected_course.effective_project_evaluation_weight }})</small></th>
+                                                <th>Presentation<br><small>({{ selected_course.effective_project_presentation_weight }})</small></th>
                                             </tr>
                                             {% else %}
                                             <tr>
-                                                <th>Attendance<br><small>({% if selected_course.is_lab %}{{ selected_course.effective_lab_ca_attendance_weight }}{% else %}{{ selected_course.effective_ca_attendance_weight }}{% endif %}%)</small></th>
+                                                <th>Attendance<br><small>({% if selected_course.is_lab %}{{ selected_course.effective_lab_ca_attendance_weight }}{% else %}{{ selected_course.effective_ca_attendance_weight }}{% endif %})</small></th>
                                                 {% if selected_course.is_lab %}
-                                                    <th colspan="4">Assignment/Lab Report<br><small>({{ selected_course.effective_lab_ca_assignment_weight }}%)</small></th>
-                                                    <th>Experiment/Lab Project<br><small>({{ selected_course.effective_lab_ca_practical_weight }}%)</small></th>
+                                                    <th colspan="4">Assignment/Lab Report<br><small>({{ selected_course.effective_lab_ca_assignment_weight }})</small></th>
+                                                    <th>Experiment/Lab Project<br><small>({{ selected_course.effective_lab_ca_practical_weight }})</small></th>
                                                 {% else %}
-                                                    <th colspan="4">Assignment/Presentation<br><small>({{ selected_course.effective_ca_assignment_weight }}%)</small></th>
+                                                    <th colspan="4">Assignment/Presentation<br><small>({{ selected_course.effective_ca_assignment_weight }})</small></th>
                                                     {% if selected_semester and selected_semester.curriculum and selected_semester.curriculum.code == 'OLD' %}
-                                                        <th colspan="3">Class Test<br><small>({{ selected_course.effective_ca_quiz_weight }}%)</small></th>
+                                                        <th colspan="3">Class Test<br><small>({{ selected_course.effective_ca_quiz_weight }})</small></th>
                                                     {% else %}
-                                                        <th>Mid-Term Exam<br><small>({{ selected_course.effective_ca_midterm_weight }}%)</small></th>
+                                                        <th>Mid-Term Exam<br><small>({{ selected_course.effective_ca_midterm_weight }})</small></th>
                                                     {% endif %}
                                                 {% endif %}
                                             </tr>
@@ -1268,7 +1269,7 @@
                                                         <span id="total-ca-{{ student.id }}" class="total-ca-value">
                                                             {% for mark_id, ca_mark in ca_marks.items %}
                                                                 {% if mark_id == student.id %}
-                                                                    {{ ca_mark.total_ca_mark|floatformat:2 }}
+                                                                    {{ ca_mark.total_ca_mark|ceil_int }}
                                                                 {% endif %}
                                                             {% empty %}
                                                                 0.00
@@ -1587,8 +1588,8 @@
                                                         <td class="total-mark">
                                                             <span id="teacher-total-{{ student.id }}" class="teacher-total-value" data-teacher-role="{{ teacher_role }}">
                                                                 {% if final_mark %}
-                                                                    {% if teacher_role == 'teacher1' %}{{ final_mark.teacher1_total|floatformat:2 }}{% elif teacher_role == 'teacher2' %}{{ final_mark.teacher2_total|floatformat:2 }}{% elif teacher_role == 'teacher3' %}{{ final_mark.teacher3_total|floatformat:2 }}{% else %}0.00{% endif %}
-                                                                {% else %}0.00{% endif %}
+                                                                    {% if teacher_role == 'teacher1' %}{{ final_mark.teacher1_total|ceil_int }}{% elif teacher_role == 'teacher2' %}{{ final_mark.teacher2_total|ceil_int }}{% elif teacher_role == 'teacher3' %}{{ final_mark.teacher3_total|ceil_int }}{% else %}0{% endif %}
+                                                                {% else %}0{% endif %}
                                                             </span>
                                                         </td>
                                                         <td>
@@ -2094,10 +2095,10 @@ function calculateStudentTotal(inputElement) {
         }
     }
     
-    // Update the Total CA Mark column (not the Average column)
+    // Update the Total CA Mark column (ceiling to next integer)
     const totalCAMarkCell = row.querySelector('.total-ca-value');
     if (totalCAMarkCell) {
-        totalCAMarkCell.textContent = total.toFixed(2);
+        totalCAMarkCell.textContent = String(Math.ceil(total));
     }
 }
 
@@ -2591,7 +2592,7 @@ function validateQuestionSet(inputElement) {
     // Calculate and update teacher's total (not final exam total)
     const teacherTotalElement = document.getElementById('teacher-total-' + studentId);
     if (teacherTotalElement) {
-        teacherTotalElement.textContent = total.toFixed(2);
+        teacherTotalElement.textContent = String(Math.ceil(total));
     }
 }
 

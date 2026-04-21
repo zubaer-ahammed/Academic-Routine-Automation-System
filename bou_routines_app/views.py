@@ -76,6 +76,15 @@ def filter_students_queryset_by_centre(students_qs, centre_id):
         return students_qs
 
 
+def _pdf_add_page_number(canvas, doc):
+    """Footer page number for PDF exports."""
+    canvas.saveState()
+    canvas.setFont('Helvetica', 9)
+    page_width, _page_height = doc.pagesize
+    canvas.drawRightString(page_width - doc.rightMargin, 20, f"Page {canvas.getPageNumber()}")
+    canvas.restoreState()
+
+
 def final_exam_mark_sample_for_scope(course, semester, centre_id):
     """
     One FinalExamMark row to read teacher1/2/3_evaluator for the UI.
@@ -7021,6 +7030,7 @@ def export_attendance_excel(request):
 def export_ca_marks_pdf(request):
     """Export CA marks to PDF"""
     try:
+        import math
         # Check permissions
         if not (request.user.is_superuser or request.user.is_staff or check_teacher_permission(request.user, 'can_manage_ca')):
             messages.error(request, "You don't have permission to export CA marks.")
@@ -7165,7 +7175,7 @@ def export_ca_marks_pdf(request):
             combined = f'{term} Term {semester_full_name}'.strip()
             left_content.append(Paragraph(combined, header_style_small))
         left_content.append(Spacer(1, 2))
-        left_content.append(Paragraph('CA Marks Report', header_style_bold))
+        left_content.append(Paragraph('Continuous Assessment Marks', header_style_bold))
         # Get teacher name from SemesterCourse
         teacher_name = None
         if centre_id:
@@ -7190,149 +7200,17 @@ def export_ca_marks_pdf(request):
         if centre_name:
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
         
-        # Build right column (contact person box)
-        # Get coordinator for this specific semester/centre combination
-        coordinator = None
-        if centre_id:
-            try:
-                centre_obj = Centre.objects.get(id=centre_id)
-                semester_centre_coordinator = SemesterCentreCoordinator.objects.filter(
-                    semester=semester,
-                    centre=centre_obj
-                ).select_related('program_coordinator', 'program_coordinator__teacher').first()
-                if semester_centre_coordinator:
-                    coordinator = semester_centre_coordinator.program_coordinator
-            except Centre.DoesNotExist:
-                pass
-        # Fallback: try to get centre from centre_name if centre_id not available
-        if not coordinator and centre_name:
-            try:
-                centre_obj = Centre.objects.get(name=centre_name)
-                semester_centre_coordinator = SemesterCentreCoordinator.objects.filter(
-                    semester=semester,
-                    centre=centre_obj
-                ).select_related('program_coordinator', 'program_coordinator__teacher').first()
-                if semester_centre_coordinator:
-                    coordinator = semester_centre_coordinator.program_coordinator
-            except Centre.DoesNotExist:
-                pass
-        contact_info_lines = []
-        
-        if coordinator:
-            contact_label = Paragraph(
-                'Contact Person',
-                ParagraphStyle(
-                    'ContactLabel',
-                    fontName='Helvetica-Bold',
-                    fontSize=11,
-                    alignment=0,
-                    textColor=colors.white,
-                    spaceAfter=0,
-                    spaceBefore=0,
-                    leading=14,
-                )
-            )
-            contact_label_table = Table(
-                [[contact_label]],
-                colWidths=[190],
-                hAlign='RIGHT',
-                style=TableStyle([
-                    ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-                    ('TOPPADDING', (0,0), (-1,-1), -3),
-                    ('LEFTPADDING', (0,0), (-1,-1), 0),
-                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
-                ])
-            )
-            if coordinator.teacher:
-                contact_info_lines.append(coordinator.teacher.name)
-            if coordinator.designation:
-                contact_info_lines.append(coordinator.designation)
-            if coordinator.secondary_designation:
-                contact_info_lines.append(coordinator.secondary_designation)
-            contact_info_lines.append('Bangladesh Open University')
-            if coordinator.phone:
-                contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
-            if coordinator.email:
-                contact_info_lines.append(f'email:{coordinator.email}')
-        else:
-            contact_info_lines.append('Bangladesh Open University')
-            contact_label = Paragraph(
-                'Contact Person',
-                ParagraphStyle(
-                    'ContactLabel',
-                    fontName='Helvetica-Bold',
-                    fontSize=11,
-                    alignment=0,
-                    textColor=colors.white,
-                    spaceAfter=0,
-                    spaceBefore=0,
-                    leading=14,
-                )
-            )
-            contact_label_table = Table(
-                [[contact_label]],
-                colWidths=[190],
-                hAlign='RIGHT',
-                style=TableStyle([
-                    ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-                    ('TOPPADDING', (0,0), (-1,-1), -3),
-                    ('LEFTPADDING', (0,0), (-1,-1), 0),
-                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
-                ])
-            )
-        
-        contact_info_para = Paragraph(
-            '<br/>'.join(contact_info_lines),
-            ParagraphStyle(
-                'ContactBox',
-                fontName='Helvetica',
-                fontSize=10,
-                alignment=0,
-                textColor=colors.black,
-                leftIndent=2,
-                leading=10,
-                spaceBefore=0,
-                spaceAfter=0,
-            )
-        )
-        contact_table = Table(
-            [[contact_label_table], [contact_info_para]],
-            colWidths=[190],
-            hAlign='RIGHT',
-        )
-        contact_table.setStyle(TableStyle([
-            ('BOX', (0, 0), (-1, -1), 1, colors.black),
-            ('ROUNDED', (0, 0), (-1, -1), 6),
-            ('BACKGROUND', (0, 0), (0, 0), colors.HexColor('#2c3e50')),
-            ('LEFTPADDING', (0, 0), (-1, -1), 8),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-            ('TOPPADDING', (0, 0), (0, 0), 6),
-            ('BOTTOMPADDING', (0, 0), (0, 0), 4),
-            ('TOPPADDING', (0, 1), (0, 1), 4),
-            ('BOTTOMPADDING', (0, 1), (0, 1), 6),
-        ]))
-        
+        # Header block (no Contact Person box)
         left_box_table = Table(
             [[left_content]],
-            colWidths=[available_width-190],
-            hAlign='LEFT',
+            colWidths=[available_width],
+            hAlign='CENTER',
             style=TableStyle([
-                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ])
         )
-        two_col_table = Table(
-            [[left_box_table, contact_table]],
-            colWidths=[available_width-190, 190],
-            hAlign='LEFT'
-        )
-        two_col_table.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (0, 0), 'MIDDLE'),
-            ('VALIGN', (1, 0), (1, 0), 'MIDDLE'),
-            ('ALIGN', (0, 0), (0, 0), 'CENTER'),
-            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-        ]))
         elements.append(Spacer(1, 4))
-        elements.append(two_col_table)
+        elements.append(left_box_table)
         elements.append(Spacer(1, 4))
         
         # Build table data with multi-row headers matching the marks page
@@ -7343,15 +7221,15 @@ def export_ca_marks_pdf(request):
             # Project course headers (2 rows)
             total_ca = course.effective_project_supervisor_weight + course.effective_project_evaluation_weight + course.effective_project_presentation_weight
             header_row_1 = [
-                'Student ID', 'Name',
-                f'Project Work CA (Total: {total_ca}%)', '', '',
+                'SL. No', 'Student ID', 'Name',
+                f'Project Work CA (Total: {total_ca})', '', '',
                 'Total'
             ]
             header_row_2 = [
-                '', '',
-                f'Supervisor\n({course.effective_project_supervisor_weight}%)',
-                f'Evaluation\n({course.effective_project_evaluation_weight}%)',
-                f'Presentation\n({course.effective_project_presentation_weight}%)',
+                '', '', '',
+                f'Supervisor\n({course.effective_project_supervisor_weight})',
+                f'Evaluation\n({course.effective_project_evaluation_weight})',
+                f'Presentation\n({course.effective_project_presentation_weight})',
                 ''
             ]
             table_data.append(header_row_1)
@@ -7360,19 +7238,19 @@ def export_ca_marks_pdf(request):
             # Lab course headers (3 rows)
             total_ca = course.effective_lab_ca_attendance_weight + course.effective_lab_ca_assignment_weight + course.effective_lab_ca_practical_weight
             header_row_1 = [
-                'Student ID', 'Name',
-                f'Lab Course CA (Total: {total_ca}%)', '', '', '', '',
+                'SL. No', 'Student ID', 'Name',
+                f'Lab Course CA (Total: {total_ca})', '', '', '', '',
                 '', 'Total'
             ]
             header_row_2 = [
-                '', '',
-                f'Attendance\n({course.effective_lab_ca_attendance_weight}%)',
-                f'Assignment/Lab Report\n({course.effective_lab_ca_assignment_weight}%)', '', '', '',
-                f'Experiment/\nLab Project\n({course.effective_lab_ca_practical_weight}%)',
+                '', '', '',
+                f'Attendance\n({course.effective_lab_ca_attendance_weight})',
+                f'Assignment/Lab Report\n({course.effective_lab_ca_assignment_weight})', '', '', '',
+                f'Experiment/\nLab Project\n({course.effective_lab_ca_practical_weight})',
                 ''
             ]
             header_row_3 = [
-                '', '',
+                '', '', '',
                 '',
                 'First', 'Second', 'Third', 'Average',
                 '', ''
@@ -7389,19 +7267,19 @@ def export_ca_marks_pdf(request):
                 exam_weight = course.effective_ca_quiz_weight
                 total_ca = course.effective_ca_attendance_weight + course.effective_ca_assignment_weight + exam_weight
                 header_row_1 = [
-                    'Student ID', 'Name',
-                    f'Theory Course CA (Total: {total_ca}%)', '', '', '', '', '', '',
+                    'SL. No', 'Student ID', 'Name',
+                    f'Theory Course CA (Total: {total_ca})', '', '', '', '', '', '',
                     '', 'Total'
                 ]
                 header_row_2 = [
-                    '', '',
-                    f'Attendance\n({course.effective_ca_attendance_weight}%)',
-                    f'Assignment/Presentation\n({course.effective_ca_assignment_weight}%)', '', '', '',
-                    f'Class Test\n({exam_weight}%)', '', '',
+                    '', '', '',
+                    f'Attendance\n({course.effective_ca_attendance_weight})',
+                    f'Assignment/Presentation\n({course.effective_ca_assignment_weight})', '', '', '',
+                    f'Class Test\n({exam_weight})', '', '',
                     'Total'
                 ]
                 header_row_3 = [
-                    '', '',
+                    '', '', '',
                     '',
                     'First', 'Second', 'Third', 'Average',
                     'First', 'Second', 'Best',
@@ -7412,19 +7290,19 @@ def export_ca_marks_pdf(request):
                 exam_weight = course.effective_ca_midterm_weight
                 total_ca = course.effective_ca_attendance_weight + course.effective_ca_assignment_weight + exam_weight
                 header_row_1 = [
-                    'Student ID', 'Name',
-                    f'Theory Course CA (Total: {total_ca}%)', '', '', '', '',
+                    'SL. No', 'Student ID', 'Name',
+                    f'Theory Course CA (Total: {total_ca})', '', '', '', '',
                     '', 'Total'
                 ]
                 header_row_2 = [
-                    '', '',
-                    f'Attendance\n({course.effective_ca_attendance_weight}%)',
-                    f'Assignment/Presentation\n({course.effective_ca_assignment_weight}%)', '', '', '',
-                    f'Mid-Term\nExam\n({exam_weight}%)',
+                    '', '', '',
+                    f'Attendance\n({course.effective_ca_attendance_weight})',
+                    f'Assignment/Presentation\n({course.effective_ca_assignment_weight})', '', '', '',
+                    f'Mid-Term\nExam\n({exam_weight})',
                     'Total'
                 ]
                 header_row_3 = [
-                    '', '',
+                    '', '', '',
                     '',
                     'First', 'Second', 'Third', 'Average',
                     '', 'Total'
@@ -7434,20 +7312,22 @@ def export_ca_marks_pdf(request):
             table_data.append(header_row_3)
         
         # Data rows
-        for student in students:
+        for sl_no, student in enumerate(students, start=1):
             mark = ca_marks.get(student.id)
             if mark:
                 if course.course_type == 'PROJECT':
                     row = [
+                        str(sl_no),
                         student.id,
                         student.name.upper(),
                         f"{mark.project_supervisor_mark:.2f}",
                         f"{mark.project_evaluation_mark:.2f}",
                         f"{mark.project_presentation_mark:.2f}",
-                        f"{mark.calculate_total_ca_mark():.2f}"
+                        str(int(math.ceil(float(mark.calculate_total_ca_mark() or 0))))
                     ]
                 elif course.is_lab:
                     row = [
+                        str(sl_no),
                         student.id,
                         student.name.upper(),
                         f"{mark.attendance_mark:.2f}",
@@ -7456,7 +7336,7 @@ def export_ca_marks_pdf(request):
                         f"{mark.third_lab_assignment_mark:.2f}",
                         f"{mark.lab_assignment_mark:.2f}",
                         f"{mark.lab_practical_mark:.2f}",
-                        f"{mark.calculate_total_ca_mark():.2f}"
+                        str(int(math.ceil(float(mark.calculate_total_ca_mark() or 0))))
                     ]
                 else:
                     # Theory course - check curriculum
@@ -7464,6 +7344,7 @@ def export_ca_marks_pdf(request):
                     if is_old_curriculum:
                         # Old curriculum: use class tests
                         row = [
+                            str(sl_no),
                             student.id,
                             student.name.upper(),
                             f"{mark.attendance_mark:.2f}",
@@ -7474,11 +7355,12 @@ def export_ca_marks_pdf(request):
                             f"{mark.first_class_test_mark:.2f}",
                             f"{mark.second_class_test_mark:.2f}",
                             f"{mark.class_test_mark:.2f}",
-                            f"{mark.calculate_total_ca_mark():.2f}"
+                            str(int(math.ceil(float(mark.calculate_total_ca_mark() or 0))))
                         ]
                     else:
                         # New curriculum: use mid-term
                         row = [
+                            str(sl_no),
                             student.id,
                             student.name.upper(),
                             f"{mark.attendance_mark:.2f}",
@@ -7487,37 +7369,38 @@ def export_ca_marks_pdf(request):
                             f"{mark.third_assignment_mark:.2f}",
                             f"{mark.assignment_mark:.2f}",
                             f"{mark.midterm_mark:.2f}",
-                            f"{mark.calculate_total_ca_mark():.2f}"
+                            str(int(math.ceil(float(mark.calculate_total_ca_mark() or 0))))
                         ]
             else:
                 if course.course_type == 'PROJECT':
-                    row = [student.id, student.name.upper(), '0.00', '0.00', '0.00', '0.00']
+                    row = [str(sl_no), student.id, student.name.upper(), '0.00', '0.00', '0.00', '0.00']
                 elif course.is_lab:
-                    row = [student.id, student.name.upper(), '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
+                    row = [str(sl_no), student.id, student.name.upper(), '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
                 else:
                     # Theory course - check curriculum
                     is_old_curriculum = semester.curriculum and semester.curriculum.code == 'OLD'
                     if is_old_curriculum:
                         # Old curriculum: 11 columns (Student ID, Name, Attendance, First, Second, Third, Average, First Class Test, Second Class Test, Best, Total)
-                        row = [student.id, student.name.upper(), '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
+                        row = [str(sl_no), student.id, student.name.upper(), '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
                     else:
                         # New curriculum: 9 columns (Student ID, Name, Attendance, First, Second, Third, Average, Mid-Term, Total)
-                        row = [student.id, student.name.upper(), '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
+                        row = [str(sl_no), student.id, student.name.upper(), '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
             table_data.append(row)
         
         # Create table with full width to align with header and footer
         # Calculate column widths based on available width
         num_cols = len(table_data[0]) if table_data else 0
         if num_cols > 0:
-            # Allocate more width to Student ID and Name columns
-            student_id_width = 80  # Fixed width for Student ID
-            name_width = 150  # Wider width for Name to prevent cutoff
+            # Allocate more width to SL, Student ID and Name columns
+            sl_width = 40  # SL. No
+            student_id_width = 80  # Student ID
+            name_width = 150  # Name
             # Remaining width for mark columns
-            remaining_width = available_width - student_id_width - name_width
-            mark_cols = num_cols - 2  # Exclude Student ID and Name
+            remaining_width = available_width - sl_width - student_id_width - name_width
+            mark_cols = num_cols - 3  # Exclude SL, Student ID and Name
             mark_col_width = remaining_width / mark_cols if mark_cols > 0 else 0
             # Build column widths array
-            col_widths = [student_id_width, name_width] + [mark_col_width] * mark_cols
+            col_widths = [sl_width, student_id_width, name_width] + [mark_col_width] * mark_cols
             table = Table(table_data, colWidths=col_widths)
         else:
             table = Table(table_data)
@@ -7530,9 +7413,7 @@ def export_ca_marks_pdf(request):
         
         # Build style with merged cells for headers
         style_commands = [
-            # Header styling
-            ('BACKGROUND', (0, 0), (-1, header_rows - 1), colors.HexColor('#2c3e50')),
-            ('TEXTCOLOR', (0, 0), (-1, header_rows - 1), colors.whitesmoke),
+            # Header styling (borders only; no background fill)
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('FONTNAME', (0, 0), (-1, header_rows - 1), 'Helvetica-Bold'),
@@ -7549,40 +7430,43 @@ def export_ca_marks_pdf(request):
         
         # Add cell spans for headers
         if course.course_type == 'PROJECT':
-            # Student ID and Name span 2 rows
-            style_commands.append(('SPAN', (0, 0), (0, 1)))  # Student ID
-            style_commands.append(('SPAN', (1, 0), (1, 1)))  # Name
-            style_commands.append(('SPAN', (2, 0), (4, 0)))  # Project Work CA header (spans columns 2-4)
-            style_commands.append(('SPAN', (5, 0), (5, 1)))  # Total CA Mark
+            # SL, Student ID and Name span 2 rows
+            style_commands.append(('SPAN', (0, 0), (0, 1)))  # SL
+            style_commands.append(('SPAN', (1, 0), (1, 1)))  # Student ID
+            style_commands.append(('SPAN', (2, 0), (2, 1)))  # Name
+            style_commands.append(('SPAN', (3, 0), (5, 0)))  # Project Work CA header
+            style_commands.append(('SPAN', (6, 0), (6, 1)))  # Total
         elif course.is_lab:
-            # Student ID and Name span 3 rows
-            style_commands.append(('SPAN', (0, 0), (0, 2)))  # Student ID
-            style_commands.append(('SPAN', (1, 0), (1, 2)))  # Name
-            style_commands.append(('SPAN', (2, 0), (7, 0)))  # Lab Course CA header (spans columns 2-7)
-            style_commands.append(('SPAN', (2, 1), (2, 2)))  # Attendance (spans rows 1-2)
-            style_commands.append(('SPAN', (3, 1), (6, 1)))  # Assignment/Lab Report (spans columns 3-6, row 1)
-            style_commands.append(('SPAN', (7, 1), (7, 2)))  # Experiment/Lab Project (spans rows 1-2)
-            style_commands.append(('SPAN', (8, 0), (8, 2)))  # Total (spans rows 0-2, column 8)
+            # SL, Student ID and Name span 3 rows
+            style_commands.append(('SPAN', (0, 0), (0, 2)))  # SL
+            style_commands.append(('SPAN', (1, 0), (1, 2)))  # Student ID
+            style_commands.append(('SPAN', (2, 0), (2, 2)))  # Name
+            style_commands.append(('SPAN', (3, 0), (8, 0)))  # Lab Course CA header
+            style_commands.append(('SPAN', (3, 1), (3, 2)))  # Attendance
+            style_commands.append(('SPAN', (4, 1), (7, 1)))  # Assignment/Lab Report
+            style_commands.append(('SPAN', (8, 1), (8, 2)))  # Experiment/Lab Project
+            style_commands.append(('SPAN', (9, 0), (9, 2)))  # Total
         else:
             # Theory course - check curriculum to determine column spans
             is_old_curriculum = semester.curriculum and semester.curriculum.code == 'OLD'
-            # Student ID and Name span 3 rows
-            style_commands.append(('SPAN', (0, 0), (0, 2)))  # Student ID
-            style_commands.append(('SPAN', (1, 0), (1, 2)))  # Name
+            # SL, Student ID and Name span 3 rows
+            style_commands.append(('SPAN', (0, 0), (0, 2)))  # SL
+            style_commands.append(('SPAN', (1, 0), (1, 2)))  # Student ID
+            style_commands.append(('SPAN', (2, 0), (2, 2)))  # Name
             if is_old_curriculum:
                 # Old curriculum: Class Test has 3 columns (First, Second, Best)
-                style_commands.append(('SPAN', (2, 0), (9, 0)))  # Theory Course CA header (spans columns 2-9)
-                style_commands.append(('SPAN', (2, 1), (2, 2)))  # Attendance (spans rows 1-2)
-                style_commands.append(('SPAN', (3, 1), (6, 1)))  # Assignment/Presentation (spans columns 3-6, row 1)
-                style_commands.append(('SPAN', (7, 1), (9, 1)))  # Class Test (spans columns 7-9, row 1)
-                style_commands.append(('SPAN', (10, 0), (10, 2)))  # Total (spans rows 0-2, column 10)
+                style_commands.append(('SPAN', (3, 0), (10, 0)))  # Theory Course CA header
+                style_commands.append(('SPAN', (3, 1), (3, 2)))  # Attendance
+                style_commands.append(('SPAN', (4, 1), (7, 1)))  # Assignment/Presentation
+                style_commands.append(('SPAN', (8, 1), (10, 1)))  # Class Test
+                style_commands.append(('SPAN', (11, 0), (11, 2)))  # Total
             else:
                 # New curriculum: Mid-Term Exam is single column
-                style_commands.append(('SPAN', (2, 0), (7, 0)))  # Theory Course CA header (spans columns 2-7)
-                style_commands.append(('SPAN', (2, 1), (2, 2)))  # Attendance (spans rows 1-2)
-                style_commands.append(('SPAN', (3, 1), (6, 1)))  # Assignment/Presentation (spans columns 3-6, row 1)
-                style_commands.append(('SPAN', (7, 1), (7, 2)))  # Mid-Term Exam (spans rows 1-2)
-                style_commands.append(('SPAN', (8, 0), (8, 2)))  # Total (spans rows 0-2, column 8)
+                style_commands.append(('SPAN', (3, 0), (8, 0)))  # Theory Course CA header
+                style_commands.append(('SPAN', (3, 1), (3, 2)))  # Attendance
+                style_commands.append(('SPAN', (4, 1), (7, 1)))  # Assignment/Presentation
+                style_commands.append(('SPAN', (8, 1), (8, 2)))  # Mid-Term Exam
+                style_commands.append(('SPAN', (9, 0), (9, 2)))  # Total
         
         table.setStyle(TableStyle(style_commands))
         
@@ -7608,50 +7492,25 @@ def export_ca_marks_pdf(request):
             spaceBefore=0,
             spaceAfter=0,
         )
-        dean_line = Paragraph("Dean", signature_style)
-        school_line = Paragraph("School of Science and Technology", signature_style)
-        bou_line = Paragraph("Bangladesh Open University", signature_style)
-        coordinator_line = Paragraph("Program Co-ordinator", signature_style_left)
-        school_line_left = Paragraph("School of Science and Technology", signature_style_left)
-        bou_line_left = Paragraph("Bangladesh Open University", signature_style_left)
-        signature_data = [
-            [dean_line],
-            [school_line],
-            [bou_line]
-        ]
-        signature_data_left = [
-            [coordinator_line],
-            [school_line_left],
-            [bou_line_left]
-        ]
-        signature_table_width = 250
-        signature_table = Table(signature_data, colWidths=[signature_table_width])
-        signature_table.setStyle(TableStyle([
-            ('ALIGN', (0,0), (-1,-1), 'RIGHT'),
-            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
-            ('TOPPADDING', (0,0), (0,0), 4),
-        ]))
-        signature_table_left = Table(signature_data_left, colWidths=[signature_table_width])
+        teacher_sig_line = Paragraph("Signature of the course teacher", signature_style_left)
+        sig_width = 280
+        signature_table_left = Table(
+            [[teacher_sig_line, '']],
+            colWidths=[sig_width, max(0, available_width - sig_width)],
+            hAlign='LEFT',
+        )
         signature_table_left.setStyle(TableStyle([
-            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
-            ('TOPPADDING', (0,0), (0,0), 4),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            # Short line only above the left signature cell
+            ('LINEABOVE', (0, 0), (0, 0), 1, colors.black),
+            ('TOPPADDING', (0, 0), (0, 0), 4),
         ]))
-        wrapper_col_widths = [available_width - signature_table_width * 2, signature_table_width, signature_table_width]
-        signature_wrapper_table = Table([[signature_table_left, '', signature_table]], colWidths=wrapper_col_widths)
-        signature_wrapper_table.setStyle(TableStyle([
-            ('ALIGN', (0,0), (0,0), 'LEFT'),
-            ('ALIGN', (2,0), (2,0), 'RIGHT'),
-            ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
-            ('LEFTPADDING', (0,0), (-1,-1), 0),
-            ('RIGHTPADDING', (0,0), (-1,-1), 0),
-            ('TOPPADDING', (0,0), (-1,-1), 0),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-        ]))
-        elements.append(signature_wrapper_table)
+        elements.append(signature_table_left)
         
         # Build PDF
-        doc.build(elements)
+        doc.build(elements, onFirstPage=_pdf_add_page_number, onLaterPages=_pdf_add_page_number)
         buffer.seek(0)
         
         response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
@@ -8151,22 +8010,8 @@ def export_blank_ca_marks_pdf(request):
             spaceBefore=0,
             spaceAfter=0,
         )
-        dean_line = Paragraph("Dean", signature_style)
-        school_line = Paragraph("School of Science and Technology", signature_style)
-        bou_line = Paragraph("Bangladesh Open University", signature_style)
-        coordinator_line = Paragraph("Program Co-ordinator", signature_style_left)
-        school_line_left = Paragraph("School of Science and Technology", signature_style_left)
-        bou_line_left = Paragraph("Bangladesh Open University", signature_style_left)
-        signature_data = [
-            [dean_line],
-            [school_line],
-            [bou_line]
-        ]
-        signature_data_left = [
-            [coordinator_line],
-            [school_line_left],
-            [bou_line_left]
-        ]
+        signature_data = [[Paragraph("External Examiner", signature_style)]]
+        signature_data_left = [[Paragraph("Internal Examiner", signature_style_left)]]
         signature_table_width = 250
         signature_table = Table(signature_data, colWidths=[signature_table_width])
         signature_table.setStyle(TableStyle([
@@ -8194,7 +8039,7 @@ def export_blank_ca_marks_pdf(request):
         elements.append(signature_wrapper_table)
         
         # Build PDF
-        doc.build(elements)
+        doc.build(elements, onFirstPage=_pdf_add_page_number, onLaterPages=_pdf_add_page_number)
         buffer.seek(0)
         
         response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
@@ -8357,6 +8202,7 @@ def export_ca_marks_excel(request):
 def export_final_exam_pdf(request):
     """Export Final Exam marks to PDF"""
     try:
+        import math
         # Check permissions
         if not (request.user.is_superuser or request.user.is_staff or check_teacher_permission(request.user, 'can_manage_final_marks')):
             messages.error(request, "You don't have permission to export Final Exam marks.")
@@ -8499,7 +8345,7 @@ def export_final_exam_pdf(request):
             left_content.append(Paragraph(combined, header_style_small))
         left_content.append(Spacer(1, 2))
         course_name_display = f"{course.code} - {course.name}" if course else "Course"
-        left_content.append(Paragraph(f'Semester Final Marks Report - {course_name_display}', header_style_bold))
+        left_content.append(Paragraph(f'Semester Final Marks - {course_name_display}', header_style_bold))
         # Get evaluator name based on teacher_role
         # First check if evaluators are manually assigned in existing marks
         # Then fall back to SemesterCourse for automatic assignment
@@ -8552,7 +8398,7 @@ def export_final_exam_pdf(request):
         if centre_name:
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
         
-        # Build right column (contact person box)
+        # Build header block (no Contact Person box)
         # Get coordinator for this specific semester/centre combination
         coordinator = None
         if centre_id:
@@ -8676,25 +8522,14 @@ def export_final_exam_pdf(request):
         
         left_box_table = Table(
             [[left_content]],
-            colWidths=[available_width-190],
-            hAlign='LEFT',
+            colWidths=[available_width],
+            hAlign='CENTER',
             style=TableStyle([
-                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ])
         )
-        two_col_table = Table(
-            [[left_box_table, contact_table]],
-            colWidths=[available_width-190, 190],
-            hAlign='LEFT'
-        )
-        two_col_table.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (0, 0), 'MIDDLE'),
-            ('VALIGN', (1, 0), (1, 0), 'MIDDLE'),
-            ('ALIGN', (0, 0), (0, 0), 'CENTER'),
-            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-        ]))
         elements.append(Spacer(1, 4))
-        elements.append(two_col_table)
+        elements.append(left_box_table)
         elements.append(Spacer(1, 4))
         
         styles = getSampleStyleSheet()
@@ -8713,26 +8548,27 @@ def export_final_exam_pdf(request):
         
         # Header row based on course type
         if course.is_lab:
-            header = ['Student ID', 'Name', 'Lab Final Exam Mark', 'Total']
+            header = ['SL. No', 'Student ID', 'Name', 'Lab Final Exam Mark', 'Total']
         else:
-            header = ['Student ID', 'Name', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Total']
+            header = ['SL. No', 'Student ID', 'Name', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Total']
         table_data.append(header)
         
         # Data rows
-        for student in students:
+        for sl_no, student in enumerate(students, start=1):
             mark = final_exam_marks.get(student.id)
             if mark:
                 if getattr(mark, 'exam_absent', False):
                     if course.is_lab:
-                        row = [student.id, student.name.upper(), 'AB', 'AB']
+                        row = [str(sl_no), student.id, student.name.upper(), 'AB', 'AB']
                     else:
-                        row = [student.id, student.name.upper(), 'AB', 'AB', 'AB', 'AB', 'AB', 'AB', 'AB', 'AB']
+                        row = [str(sl_no), student.id, student.name.upper(), 'AB', 'AB', 'AB', 'AB', 'AB', 'AB', 'AB', 'AB', 'AB']
                 elif course.is_lab:
                     row = [
+                        str(sl_no),
                         student.id,
                         student.name.upper(),
                         f"{mark.lab_final_exam_mark:.2f}" if mark.lab_final_exam_mark else '0.00',
-                        f"{mark.calculate_final_total():.2f}"
+                        str(int(math.ceil(float(mark.calculate_final_total() or 0))))
                     ]
                 else:
                     # For theory courses, show marks based on teacher role
@@ -8771,6 +8607,7 @@ def export_final_exam_pdf(request):
                         q7 = mark.teacher1_q7 or 0
                     
                     row = [
+                        str(sl_no),
                         student.id,
                         student.name.upper(),
                         f"{q1:.2f}",
@@ -8780,36 +8617,35 @@ def export_final_exam_pdf(request):
                         f"{q5:.2f}",
                         f"{q6:.2f}",
                         f"{q7:.2f}",
-                        f"{mark.calculate_final_total():.2f}"
+                        str(int(math.ceil(float((q1 or 0) + (q2 or 0) + (q3 or 0) + (q4 or 0) + (q5 or 0) + (q6 or 0) + (q7 or 0)))))
                     ]
             else:
                 if course.is_lab:
-                    row = [student.id, student.name.upper(), '0.00', '0.00']
+                    row = [str(sl_no), student.id, student.name.upper(), '0.00', '0.00']
                 else:
-                    row = [student.id, student.name.upper(), '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
+                    row = [str(sl_no), student.id, student.name.upper(), '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
             table_data.append(row)
         
         # Calculate column widths to match header/footer width
         num_cols = len(header)
         if course.is_lab:
-            # Lab course: Student ID, Name, Lab Final Exam Mark, Total
-            # Fixed widths: 80 + 150 + 120 = 350
-            col_widths = [80, 150, 120, available_width - 350]
+            # Lab: SL, Student ID, Name, Lab Final Exam Mark, Total
+            sl_w = 40
+            col_widths = [sl_w, 80, 150, 120, max(40, available_width - (sl_w + 80 + 150 + 120))]
         else:
-            # Theory course: Student ID, Name, Q1-Q7, Total
-            # Fixed widths: 80 + 150 + (60 * 7) = 650
-            col_widths = [80, 150] + [60] * 7 + [available_width - 650]
+            # Theory: SL, Student ID, Name, Q1-Q7, Total
+            sl_w = 40
+            fixed = sl_w + 80 + 150 + (60 * 7)
+            col_widths = [sl_w, 80, 150] + [60] * 7 + [max(40, available_width - fixed)]
         
         # Create table with explicit column widths
         table = Table(table_data, colWidths=col_widths)
         table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            # Header styling (borders only; no background fill)
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 9),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
             ('FONTSIZE', (0, 1), (-1, -1), 8),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
@@ -8837,22 +8673,8 @@ def export_final_exam_pdf(request):
             spaceBefore=0,
             spaceAfter=0,
         )
-        dean_line = Paragraph("Dean", signature_style)
-        school_line = Paragraph("School of Science and Technology", signature_style)
-        bou_line = Paragraph("Bangladesh Open University", signature_style)
-        coordinator_line = Paragraph("Program Co-ordinator", signature_style_left)
-        school_line_left = Paragraph("School of Science and Technology", signature_style_left)
-        bou_line_left = Paragraph("Bangladesh Open University", signature_style_left)
-        signature_data = [
-            [dean_line],
-            [school_line],
-            [bou_line]
-        ]
-        signature_data_left = [
-            [coordinator_line],
-            [school_line_left],
-            [bou_line_left]
-        ]
+        signature_data = [[Paragraph("External Examiner", signature_style)]]
+        signature_data_left = [[Paragraph("Internal Examiner", signature_style_left)]]
         signature_table_width = 250
         signature_table = Table(signature_data, colWidths=[signature_table_width])
         signature_table.setStyle(TableStyle([
@@ -8880,7 +8702,7 @@ def export_final_exam_pdf(request):
         elements.append(signature_wrapper_table)
         
         # Build PDF
-        doc.build(elements)
+        doc.build(elements, onFirstPage=_pdf_add_page_number, onLaterPages=_pdf_add_page_number)
         buffer.seek(0)
         
         response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
@@ -9282,22 +9104,8 @@ def export_blank_final_exam_pdf(request):
             spaceBefore=0,
             spaceAfter=0,
         )
-        dean_line = Paragraph("Dean", signature_style)
-        school_line = Paragraph("School of Science and Technology", signature_style)
-        bou_line = Paragraph("Bangladesh Open University", signature_style)
-        coordinator_line = Paragraph("Program Co-ordinator", signature_style_left)
-        school_line_left = Paragraph("School of Science and Technology", signature_style_left)
-        bou_line_left = Paragraph("Bangladesh Open University", signature_style_left)
-        signature_data = [
-            [dean_line],
-            [school_line],
-            [bou_line]
-        ]
-        signature_data_left = [
-            [coordinator_line],
-            [school_line_left],
-            [bou_line_left]
-        ]
+        signature_data = [[Paragraph("External Examiner", signature_style)]]
+        signature_data_left = [[Paragraph("Internal Examiner", signature_style_left)]]
         signature_table_width = 250
         signature_table = Table(signature_data, colWidths=[signature_table_width])
         signature_table.setStyle(TableStyle([
@@ -9325,7 +9133,7 @@ def export_blank_final_exam_pdf(request):
         elements.append(signature_wrapper_table)
         
         # Build PDF
-        doc.build(elements)
+        doc.build(elements, onFirstPage=_pdf_add_page_number, onLaterPages=_pdf_add_page_number)
         buffer.seek(0)
         
         response = HttpResponse(buffer.getvalue(), content_type='application/pdf')

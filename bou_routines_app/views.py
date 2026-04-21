@@ -4954,20 +4954,67 @@ def attendance_calendar(request):
                 if makeup_day in days_to_show:
                     filtered_makeup_dates.append(makeup_date)
             
-            # Get mid-term exam dates (only for new curriculum) - these should be excluded
+            # Attendance-only: allow per SemesterCourse override for mid-term exam dates exclusion.
+            # If set, it replaces Semester.mid_term_exam_dates for the Attendance table only.
+            def _parse_date_list_csv(value):
+                dates = []
+                if not value:
+                    return dates
+                for part in str(value).split(','):
+                    part = part.strip()
+                    if not part:
+                        continue
+                    try:
+                        dates.append(datetime.strptime(part, "%Y-%m-%d").date())
+                    except ValueError:
+                        continue
+                return dates
+
+            semester_course_scope = None
+            attendance_override_scope = None
+            if selected_centre:
+                # Course-specific SemesterCourse (still used for number_of_classes etc.)
+                semester_course_scope = SemesterCourse.objects.filter(
+                    semester=semester,
+                    course=course,
+                    centre=selected_centre,
+                ).first()
+
+                # Attendance override is applied per Semester + Centre (all courses) to avoid
+                # per-course mismatches between Friday/Saturday offerings.
+                attendance_override_scope = SemesterCourse.objects.filter(
+                    semester=semester,
+                    centre=selected_centre,
+                    attendance_midterm_override_dates__isnull=False,
+                ).first()
+
+            mid_term_source = None
+            if attendance_override_scope and attendance_override_scope.attendance_midterm_override_dates is not None:
+                mid_term_source = attendance_override_scope.attendance_midterm_override_dates
+            else:
+                mid_term_source = semester.mid_term_exam_dates
+
             mid_term_exam_dates = set()
-            if semester.mid_term_exam_dates and semester.curriculum and semester.curriculum.code != 'OLD':
-                for date_str in semester.mid_term_exam_dates.split(','):
-                    if date_str.strip():
-                        try:
-                            mid_term_date = datetime.strptime(date_str.strip(), "%Y-%m-%d").date()
-                            mid_term_exam_dates.add(mid_term_date)
-                        except ValueError:
-                            pass  # Skip invalid date formats
+            if mid_term_source and semester.curriculum and semester.curriculum.code != 'OLD':
+                mid_term_exam_dates = set(_parse_date_list_csv(mid_term_source))
             
-            # Combine routine dates and filtered makeup dates (same as PDF export)
-            all_dates = set(routine_dates) | set(filtered_makeup_dates)
-            # Exclude mid-term exam dates
+            # Attendance table dates:
+            # - Routine generator excludes semester mid-term dates from NewRoutine entries, but in reality
+            #   classes may happen if mid-terms are shifted. For Attendance only, we therefore add the
+            #   semester mid-term dates back as potential class dates, then exclude the *effective* mid-term
+            #   dates (override if set; otherwise semester default).
+            semester_mid_term_dates = set()
+            if semester.mid_term_exam_dates and semester.curriculum and semester.curriculum.code != 'OLD':
+                semester_mid_term_dates = set(_parse_date_list_csv(semester.mid_term_exam_dates))
+
+            # Keep only dates that match the course's scheduled day(s) for consistency with attendance columns.
+            semester_mid_term_dates = {
+                d for d in semester_mid_term_dates if d.strftime('%A') in days_to_show
+            }
+
+            # Combine routine dates, filtered makeup dates, and semester mid-term dates
+            all_dates = set(routine_dates) | set(filtered_makeup_dates) | set(semester_mid_term_dates)
+            # Exclude effective mid-term exam dates for attendance
             all_dates = all_dates - mid_term_exam_dates
             semester_dates = sorted(all_dates)
             
@@ -5083,6 +5130,10 @@ def attendance_calendar(request):
                 'course': course,
                 'students': students,
                 'semester_dates': semester_dates,
+                'semester_course_scope': semester_course_scope,
+                'attendance_midterm_override_dates': (attendance_override_scope.attendance_midterm_override_dates if attendance_override_scope else None),
+                'default_midterm_exam_dates': semester.mid_term_exam_dates,
+                'attendance_midterm_override_is_set': bool(attendance_override_scope and attendance_override_scope.attendance_midterm_override_dates is not None),
                 'attendance_matrix': attendance_matrix,
                 'attendance_status': attendance_status,
                 'attendance_data': attendance_data,
@@ -5112,6 +5163,64 @@ def attendance_calendar(request):
         context['selected_centre_id'] = selected_centre_id
     
     return render(request, 'bou_routines_app/attendance_calendar.html', context)
+
+
+@login_required
+@require_POST
+def set_attendance_midterm_override_dates(request):
+    """Admin-only: set attendance-only midterm exam dates override per SemesterCourse."""
+    if not (request.user.is_superuser or request.user.is_staff):
+        return JsonResponse({'success': False, 'error': 'Permission denied'}, status=403)
+
+    semester_id = request.POST.get('semester_id')
+    course_id = request.POST.get('course_id')
+    centre_id = request.POST.get('centre_id')
+    override_csv = request.POST.get('attendance_midterm_override_dates', '')
+
+    if not (semester_id and course_id and centre_id):
+        return JsonResponse({'success': False, 'error': 'semester_id, course_id and centre_id are required'}, status=400)
+
+    try:
+        semester = Semester.objects.get(id=semester_id)
+        course = Course.objects.get(id=course_id)
+        centre = Centre.objects.get(id=centre_id)
+    except (Semester.DoesNotExist, Course.DoesNotExist, Centre.DoesNotExist):
+        return JsonResponse({'success': False, 'error': 'Invalid semester/course/centre'}, status=400)
+
+    # Normalize: keep comma-separated YYYY-MM-DD, sorted, unique, allow clearing.
+    from datetime import datetime
+    cleaned_dates = []
+    if override_csv is None:
+        override_csv = ''
+    for part in str(override_csv).split(','):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            cleaned_dates.append(datetime.strptime(part, "%Y-%m-%d").date())
+        except ValueError:
+            continue
+
+    cleaned_dates = sorted(set(cleaned_dates))
+    normalized_csv = ",".join(d.strftime("%Y-%m-%d") for d in cleaned_dates)
+
+    # Ensure there's at least one SemesterCourse row for this course scope (existing behavior),
+    # but apply the override consistently to all courses in this semester+centre.
+    semester_course, _ = SemesterCourse.objects.get_or_create(
+        semester=semester,
+        course=course,
+        centre=centre,
+        defaults={},
+    )
+    # Important:
+    # - NULL means "not set" (use semester default)
+    # - '' means "explicitly no midterm exclusions for attendance"
+    SemesterCourse.objects.filter(
+        semester=semester,
+        centre=centre,
+    ).update(attendance_midterm_override_dates=normalized_csv)
+
+    return JsonResponse({'success': True, 'attendance_midterm_override_dates': normalized_csv})
 
 @login_required
 def get_semesters_for_curriculum(request):

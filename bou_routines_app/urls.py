@@ -27,6 +27,7 @@ urlpatterns = [
     path('attendance/courses/', views.get_courses_for_semester, name='get-courses-for-semester'),
     path('attendance/semesters/', views.get_semesters_for_curriculum, name='get-semesters-for-curriculum'),
     path('attendance/mark-individual/', views.mark_individual_attendance, name='mark-individual-attendance'),
+    path('attendance/midterm-override/', views.set_attendance_midterm_override_dates, name='set-attendance-midterm-override-dates'),
     
     # Teacher Management URLs
     path('teacher/register/', views.teacher_register, name='teacher-register'),

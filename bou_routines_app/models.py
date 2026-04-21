@@ -369,6 +369,12 @@ class SemesterCourse(models.Model):
         related_name='semester_courses_as_final_exam_evaluator3',
         help_text="Third examiner if required (large T1/T2 discrepancy)",
     )
+    # Attendance-only schedule override (does NOT affect routine/calendar generation)
+    attendance_midterm_override_dates = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Attendance-only mid-term exam dates override (comma-separated YYYY-MM-DD). Used only to adjust Attendance table date columns.",
+    )
     number_of_classes = models.PositiveIntegerField(default=1)  # Default to 1 class
 
     class Meta:

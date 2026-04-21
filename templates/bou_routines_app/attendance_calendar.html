@@ -9,10 +9,17 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 {% endblock %}
 
 {% block extra_css %}
 <style>
+    /* Keep flatpickr above sticky headers */
+    .flatpickr-calendar.open {
+        z-index: 99999 !important;
+    }
     .container-box-bou {
         background: white;
         padding: 30px;
@@ -1544,6 +1551,50 @@
                         <strong>Admin Access:</strong> You are viewing all courses as an administrator.
                     </div>
                 {% endif %}
+
+                {% if is_admin and selected_centre_id %}
+                    <div class="card" style="margin-top: 12px; border: 1px solid #e9ecef;">
+                        <div class="card-body" style="padding: 12px 14px;">
+                            <div class="d-flex justify-content-between align-items-start" style="gap: 12px;">
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 700; margin-bottom: 6px;">
+                                        Change Mid-Term Exam Dates (Attendance only)
+                                    </div>
+                                    <div class="text-muted" style="font-size: 12px; line-height: 1.3;">
+                                        This only affects the Attendance table date columns. Routine / academic calendar remain unchanged.
+                                        <br>
+                                        <strong>Default (semester):</strong> {{ default_midterm_exam_dates|default:"(none)" }}
+                                    </div>
+                                    <div style="margin-top: 10px;">
+                                        <input type="text"
+                                               class="form-control"
+                                               id="attendance_midterm_override_dates"
+                                               placeholder="Click to select mid-term exam dates for Attendance table only"
+                                               style="max-width: 720px;">
+                                        <div id="selectedAttendanceMidTermExamDates" class="mt-2 d-flex flex-wrap gap-1"></div>
+                                        <input type="hidden"
+                                               id="attendance_midterm_override_date_list"
+                                               value="{{ attendance_midterm_override_dates|default:'' }}">
+                                        <input type="hidden"
+                                               id="attendance_default_midterm_date_list"
+                                               value="{{ default_midterm_exam_dates|default:'' }}">
+                                        <input type="hidden"
+                                               id="attendance_midterm_override_is_set"
+                                               value="{% if attendance_midterm_override_is_set %}1{% else %}0{% endif %}">
+                                        <small class="text-muted">
+                                            Leave empty to show classes on all midterm dates. Click a chip’s <i class="bi bi-x-circle"></i> to remove.
+                                        </small>
+                                    </div>
+                                </div>
+                                <div>
+                                    <button type="button" class="btn btn-primary" id="save-attendance-midterm-override-btn">
+                                        Save
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
             </div>
             
             <!-- Duration-based Attendance Information -->
@@ -1629,9 +1680,8 @@
                                            data-course="{{ course.id }}"
                                            {% if status == True %}checked{% endif %}
                                            {% if not date_allowed %}disabled readonly{% endif %}
-                                           style="{% if not date_allowed %}cursor: not-allowed; opacity: 0.6;{% endif %}"
                                            title="{% if not date_allowed %}Date outside scheduled class dates{% else %}Click to mark present/absent{% endif %}">
-                                    <label for="attendance_{{ student.id }}_{{ date|date:'Y-m-d' }}" class="checkbox-label{% if not date_allowed %} disabled-label{% endif %}" {% if not date_allowed %}style="pointer-events: none; cursor: not-allowed;"{% endif %}></label>
+                                    <label for="attendance_{{ student.id }}_{{ date|date:'Y-m-d' }}" class="checkbox-label{% if not date_allowed %} disabled-label{% endif %}"></label>
                                 </div>
                                 {% endwith %}
                             </td>
@@ -2385,7 +2435,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (presentSpan) {
                 // Calculate classes attended based on class ratio (1 attendance = 1.5 classes)
-                const classRatio = {{ class_ratio|default:1.0 }};
+                const classRatio = parseFloat("{{ class_ratio|default:'1.0' }}");
                 const classesAttended = Math.round(checkedBoxes * classRatio * 10) / 10; // Round to 1 decimal
                 presentSpan.textContent = classesAttended;
             }
@@ -2602,6 +2652,128 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize header drag scroll
     setupHeaderDragScroll();
+
+    // Admin-only: save attendance-only midterm override dates
+    const saveOverrideBtn = document.getElementById('save-attendance-midterm-override-btn');
+    const overridePickerInput = document.getElementById('attendance_midterm_override_dates');
+    const overrideHidden = document.getElementById('attendance_midterm_override_date_list');
+    const defaultHidden = document.getElementById('attendance_default_midterm_date_list');
+    const overrideIsSetHidden = document.getElementById('attendance_midterm_override_is_set');
+    const overrideBadges = document.getElementById('selectedAttendanceMidTermExamDates');
+
+    function renderAttendanceMidtermOverrideBadges(isoDates) {
+        if (!overrideBadges) return;
+        overrideBadges.innerHTML = '';
+        (isoDates || []).forEach(dateStr => {
+            const formattedDate = new Date(dateStr).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+            });
+            const span = document.createElement('span');
+            span.className = 'badge bg-warning me-1 mb-1';
+            span.dataset.date = dateStr;
+            span.innerHTML = `${formattedDate} <i class="bi bi-x-circle" style="cursor: pointer;"></i>`;
+            overrideBadges.appendChild(span);
+        });
+    }
+
+    // Initialize Flatpickr multi-date selection (same UX as Generate Routine)
+    let attendanceMidtermPicker = null;
+    if (overridePickerInput && window.flatpickr) {
+        attendanceMidtermPicker = window.flatpickr(overridePickerInput, {
+            mode: 'multiple',
+            dateFormat: 'Y-m-d',
+            onChange: function (selectedDates, dateStr, instance) {
+                const formattedDates = (selectedDates || []).map(d => instance.formatDate(d, 'Y-m-d'));
+                if (overrideHidden) overrideHidden.value = formattedDates.join(',');
+                renderAttendanceMidtermOverrideBadges(formattedDates);
+            }
+        });
+
+        // Preload:
+        // - if override is set (NULL vs '' matters), use overrideHidden
+        // - else, show semester default mid-term dates pre-populated for convenience
+        const overrideIsSet = overrideIsSetHidden && overrideIsSetHidden.value === '1';
+        const initialCsv = overrideIsSet
+            ? ((overrideHidden && overrideHidden.value) ? overrideHidden.value : '')
+            : ((defaultHidden && defaultHidden.value) ? defaultHidden.value : '');
+        if (initialCsv) {
+            const parts = initialCsv.split(',').map(s => s.trim()).filter(Boolean);
+            attendanceMidtermPicker.setDate(parts, true);
+            renderAttendanceMidtermOverrideBadges(parts);
+            // If we pre-populated from default, keep hidden value in sync so Save stores the same behavior unless user changes it.
+            if (!overrideIsSet && overrideHidden) overrideHidden.value = parts.join(',');
+        }
+    } else if (overrideHidden && overrideHidden.value) {
+        // Fallback if flatpickr isn't available: still show chips from existing CSV
+        const parts = overrideHidden.value.split(',').map(s => s.trim()).filter(Boolean);
+        renderAttendanceMidtermOverrideBadges(parts);
+    }
+
+    // Remove chip handler (updates picker + hidden)
+    if (overrideBadges) {
+        overrideBadges.addEventListener('click', function (e) {
+            const icon = e.target && e.target.classList && e.target.classList.contains('bi-x-circle') ? e.target : null;
+            if (!icon) return;
+            const badge = icon.closest('.badge');
+            const dateStr = badge ? badge.dataset.date : null;
+            if (!dateStr) return;
+
+            const current = (overrideHidden && overrideHidden.value) ? overrideHidden.value.split(',').map(s => s.trim()).filter(Boolean) : [];
+            const next = current.filter(d => d !== dateStr);
+            if (overrideHidden) overrideHidden.value = next.join(',');
+            renderAttendanceMidtermOverrideBadges(next);
+
+            if (attendanceMidtermPicker) {
+                attendanceMidtermPicker.clear();
+                if (next.length) attendanceMidtermPicker.setDate(next, false);
+            }
+        });
+    }
+
+    if (saveOverrideBtn && overrideHidden) {
+        saveOverrideBtn.addEventListener('click', async function () {
+            const semesterId = "{{ semester.id|default:'' }}";
+            const courseId = "{{ course.id|default:'' }}";
+            const centreId = "{{ selected_centre_id|default:'' }}";
+            const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+
+            if (!semesterId || !courseId || !centreId || !csrf) {
+                alert('Missing context to save override.');
+                return;
+            }
+
+            saveOverrideBtn.disabled = true;
+            const originalText = saveOverrideBtn.textContent;
+            saveOverrideBtn.textContent = 'Saving...';
+            try {
+                const formData = new FormData();
+                formData.append('semester_id', semesterId);
+                formData.append('course_id', courseId);
+                formData.append('centre_id', centreId);
+                formData.append('attendance_midterm_override_dates', overrideHidden.value || '');
+
+                const res = await fetch("{% url 'set-attendance-midterm-override-dates' %}", {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrf },
+                    body: formData
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    alert(data.error || 'Failed to save override dates.');
+                    return;
+                }
+                window.location.reload();
+            } catch (e) {
+                console.error(e);
+                alert('Failed to save override dates.');
+            } finally {
+                saveOverrideBtn.disabled = false;
+                saveOverrideBtn.textContent = originalText;
+            }
+        });
+    }
     
     // Handle export links with hide_faculty parameter
     const hideFacultyCheckbox = document.getElementById('hideFacultyCheckbox');

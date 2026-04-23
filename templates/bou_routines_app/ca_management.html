@@ -2621,6 +2621,27 @@ function validateQuestionSet(inputElement) {
     if (teacherTotalElement) {
         teacherTotalElement.textContent = String(Math.ceil(total));
     }
+
+    // Auto-advance: if this cell is exactly one digit 2–9, the mark cannot grow with another digit
+    // and still be ≤ 14 (e.g. 20+ is invalid), so move focus to the next question field in the row.
+    const rawTrim = (inputElement.value || '').trim();
+    if (/^[2-9]$/.test(rawTrim) && rawTrim.indexOf('.') === -1) {
+        const q = parseInt(inputElement.getAttribute('data-question'), 10);
+        if (!isNaN(q) && q < 7 && row) {
+            let nextQ = q + 1;
+            while (nextQ <= 7) {
+                const next = row.querySelector('.question-set-input[data-question="' + nextQ + '"]');
+                if (next && !next.classList.contains('disabled')) {
+                    setTimeout(function () {
+                        next.focus();
+                        try { next.select(); } catch (e) { /* ignore */ }
+                    }, 0);
+                    break;
+                }
+                nextQ += 1;
+            }
+        }
+    }
 }
 
 const LAB_FINAL_EXAM_MAX = parseInt("{{ lab_final_exam_max|default:50 }}", 10) || 50;

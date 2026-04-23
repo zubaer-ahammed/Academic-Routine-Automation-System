@@ -1305,7 +1305,7 @@
                             {% if selected_course.is_lab %}
                                 <!-- Lab Course Final Exam -->
                                 <div class="ca-distribution">
-                                    <p><strong>Lab Course Final Exam:</strong> Maximum 60 marks</p>
+                                    <p><strong>Lab Course Final Exam:</strong> Maximum {{ lab_final_exam_max|default:50 }} marks</p>
                                 </div>
                             {% else %}
                                 <!-- Theory Course Final Exam -->
@@ -1445,14 +1445,14 @@
                                                 <th rowspan="2" class="student-info">Student ID</th>
                                                 <th rowspan="2" class="student-info">Name</th>
                                                 {% if selected_course.is_lab %}
-                                                    <th colspan="2">Lab Course Final Exam (Total: 60 marks)</th>
+                                                    <th colspan="2">Lab Course Final Exam (Total: {{ lab_final_exam_max|default:50 }} marks)</th>
                                                 {% else %}
                                                     <th colspan="9">Theory Course Final Exam (Total: 70 marks)</th>
                                                 {% endif %}
                                             </tr>
                                             {% if selected_course.is_lab %}
                                                 <tr>
-                                                    <th>Final Exam Mark</th>
+                                                    <th>Problem Solving</th>
                                                     <th>Status</th>
                                                 </tr>
                                             {% else %}
@@ -1483,10 +1483,10 @@
                                                                    name="students_data[{{ student.id }}][lab_final_exam_mark]"
                                                                    value="{% if final_mark %}{{ final_mark.lab_final_exam_mark|floatformat:2 }}{% else %}0.00{% endif %}"
                                                                    min="0" 
-                                                                   max="60"
+                                                                   max="{{ lab_final_exam_max|default:50 }}"
                                                                    step="0.01"
                                                                    class="mark-input"
-                                                                   placeholder="Final Exam Mark"
+                                                                   placeholder="Problem Solving"
                                                                    oninput="calculateFinalExamTotal(this)">
                                                         </td>
                                                         <td>
@@ -1648,7 +1648,7 @@
                                                     <th>SL.</th>
                                                     <th>Student ID</th>
                                                     <th>Name</th>
-                                                    <th>Lab final (max 60)</th>
+                                                    <th>Lab final (max {{ lab_final_exam_max|default:50 }})</th>
                                                     <th>Marks obtained</th>
                                                     <th>Remarks</th>
                                                 </tr>
@@ -2011,6 +2011,13 @@ function updateUrlParams(curriculumId, centreId, semesterId, courseId, skipReloa
     }
 }
 
+// Non-negative mark helper (CA / final exam numeric fields)
+function nonNegativeMark(v) {
+    const x = parseFloat(v);
+    if (isNaN(x) || x < 0) return 0;
+    return x;
+}
+
 // Function to calculate total CA mark for a single student row
 function calculateStudentTotal(inputElement) {
     const row = inputElement.closest('tr');
@@ -2021,22 +2028,22 @@ function calculateStudentTotal(inputElement) {
 
     if (isProjectCourse) {
         // Project Work: supervisor + evaluation + presentation
-        const supervisorMark = parseFloat(row.querySelector('input[name$="[project_supervisor_mark]"]').value) || 0;
-        const evaluationMark = parseFloat(row.querySelector('input[name$="[project_evaluation_mark]"]').value) || 0;
-        const presentationMark = parseFloat(row.querySelector('input[name$="[project_presentation_mark]"]').value) || 0;
+        const supervisorMark = nonNegativeMark(row.querySelector('input[name$="[project_supervisor_mark]"]').value);
+        const evaluationMark = nonNegativeMark(row.querySelector('input[name$="[project_evaluation_mark]"]').value);
+        const presentationMark = nonNegativeMark(row.querySelector('input[name$="[project_presentation_mark]"]').value);
         total = supervisorMark + evaluationMark + presentationMark;
     } else {
-    const attendanceMark = parseFloat(row.querySelector('input[name$="[attendance_mark]"]').value) || 0;
+    const attendanceMark = nonNegativeMark(row.querySelector('input[name$="[attendance_mark]"]').value);
         total = attendanceMark; // Attendance is auto-calculated, so we include it in total
 
     if (isLabCourse) {
-        const firstLabAssignmentMark = parseFloat(row.querySelector('input[name$="[first_lab_assignment_mark]"]').value) || 0;
-        const secondLabAssignmentMark = parseFloat(row.querySelector('input[name$="[second_lab_assignment_mark]"]').value) || 0;
-        const thirdLabAssignmentMark = parseFloat(row.querySelector('input[name$="[third_lab_assignment_mark]"]').value) || 0;
+        const firstLabAssignmentMark = nonNegativeMark(row.querySelector('input[name$="[first_lab_assignment_mark]"]').value);
+        const secondLabAssignmentMark = nonNegativeMark(row.querySelector('input[name$="[second_lab_assignment_mark]"]').value);
+        const thirdLabAssignmentMark = nonNegativeMark(row.querySelector('input[name$="[third_lab_assignment_mark]"]').value);
         
         // Calculate average of ONLY the three lab assignment marks (NOT including attendance)
         const labAssignmentMark = (firstLabAssignmentMark + secondLabAssignmentMark + thirdLabAssignmentMark) / 3;
-        const labPracticalMark = parseFloat(row.querySelector('input[name$="[lab_practical_mark]"]').value) || 0;
+        const labPracticalMark = nonNegativeMark(row.querySelector('input[name$="[lab_practical_mark]"]').value);
         total += labAssignmentMark + labPracticalMark;
         
         // Update the average lab assignment mark display
@@ -2045,9 +2052,9 @@ function calculateStudentTotal(inputElement) {
             averageLabAssignmentCell.textContent = labAssignmentMark.toFixed(2);
         }
     } else {
-        const firstAssignmentMark = parseFloat(row.querySelector('input[name$="[first_assignment_mark]"]').value) || 0;
-        const secondAssignmentMark = parseFloat(row.querySelector('input[name$="[second_assignment_mark]"]').value) || 0;
-        const thirdAssignmentMark = parseFloat(row.querySelector('input[name$="[third_assignment_mark]"]').value) || 0;
+        const firstAssignmentMark = nonNegativeMark(row.querySelector('input[name$="[first_assignment_mark]"]').value);
+        const secondAssignmentMark = nonNegativeMark(row.querySelector('input[name$="[second_assignment_mark]"]').value);
+        const thirdAssignmentMark = nonNegativeMark(row.querySelector('input[name$="[third_assignment_mark]"]').value);
         
         // Calculate average of ONLY the three assignment marks (NOT including attendance)
         const assignmentMark = (firstAssignmentMark + secondAssignmentMark + thirdAssignmentMark) / 3;
@@ -2064,13 +2071,13 @@ function calculateStudentTotal(inputElement) {
             let firstClassTest = 0;
             if (firstClassTestInput && firstClassTestInput.value !== '') {
                 const parsed = parseFloat(firstClassTestInput.value);
-                firstClassTest = isNaN(parsed) ? 0 : parsed;
+                firstClassTest = isNaN(parsed) ? 0 : Math.max(0, parsed);
             }
             
             let secondClassTest = 0;
             if (secondClassTestInput && secondClassTestInput.value !== '') {
                 const parsed = parseFloat(secondClassTestInput.value);
-                secondClassTest = isNaN(parsed) ? 0 : parsed;
+                secondClassTest = isNaN(parsed) ? 0 : Math.max(0, parsed);
             }
             
             examMark = Math.max(firstClassTest, secondClassTest);
@@ -2083,7 +2090,7 @@ function calculateStudentTotal(inputElement) {
         } else {
             // New curriculum: use midterm
             const midtermInput = row.querySelector('input[name$="[midterm_mark]"]');
-            examMark = midtermInput ? (parseFloat(midtermInput.value) || 0) : 0;
+            examMark = midtermInput ? nonNegativeMark(midtermInput.value) : 0;
         }
         total += assignmentMark + examMark;
         
@@ -2102,14 +2109,27 @@ function calculateStudentTotal(inputElement) {
     }
 }
 
-// Function to validate CA mark input (enforce max constraints)
+// Function to validate CA mark input (enforce min 0 and max constraints)
 function validateCAMark(inputElement) {
-    const maxValue = parseFloat(inputElement.getAttribute('max')) || Infinity;
-    const currentValue = parseFloat(inputElement.value) || 0;
-    
-    if (currentValue > maxValue) {
+    const minAttr = inputElement.getAttribute('min');
+    const minValue = minAttr === null || minAttr === '' ? 0 : parseFloat(minAttr);
+    const minV = isNaN(minValue) ? 0 : minValue;
+    const maxAttr = inputElement.getAttribute('max');
+    const maxValue = maxAttr === null || maxAttr === '' ? Infinity : parseFloat(maxAttr);
+    const maxV = isNaN(maxValue) ? Infinity : maxValue;
+    let currentValue = parseFloat(inputElement.value);
+    if (isNaN(currentValue)) {
         inputElement.value = 0;
-        alert(`Maximum allowed value is ${maxValue}. Value reset to 0.`);
+        return;
+    }
+    if (currentValue < minV) {
+        inputElement.value = minV;
+        alert('Marks cannot be negative.');
+        return;
+    }
+    if (currentValue > maxV) {
+        inputElement.value = 0;
+        alert(`Maximum allowed value is ${maxV}. Value reset to 0.`);
     }
 }
 
@@ -2145,13 +2165,13 @@ function updateClassTestBest(inputElement) {
     let firstClassTest = 0;
     if (firstClassTestInput.value !== '') {
         const parsed = parseFloat(firstClassTestInput.value);
-        firstClassTest = isNaN(parsed) ? 0 : parsed;
+        firstClassTest = isNaN(parsed) ? 0 : Math.max(0, parsed);
     }
     
     let secondClassTest = 0;
     if (secondClassTestInput.value !== '') {
         const parsed = parseFloat(secondClassTestInput.value);
-        secondClassTest = isNaN(parsed) ? 0 : parsed;
+        secondClassTest = isNaN(parsed) ? 0 : Math.max(0, parsed);
     }
     
     const bestValue = Math.max(firstClassTest, secondClassTest);
@@ -2251,12 +2271,12 @@ function saveCAMarks(reloadPage = true) {
         const isLabCourse = {% if selected_course.is_lab %}true{% else %}false{% endif %};
 
         if (isProjectCourse) {
-            marks['project_supervisor_mark'] = parseFloat(row.querySelector('input[name$="[project_supervisor_mark]"]').value) || 0;
-            marks['project_evaluation_mark'] = parseFloat(row.querySelector('input[name$="[project_evaluation_mark]"]').value) || 0;
-            marks['project_presentation_mark'] = parseFloat(row.querySelector('input[name$="[project_presentation_mark]"]').value) || 0;
+            marks['project_supervisor_mark'] = nonNegativeMark(row.querySelector('input[name$="[project_supervisor_mark]"]').value);
+            marks['project_evaluation_mark'] = nonNegativeMark(row.querySelector('input[name$="[project_evaluation_mark]"]').value);
+            marks['project_presentation_mark'] = nonNegativeMark(row.querySelector('input[name$="[project_presentation_mark]"]').value);
         } else {
             const attendanceInput = row.querySelector('input[name$="[attendance_mark]"]');
-            const attendanceMark = attendanceInput ? (parseFloat(attendanceInput.value) || 0) : 0;
+            const attendanceMark = attendanceInput ? nonNegativeMark(attendanceInput.value) : 0;
             marks['attendance_mark'] = attendanceMark; // This will be auto-calculated on the server
 
         if (isLabCourse) {
@@ -2264,28 +2284,28 @@ function saveCAMarks(reloadPage = true) {
                 const secondLabInput = row.querySelector('input[name$="[second_lab_assignment_mark]"]');
                 const thirdLabInput = row.querySelector('input[name$="[third_lab_assignment_mark]"]');
                 const labPracticalInput = row.querySelector('input[name$="[lab_practical_mark]"]');
-                marks['first_lab_assignment_mark'] = firstLabInput ? (parseFloat(firstLabInput.value) || 0) : 0;
-                marks['second_lab_assignment_mark'] = secondLabInput ? (parseFloat(secondLabInput.value) || 0) : 0;
-                marks['third_lab_assignment_mark'] = thirdLabInput ? (parseFloat(thirdLabInput.value) || 0) : 0;
-                marks['lab_practical_mark'] = labPracticalInput ? (parseFloat(labPracticalInput.value) || 0) : 0;
+                marks['first_lab_assignment_mark'] = firstLabInput ? nonNegativeMark(firstLabInput.value) : 0;
+                marks['second_lab_assignment_mark'] = secondLabInput ? nonNegativeMark(secondLabInput.value) : 0;
+                marks['third_lab_assignment_mark'] = thirdLabInput ? nonNegativeMark(thirdLabInput.value) : 0;
+                marks['lab_practical_mark'] = labPracticalInput ? nonNegativeMark(labPracticalInput.value) : 0;
         } else {
                 const firstInput = row.querySelector('input[name$="[first_assignment_mark]"]');
                 const secondInput = row.querySelector('input[name$="[second_assignment_mark]"]');
                 const thirdInput = row.querySelector('input[name$="[third_assignment_mark]"]');
-                marks['first_assignment_mark'] = firstInput ? (parseFloat(firstInput.value) || 0) : 0;
-                marks['second_assignment_mark'] = secondInput ? (parseFloat(secondInput.value) || 0) : 0;
-                marks['third_assignment_mark'] = thirdInput ? (parseFloat(thirdInput.value) || 0) : 0;
+                marks['first_assignment_mark'] = firstInput ? nonNegativeMark(firstInput.value) : 0;
+                marks['second_assignment_mark'] = secondInput ? nonNegativeMark(secondInput.value) : 0;
+                marks['third_assignment_mark'] = thirdInput ? nonNegativeMark(thirdInput.value) : 0;
                 
                 // Check if it's old curriculum (class tests) or new curriculum (midterm)
                 const isOldCurriculum = {% if selected_semester and selected_semester.curriculum and selected_semester.curriculum.code == 'OLD' %}true{% else %}false{% endif %};
                 if (isOldCurriculum) {
                     const firstClassTestInput = row.querySelector('input[name$="[first_class_test_mark]"]');
                     const secondClassTestInput = row.querySelector('input[name$="[second_class_test_mark]"]');
-                    marks['first_class_test_mark'] = firstClassTestInput ? (parseFloat(firstClassTestInput.value) || 0) : 0;
-                    marks['second_class_test_mark'] = secondClassTestInput ? (parseFloat(secondClassTestInput.value) || 0) : 0;
+                    marks['first_class_test_mark'] = firstClassTestInput ? nonNegativeMark(firstClassTestInput.value) : 0;
+                    marks['second_class_test_mark'] = secondClassTestInput ? nonNegativeMark(secondClassTestInput.value) : 0;
                 } else {
                     const midtermInput = row.querySelector('input[name$="[midterm_mark]"]');
-                    marks['midterm_mark'] = midtermInput ? (parseFloat(midtermInput.value) || 0) : 0;
+                    marks['midterm_mark'] = midtermInput ? nonNegativeMark(midtermInput.value) : 0;
                 }
             }
         }
@@ -2550,7 +2570,12 @@ function validateQuestionSet(inputElement) {
     let total = 0;
     
     questionInputs.forEach(input => {
-        const value = parseFloat(input.value) || 0;
+        let value = parseFloat(input.value);
+        if (isNaN(value)) value = 0;
+        if (value < 0) {
+            input.value = 0;
+            value = 0;
+        }
         if (value > 0) {
             filledCount++;
             total += value;
@@ -2568,7 +2593,9 @@ function validateQuestionSet(inputElement) {
         // Disable the last filled input
         let enabledCount = 0;
         questionInputs.forEach(input => {
-            const value = parseFloat(input.value) || 0;
+            let value = parseFloat(input.value);
+            if (isNaN(value)) value = 0;
+            if (value < 0) value = 0;
             if (value > 0) {
                 enabledCount++;
                 if (enabledCount > 5) {
@@ -2596,12 +2623,19 @@ function validateQuestionSet(inputElement) {
     }
 }
 
+const LAB_FINAL_EXAM_MAX = parseInt("{{ lab_final_exam_max|default:50 }}", 10) || 50;
+
 // Function to calculate final exam total for lab course
 function calculateFinalExamTotal(inputElement) {
-    const value = parseFloat(inputElement.value) || 0;
-    if (value > 60) {
-        inputElement.value = 60;
-        alert('Maximum mark for lab final exam is 60.');
+    let value = parseFloat(inputElement.value);
+    if (isNaN(value)) value = 0;
+    if (value < 0) {
+        value = 0;
+        inputElement.value = 0;
+    }
+    if (value > LAB_FINAL_EXAM_MAX) {
+        inputElement.value = LAB_FINAL_EXAM_MAX;
+        alert('Maximum mark for lab final exam is ' + LAB_FINAL_EXAM_MAX + '.');
     }
 }
 
@@ -2643,13 +2677,18 @@ function saveFinalExamMarks() {
         const marks = {};
         
         if (isLabCourse) {
-            marks['lab_final_exam_mark'] = parseFloat(row.querySelector('input[name$="[lab_final_exam_mark]"]').value) || 0;
+            let labVal = parseFloat(row.querySelector('input[name$="[lab_final_exam_mark]"]').value);
+            if (isNaN(labVal)) labVal = 0;
+            labVal = Math.max(0, Math.min(LAB_FINAL_EXAM_MAX, labVal));
+            marks['lab_final_exam_mark'] = labVal;
         } else {
             // Theory course: collect all 7 question sets
             for (let i = 1; i <= 7; i++) {
                 const input = row.querySelector(`input[name$="[q${i}]"]`);
                 if (input) {
-                    const value = parseFloat(input.value) || 0;
+                    let value = parseFloat(input.value);
+                    if (isNaN(value)) value = 0;
+                    value = Math.max(0, Math.min(14, value));
                     if (value > 0) {
                         marks[`q${i}`] = value;
                     }

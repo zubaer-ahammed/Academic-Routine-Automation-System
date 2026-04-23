@@ -9781,6 +9781,11 @@ def ca_management(request):
         teacher_role = 'teacher1'
         can_select_evaluator = False
     
+    # Lab final exam cap in UI and saves: old curriculum 60 marks; new (and other non-OLD) 50 marks
+    lab_final_exam_max = 50
+    if selected_semester and getattr(selected_semester, 'curriculum', None) and selected_semester.curriculum.code == 'OLD':
+        lab_final_exam_max = 60
+
     context = {
         'teacher': teacher,
         'is_admin': is_admin,
@@ -9801,6 +9806,7 @@ def ca_management(request):
         'final_exam_marks': final_exam_marks,
         'teacher_role': teacher_role,
         'can_select_evaluator': can_select_evaluator,
+        'lab_final_exam_max': lab_final_exam_max,
     }
     
     # Get evaluator teachers for the selected course
@@ -10004,6 +10010,32 @@ def ca_management(request):
     return render(request, 'bou_routines_app/ca_management.html', context)
 
 
+def _clamp_mark_float(raw, maximum=None):
+    """Parse a numeric mark from client JSON: no negatives; optionally cap at maximum."""
+    try:
+        x = float(raw)
+    except (TypeError, ValueError):
+        x = 0.0
+    if x < 0:
+        x = 0.0
+    if maximum is not None:
+        try:
+            mx = float(maximum)
+            if x > mx:
+                x = mx
+        except (TypeError, ValueError):
+            pass
+    return x
+
+
+def _parse_final_exam_q_mark(raw):
+    """Theory final exam one question set: 0..14, stored as None when not positive (matches prior UI semantics)."""
+    if raw is None or raw == '':
+        return None
+    v = _clamp_mark_float(raw, 14.0)
+    return v if v > 0 else None
+
+
 @login_required
 def save_ca_marks(request):
     """
@@ -10174,31 +10206,57 @@ def save_ca_marks(request):
                 # Update marks based on course type
                 if course.course_type == 'PROJECT':
                     # Project Work marks
-                    ca_mark.project_supervisor_mark = float(marks_data.get('project_supervisor_mark', 0))
-                    ca_mark.project_evaluation_mark = float(marks_data.get('project_evaluation_mark', 0))
-                    ca_mark.project_presentation_mark = float(marks_data.get('project_presentation_mark', 0))
+                    ca_mark.project_supervisor_mark = _clamp_mark_float(
+                        marks_data.get('project_supervisor_mark', 0), course.effective_project_supervisor_weight
+                    )
+                    ca_mark.project_evaluation_mark = _clamp_mark_float(
+                        marks_data.get('project_evaluation_mark', 0), course.effective_project_evaluation_weight
+                    )
+                    ca_mark.project_presentation_mark = _clamp_mark_float(
+                        marks_data.get('project_presentation_mark', 0), course.effective_project_presentation_weight
+                    )
                 elif course.is_lab:
                     # Lab course marks
-                    ca_mark.first_lab_assignment_mark = float(marks_data.get('first_lab_assignment_mark', 0))
-                    ca_mark.second_lab_assignment_mark = float(marks_data.get('second_lab_assignment_mark', 0))
-                    ca_mark.third_lab_assignment_mark = float(marks_data.get('third_lab_assignment_mark', 0))
-                    ca_mark.lab_practical_mark = float(marks_data.get('lab_practical_mark', 0))
+                    ca_mark.first_lab_assignment_mark = _clamp_mark_float(
+                        marks_data.get('first_lab_assignment_mark', 0), course.effective_lab_ca_assignment_weight
+                    )
+                    ca_mark.second_lab_assignment_mark = _clamp_mark_float(
+                        marks_data.get('second_lab_assignment_mark', 0), course.effective_lab_ca_assignment_weight
+                    )
+                    ca_mark.third_lab_assignment_mark = _clamp_mark_float(
+                        marks_data.get('third_lab_assignment_mark', 0), course.effective_lab_ca_assignment_weight
+                    )
+                    ca_mark.lab_practical_mark = _clamp_mark_float(
+                        marks_data.get('lab_practical_mark', 0), course.effective_lab_ca_practical_weight
+                    )
                 else:
                     # Theory course marks
-                    ca_mark.first_assignment_mark = float(marks_data.get('first_assignment_mark', 0))
-                    ca_mark.second_assignment_mark = float(marks_data.get('second_assignment_mark', 0))
-                    ca_mark.third_assignment_mark = float(marks_data.get('third_assignment_mark', 0))
+                    ca_mark.first_assignment_mark = _clamp_mark_float(
+                        marks_data.get('first_assignment_mark', 0), course.effective_ca_assignment_weight
+                    )
+                    ca_mark.second_assignment_mark = _clamp_mark_float(
+                        marks_data.get('second_assignment_mark', 0), course.effective_ca_assignment_weight
+                    )
+                    ca_mark.third_assignment_mark = _clamp_mark_float(
+                        marks_data.get('third_assignment_mark', 0), course.effective_ca_assignment_weight
+                    )
                     
                     # Determine which exam type to use based on curriculum
                     if semester.curriculum and semester.curriculum.code == 'OLD':
                         # Old curriculum: use class tests (best of first and second)
-                        ca_mark.first_class_test_mark = float(marks_data.get('first_class_test_mark', 0))
-                        ca_mark.second_class_test_mark = float(marks_data.get('second_class_test_mark', 0))
+                        ca_mark.first_class_test_mark = _clamp_mark_float(
+                            marks_data.get('first_class_test_mark', 0), course.effective_ca_quiz_weight
+                        )
+                        ca_mark.second_class_test_mark = _clamp_mark_float(
+                            marks_data.get('second_class_test_mark', 0), course.effective_ca_quiz_weight
+                        )
                         # Set midterm to 0 for old curriculum
                         ca_mark.midterm_mark = 0
                     else:
                         # New curriculum: use midterm
-                        ca_mark.midterm_mark = float(marks_data.get('midterm_mark', 0))
+                        ca_mark.midterm_mark = _clamp_mark_float(
+                            marks_data.get('midterm_mark', 0), course.effective_ca_midterm_weight
+                        )
                         # Set class tests to 0 for new curriculum
                         ca_mark.first_class_test_mark = 0
                         ca_mark.second_class_test_mark = 0
@@ -10500,39 +10558,44 @@ def save_final_exam_marks(request):
                     else:
                         # Update marks based on course type
                         if course.is_lab:
-                            # Lab course: single field
-                            final_mark.lab_final_exam_mark = float(marks_data.get('lab_final_exam_mark', 0))
+                            # Lab course: single field (max 60 old curriculum, 50 new curriculum)
+                            lab_final_max = 60 if (semester.curriculum_id and semester.curriculum.code == 'OLD') else 50
+                            try:
+                                lab_raw = float(marks_data.get('lab_final_exam_mark', 0) or 0)
+                            except (TypeError, ValueError):
+                                lab_raw = 0.0
+                            final_mark.lab_final_exam_mark = max(0.0, min(lab_raw, float(lab_final_max)))
                             final_mark.marked_by = teacher
                         else:
                             # Theory course: 7 question sets
                             if teacher_role == 'teacher1':
-                                final_mark.teacher1_q1 = float(marks_data.get('q1', 0)) if marks_data.get('q1') else None
-                                final_mark.teacher1_q2 = float(marks_data.get('q2', 0)) if marks_data.get('q2') else None
-                                final_mark.teacher1_q3 = float(marks_data.get('q3', 0)) if marks_data.get('q3') else None
-                                final_mark.teacher1_q4 = float(marks_data.get('q4', 0)) if marks_data.get('q4') else None
-                                final_mark.teacher1_q5 = float(marks_data.get('q5', 0)) if marks_data.get('q5') else None
-                                final_mark.teacher1_q6 = float(marks_data.get('q6', 0)) if marks_data.get('q6') else None
-                                final_mark.teacher1_q7 = float(marks_data.get('q7', 0)) if marks_data.get('q7') else None
+                                final_mark.teacher1_q1 = _parse_final_exam_q_mark(marks_data.get('q1')) if marks_data.get('q1') else None
+                                final_mark.teacher1_q2 = _parse_final_exam_q_mark(marks_data.get('q2')) if marks_data.get('q2') else None
+                                final_mark.teacher1_q3 = _parse_final_exam_q_mark(marks_data.get('q3')) if marks_data.get('q3') else None
+                                final_mark.teacher1_q4 = _parse_final_exam_q_mark(marks_data.get('q4')) if marks_data.get('q4') else None
+                                final_mark.teacher1_q5 = _parse_final_exam_q_mark(marks_data.get('q5')) if marks_data.get('q5') else None
+                                final_mark.teacher1_q6 = _parse_final_exam_q_mark(marks_data.get('q6')) if marks_data.get('q6') else None
+                                final_mark.teacher1_q7 = _parse_final_exam_q_mark(marks_data.get('q7')) if marks_data.get('q7') else None
                                 if not apply_assign_from_post:
                                     final_mark.teacher1_evaluator = teacher
                             elif teacher_role == 'teacher2':
-                                final_mark.teacher2_q1 = float(marks_data.get('q1', 0)) if marks_data.get('q1') else None
-                                final_mark.teacher2_q2 = float(marks_data.get('q2', 0)) if marks_data.get('q2') else None
-                                final_mark.teacher2_q3 = float(marks_data.get('q3', 0)) if marks_data.get('q3') else None
-                                final_mark.teacher2_q4 = float(marks_data.get('q4', 0)) if marks_data.get('q4') else None
-                                final_mark.teacher2_q5 = float(marks_data.get('q5', 0)) if marks_data.get('q5') else None
-                                final_mark.teacher2_q6 = float(marks_data.get('q6', 0)) if marks_data.get('q6') else None
-                                final_mark.teacher2_q7 = float(marks_data.get('q7', 0)) if marks_data.get('q7') else None
+                                final_mark.teacher2_q1 = _parse_final_exam_q_mark(marks_data.get('q1')) if marks_data.get('q1') else None
+                                final_mark.teacher2_q2 = _parse_final_exam_q_mark(marks_data.get('q2')) if marks_data.get('q2') else None
+                                final_mark.teacher2_q3 = _parse_final_exam_q_mark(marks_data.get('q3')) if marks_data.get('q3') else None
+                                final_mark.teacher2_q4 = _parse_final_exam_q_mark(marks_data.get('q4')) if marks_data.get('q4') else None
+                                final_mark.teacher2_q5 = _parse_final_exam_q_mark(marks_data.get('q5')) if marks_data.get('q5') else None
+                                final_mark.teacher2_q6 = _parse_final_exam_q_mark(marks_data.get('q6')) if marks_data.get('q6') else None
+                                final_mark.teacher2_q7 = _parse_final_exam_q_mark(marks_data.get('q7')) if marks_data.get('q7') else None
                                 if not apply_assign_from_post:
                                     final_mark.teacher2_evaluator = teacher
                             elif teacher_role == 'teacher3':
-                                final_mark.teacher3_q1 = float(marks_data.get('q1', 0)) if marks_data.get('q1') else None
-                                final_mark.teacher3_q2 = float(marks_data.get('q2', 0)) if marks_data.get('q2') else None
-                                final_mark.teacher3_q3 = float(marks_data.get('q3', 0)) if marks_data.get('q3') else None
-                                final_mark.teacher3_q4 = float(marks_data.get('q4', 0)) if marks_data.get('q4') else None
-                                final_mark.teacher3_q5 = float(marks_data.get('q5', 0)) if marks_data.get('q5') else None
-                                final_mark.teacher3_q6 = float(marks_data.get('q6', 0)) if marks_data.get('q6') else None
-                                final_mark.teacher3_q7 = float(marks_data.get('q7', 0)) if marks_data.get('q7') else None
+                                final_mark.teacher3_q1 = _parse_final_exam_q_mark(marks_data.get('q1')) if marks_data.get('q1') else None
+                                final_mark.teacher3_q2 = _parse_final_exam_q_mark(marks_data.get('q2')) if marks_data.get('q2') else None
+                                final_mark.teacher3_q3 = _parse_final_exam_q_mark(marks_data.get('q3')) if marks_data.get('q3') else None
+                                final_mark.teacher3_q4 = _parse_final_exam_q_mark(marks_data.get('q4')) if marks_data.get('q4') else None
+                                final_mark.teacher3_q5 = _parse_final_exam_q_mark(marks_data.get('q5')) if marks_data.get('q5') else None
+                                final_mark.teacher3_q6 = _parse_final_exam_q_mark(marks_data.get('q6')) if marks_data.get('q6') else None
+                                final_mark.teacher3_q7 = _parse_final_exam_q_mark(marks_data.get('q7')) if marks_data.get('q7') else None
                                 if not apply_assign_from_post:
                                     final_mark.teacher3_evaluator = teacher
 

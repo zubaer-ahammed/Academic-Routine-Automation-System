@@ -9954,10 +9954,11 @@ def ca_management(request):
     
     context['show_final_exam_tab'] = show_final_exam_tab
     
-    # Read-only "Final Exam Summary" tab: examiner totals, variation, consolidated mark
+    # Read-only "Final Exam Summary" tab: examiner totals, variation, consolidated mark (admins only)
     examiner_summary_rows = []
     if (
-        show_final_exam_tab
+        is_admin
+        and show_final_exam_tab
         and selected_semester
         and selected_course
         and students
@@ -9976,15 +9977,12 @@ def ca_management(request):
                     'is_lab': True,
                     'lab_mark': lab_val,
                     'marks_obtained': mo,
-                    'notes': (fm.notes or '') if fm else '',
                 })
             else:
                 t1 = float(fm.teacher1_total or 0) if fm else 0.0
                 t2 = float(fm.teacher2_total or 0) if fm else 0.0
                 t3 = float(fm.teacher3_total or 0) if fm else 0.0
                 diff_abs = abs(t1 - t2)
-                avg_12 = (t1 + t2) / 2.0 if (t1 or t2) else 0.0
-                diff_pct = (diff_abs / avg_12 * 100.0) if avg_12 > 0 else 0.0
                 mo = float(fm.final_exam_total or 0) if fm else 0.0
                 examiner_summary_rows.append({
                     'sl': idx,
@@ -9995,10 +9993,8 @@ def ca_management(request):
                     't2': t2,
                     't3': t3,
                     'diff_abs': diff_abs,
-                    'diff_pct': diff_pct,
                     'marks_obtained': mo,
-                    'requires_third': fm.requires_third_teacher if fm else False,
-                    'notes': (fm.notes or '') if fm else '',
+                    'requires_third': (fm.is_third_examiner_required if fm else False),
                 })
     context['examiner_summary_rows'] = examiner_summary_rows
     
@@ -10034,6 +10030,67 @@ def _parse_final_exam_q_mark(raw):
         return None
     v = _clamp_mark_float(raw, 14.0)
     return v if v > 0 else None
+
+
+def _apply_theory_final_exam_q_fields(final_mark, teacher_role, marks_data):
+    """
+    Apply Q1..Q7 from marks_data to the right teacher_* fields.
+    Only updates a column when the key is present so sparse requests never wipe
+    other questions (e.g. mid-edit auto-save with only one Q filled in).
+    """
+    prefix = {'teacher1': 'teacher1', 'teacher2': 'teacher2', 'teacher3': 'teacher3'}.get(teacher_role, 'teacher1')
+    for i in range(1, 8):
+        k = f'q{i}'
+        if k not in marks_data:
+            continue
+        val = _parse_final_exam_q_mark(marks_data.get(k))
+        setattr(final_mark, f'{prefix}_q{i}', val)
+
+
+def _is_final_exam_evaluator_for_scope(teacher, semester, course, centre_id):
+    """
+    True if this teacher may use the Semester Final tab in CA management (non-admins).
+    Kept in sync with show_final_exam_tab in ca_management.
+    """
+    if not teacher or not semester or not course:
+        return False
+    if centre_id not in (None, ''):
+        try:
+            sc_tab = SemesterCourse.objects.filter(
+                semester=semester,
+                course=course,
+                centre_id=int(centre_id),
+            ).first()
+            if sc_tab and (
+                sc_tab.final_exam_evaluator1 == teacher
+                or sc_tab.final_exam_evaluator2 == teacher
+                or sc_tab.final_exam_evaluator3 == teacher
+            ):
+                return True
+        except (ValueError, TypeError):
+            pass
+    sample_mark = final_exam_mark_sample_for_scope(course, semester, centre_id)
+    if sample_mark and (
+        sample_mark.teacher1_evaluator == teacher
+        or sample_mark.teacher2_evaluator == teacher
+        or sample_mark.teacher3_evaluator == teacher
+    ):
+        return True
+    drc_centre = Centre.objects.filter(code='DRC').first()
+    if drc_centre:
+        drc_sc = SemesterCourse.objects.filter(
+            semester=semester, course=course, centre=drc_centre
+        ).select_related('teacher').first()
+        if drc_sc and drc_sc.teacher == teacher:
+            return True
+    duet_centre = Centre.objects.filter(code='DUET').first()
+    if duet_centre:
+        duet_sc = SemesterCourse.objects.filter(
+            semester=semester, course=course, centre=duet_centre
+        ).select_related('teacher').first()
+        if duet_sc and duet_sc.teacher == teacher:
+            return True
+    return False
 
 
 @login_required
@@ -10359,6 +10416,9 @@ def _apply_final_exam_examiner_assignments_from_post(request, semester, course):
     assign_keys = ('assign_teacher1_id', 'assign_teacher2_id', 'assign_teacher3_id')
     if not any(k in request.POST for k in assign_keys):
         return None
+    # If all assign fields are empty, do nothing (avoids requiring centre on every marks-only save)
+    if not any((request.POST.get(k) or '').strip() for k in assign_keys):
+        return None
 
     cid = (request.POST.get('centre_id') or request.POST.get('centre') or '').strip()
     if not cid:
@@ -10403,24 +10463,162 @@ def _apply_final_exam_examiner_assignments_from_post(request, semester, course):
 
 @login_required
 @require_POST
+def save_semester_final_attendance(request):
+    """
+    Set FinalExamMark.exam_absent for one student (Semester Final Attendance UI).
+    Auto-saved from the marks page without a separate Save button.
+    Only administrators (same rule as ca_management is_admin) may use this;
+    evaluators and other teachers have no visibility of the UI and must not POST here.
+    """
+    try:
+        t_user = get_teacher_from_user(request.user)
+        if not (request.user.is_superuser or (request.user.is_staff and not t_user)):
+            return JsonResponse(
+                {'error': 'Only administrators can update semester final attendance.'},
+                status=403,
+            )
+        semester_id = request.POST.get('semester_id')
+        course_id = request.POST.get('course_id')
+        student_id = (request.POST.get('student_id') or '').strip()
+        raw_absent = (request.POST.get('exam_absent') or '').strip().lower()
+        exam_absent = raw_absent in ('1', 'true', 'yes', 'absent', 'on')
+        teacher_role = (request.POST.get('teacher_role') or 'teacher1').strip()
+        if teacher_role not in ('teacher1', 'teacher2', 'teacher3'):
+            teacher_role = 'teacher1'
+
+        if not semester_id or not course_id or not student_id:
+            return JsonResponse({'error': 'semester_id, course_id, and student_id are required'}, status=400)
+
+        semester = Semester.objects.get(id=semester_id)
+        course = Course.objects.get(id=course_id)
+
+        centre_id_for_perm = request.POST.get('centre_id') or request.POST.get('centre')
+        teacher_user = get_teacher_from_user(request.user)
+        can_post = (
+            request.user.is_superuser
+            or request.user.is_staff
+            or check_teacher_permission(request.user, 'can_manage_final_marks')
+            or (teacher_user is not None and _is_final_exam_evaluator_for_scope(teacher_user, semester, course, centre_id_for_perm))
+        )
+        if not can_post:
+            return JsonResponse({'error': 'Permission denied'}, status=403)
+
+        student = Student.objects.get(id=student_id)
+        if centre_id_for_perm:
+            try:
+                expected_centre = Centre.objects.get(id=int(centre_id_for_perm))
+                if student.centre_id is not None and student.centre_id != expected_centre.id:
+                    return JsonResponse({'error': 'Student is not in the selected study centre.'}, status=400)
+            except (Centre.DoesNotExist, ValueError, TypeError):
+                pass
+
+        teacher = None
+        if hasattr(request.user, 'teacher'):
+            teacher = request.user.teacher
+        elif request.user.is_superuser or request.user.is_staff:
+            drc_centre = Centre.objects.filter(code='DRC').first()
+            duet_centre = Centre.objects.filter(code='DUET').first()
+            if teacher_role == 'teacher1' and drc_centre:
+                semester_course = SemesterCourse.objects.filter(
+                    semester=semester,
+                    course=course,
+                    centre=drc_centre,
+                ).select_related('teacher', 'teacher__centre').first()
+                if semester_course and semester_course.teacher and semester_course.teacher.centre == drc_centre:
+                    teacher = semester_course.teacher
+            elif teacher_role == 'teacher2' and duet_centre:
+                semester_course = SemesterCourse.objects.filter(
+                    semester=semester,
+                    course=course,
+                    centre=duet_centre,
+                ).select_related('teacher', 'teacher__centre').first()
+                if semester_course and semester_course.teacher and semester_course.teacher.centre == duet_centre:
+                    teacher = semester_course.teacher
+            elif teacher_role == 'teacher3':
+                sample_mark = FinalExamMark.objects.filter(course=course, semester=semester).first()
+                if sample_mark and sample_mark.teacher3_evaluator:
+                    teacher = sample_mark.teacher3_evaluator
+                else:
+                    teacher_id = request.POST.get('teacher3_id')
+                    if teacher_id:
+                        try:
+                            teacher = Teacher.objects.get(id=teacher_id)
+                        except Teacher.DoesNotExist:
+                            pass
+            if not teacher:
+                centre_id = request.POST.get('centre_id') or request.POST.get('centre')
+                semester_course = None
+                if centre_id:
+                    try:
+                        centre = Centre.objects.get(id=centre_id)
+                        semester_course = SemesterCourse.objects.filter(
+                            semester=semester,
+                            course=course,
+                            centre=centre,
+                        ).select_related('teacher').first()
+                    except Centre.DoesNotExist:
+                        pass
+                if not semester_course:
+                    semester_course = SemesterCourse.objects.filter(
+                        semester=semester,
+                        course=course,
+                    ).select_related('teacher').first()
+                if semester_course:
+                    teacher = semester_course.teacher
+
+        if not teacher:
+            return JsonResponse({'error': 'Teacher not found for this record.'}, status=400)
+
+        final_mark, _created = FinalExamMark.objects.get_or_create(
+            student=student,
+            course=course,
+            semester=semester,
+            defaults={'marked_by': teacher, 'exam_absent': False},
+        )
+        final_mark.exam_absent = bool(exam_absent)
+        if final_mark.exam_absent:
+            final_mark.clear_numeric_exam_fields()
+        final_mark.marked_by = teacher
+        final_mark.save()
+
+        return JsonResponse({'success': True, 'exam_absent': final_mark.exam_absent})
+    except Student.DoesNotExist:
+        return JsonResponse({'error': 'Student not found'}, status=404)
+    except (Semester.DoesNotExist, Course.DoesNotExist):
+        return JsonResponse({'error': 'Invalid semester or course'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@require_POST
 def save_final_exam_marks(request):
     """
     Save Semester Final Examination marks for students
     """
-    # Check permissions
-    if not (request.user.is_superuser or request.user.is_staff or check_teacher_permission(request.user, 'can_manage_final_marks')):
-        return JsonResponse({'error': 'Permission denied'}, status=403)
-    
     try:
         semester_id = request.POST.get('semester_id')
         course_id = request.POST.get('course_id')
-        teacher_role = request.POST.get('teacher_role', 'teacher1')  # teacher1, teacher2, or teacher3
+        teacher_role = (request.POST.get('teacher_role') or 'teacher1').strip()
+        if teacher_role not in ('teacher1', 'teacher2', 'teacher3'):
+            teacher_role = 'teacher1'
         
         if not semester_id or not course_id:
             return JsonResponse({'error': 'Semester and course are required'}, status=400)
         
         semester = Semester.objects.get(id=semester_id)
         course = Course.objects.get(id=course_id)
+
+        centre_id_for_perm = request.POST.get('centre_id') or request.POST.get('centre')
+        teacher_user = get_teacher_from_user(request.user)
+        can_post = (
+            request.user.is_superuser
+            or request.user.is_staff
+            or check_teacher_permission(request.user, 'can_manage_final_marks')
+            or (teacher_user is not None and _is_final_exam_evaluator_for_scope(teacher_user, semester, course, centre_id_for_perm))
+        )
+        if not can_post:
+            return JsonResponse({'error': 'Permission denied'}, status=403)
         
         # Get teacher based on role
         teacher = None
@@ -10472,7 +10670,7 @@ def save_final_exam_marks(request):
             
             # Fallback: if still no teacher found, try to get from any SemesterCourse
             if not teacher:
-                centre_id = request.POST.get('centre_id')
+                centre_id = request.POST.get('centre_id') or request.POST.get('centre')
                 semester_course = None
                 if centre_id:
                     try:
@@ -10503,7 +10701,7 @@ def save_final_exam_marks(request):
             not notes_only_request
             and (request.user.is_superuser or request.user.is_staff)
             and any(
-                k in request.POST
+                (request.POST.get(k) or '').strip()
                 for k in ('assign_teacher1_id', 'assign_teacher2_id', 'assign_teacher3_id')
             )
         )
@@ -10513,23 +10711,36 @@ def save_final_exam_marks(request):
                 return JsonResponse({'error': assign_err}, status=400)
 
         students_data = request.POST.get('students_data')
+        rows_updated = 0
         if students_data:
             import json
-            students_marks = json.loads(students_data)
+            try:
+                students_marks = json.loads(students_data)
+            except json.JSONDecodeError:
+                return JsonResponse({'error': 'Invalid students_data (JSON).'}, status=400)
+            if not isinstance(students_marks, dict):
+                return JsonResponse({'error': 'Invalid students_data format.'}, status=400)
             
             for student_id, marks_data in students_marks.items():
+                if not isinstance(marks_data, dict):
+                    return JsonResponse(
+                        {'error': f'Invalid marks for student {student_id}: expected an object, not a single value. Reload and try again.'},
+                        status=400,
+                    )
                 try:
-                    student = Student.objects.get(id=student_id)
+                    student = Student.objects.get(id=str(student_id).strip())
 
-                    centre_id_post = request.POST.get('centre_id')
+                    # Optional centre check: only skip if student has a centre and it differs
+                    # (saves for students with centre=None were previously skipped, so nothing persisted)
+                    centre_id_post = request.POST.get('centre_id') or request.POST.get('centre')
                     if centre_id_post:
                         try:
                             expected_centre = Centre.objects.get(id=int(centre_id_post))
-                            if student.centre_id != expected_centre.id:
+                            if student.centre_id is not None and student.centre_id != expected_centre.id:
                                 continue
                         except (Centre.DoesNotExist, ValueError, TypeError):
                             pass
-                    
+
                     # Get or create Final Exam mark record
                     final_mark, created = FinalExamMark.objects.get_or_create(
                         student=student,
@@ -10542,6 +10753,7 @@ def save_final_exam_marks(request):
                         if 'notes' in marks_data:
                             final_mark.notes = marks_data.get('notes', '') or ''
                         final_mark.save()
+                        rows_updated += 1
                         continue
 
                     def _post_exam_absent(val):
@@ -10549,8 +10761,28 @@ def save_final_exam_marks(request):
                             return True
                         return False
 
-                    if 'exam_absent' in marks_data:
+                    # Any positive final-exam mark means the student is not exam-absent. Without this, a stale
+                    # exam_absent=1 in the DB (from a prior AB) blocks all Q/ lab updates: we clear and never
+                    # apply the posted marks (affects a subset of students but not all).
+                    has_positive_final = False
+                    if not course.is_lab:
+                        for i in range(1, 8):
+                            k = f'q{i}'
+                            if k in marks_data and _parse_final_exam_q_mark(marks_data.get(k)) is not None:
+                                has_positive_final = True
+                                break
+                    else:
+                        try:
+                            lrv = float(marks_data.get('lab_final_exam_mark', 0) or 0)
+                        except (TypeError, ValueError):
+                            lrv = 0.0
+                        if lrv > 0:
+                            has_positive_final = True
+                    if has_positive_final:
+                        final_mark.exam_absent = False
+                    elif 'exam_absent' in marks_data:
                         final_mark.exam_absent = _post_exam_absent(marks_data.get('exam_absent'))
+                    # else: leave exam_absent as loaded (e.g. not mentioned in this POST)
                     exam_absent = final_mark.exam_absent
                     if exam_absent:
                         final_mark.clear_numeric_exam_fields()
@@ -10567,51 +10799,52 @@ def save_final_exam_marks(request):
                             final_mark.lab_final_exam_mark = max(0.0, min(lab_raw, float(lab_final_max)))
                             final_mark.marked_by = teacher
                         else:
-                            # Theory course: 7 question sets
+                            # Theory course: 7 question sets (see _apply_theory_final_exam_q_fields: key must be
+                            # present; omitted keys are left unchanged to avoid clearing other Qs on partial save.)
                             if teacher_role == 'teacher1':
-                                final_mark.teacher1_q1 = _parse_final_exam_q_mark(marks_data.get('q1')) if marks_data.get('q1') else None
-                                final_mark.teacher1_q2 = _parse_final_exam_q_mark(marks_data.get('q2')) if marks_data.get('q2') else None
-                                final_mark.teacher1_q3 = _parse_final_exam_q_mark(marks_data.get('q3')) if marks_data.get('q3') else None
-                                final_mark.teacher1_q4 = _parse_final_exam_q_mark(marks_data.get('q4')) if marks_data.get('q4') else None
-                                final_mark.teacher1_q5 = _parse_final_exam_q_mark(marks_data.get('q5')) if marks_data.get('q5') else None
-                                final_mark.teacher1_q6 = _parse_final_exam_q_mark(marks_data.get('q6')) if marks_data.get('q6') else None
-                                final_mark.teacher1_q7 = _parse_final_exam_q_mark(marks_data.get('q7')) if marks_data.get('q7') else None
+                                _apply_theory_final_exam_q_fields(final_mark, 'teacher1', marks_data)
                                 if not apply_assign_from_post:
                                     final_mark.teacher1_evaluator = teacher
                             elif teacher_role == 'teacher2':
-                                final_mark.teacher2_q1 = _parse_final_exam_q_mark(marks_data.get('q1')) if marks_data.get('q1') else None
-                                final_mark.teacher2_q2 = _parse_final_exam_q_mark(marks_data.get('q2')) if marks_data.get('q2') else None
-                                final_mark.teacher2_q3 = _parse_final_exam_q_mark(marks_data.get('q3')) if marks_data.get('q3') else None
-                                final_mark.teacher2_q4 = _parse_final_exam_q_mark(marks_data.get('q4')) if marks_data.get('q4') else None
-                                final_mark.teacher2_q5 = _parse_final_exam_q_mark(marks_data.get('q5')) if marks_data.get('q5') else None
-                                final_mark.teacher2_q6 = _parse_final_exam_q_mark(marks_data.get('q6')) if marks_data.get('q6') else None
-                                final_mark.teacher2_q7 = _parse_final_exam_q_mark(marks_data.get('q7')) if marks_data.get('q7') else None
+                                _apply_theory_final_exam_q_fields(final_mark, 'teacher2', marks_data)
                                 if not apply_assign_from_post:
                                     final_mark.teacher2_evaluator = teacher
                             elif teacher_role == 'teacher3':
-                                final_mark.teacher3_q1 = _parse_final_exam_q_mark(marks_data.get('q1')) if marks_data.get('q1') else None
-                                final_mark.teacher3_q2 = _parse_final_exam_q_mark(marks_data.get('q2')) if marks_data.get('q2') else None
-                                final_mark.teacher3_q3 = _parse_final_exam_q_mark(marks_data.get('q3')) if marks_data.get('q3') else None
-                                final_mark.teacher3_q4 = _parse_final_exam_q_mark(marks_data.get('q4')) if marks_data.get('q4') else None
-                                final_mark.teacher3_q5 = _parse_final_exam_q_mark(marks_data.get('q5')) if marks_data.get('q5') else None
-                                final_mark.teacher3_q6 = _parse_final_exam_q_mark(marks_data.get('q6')) if marks_data.get('q6') else None
-                                final_mark.teacher3_q7 = _parse_final_exam_q_mark(marks_data.get('q7')) if marks_data.get('q7') else None
+                                _apply_theory_final_exam_q_fields(final_mark, 'teacher3', marks_data)
                                 if not apply_assign_from_post:
                                     final_mark.teacher3_evaluator = teacher
 
                             final_mark.marked_by = teacher
-                    
+
                     # Update notes if provided
                     if 'notes' in marks_data:
                         final_mark.notes = marks_data.get('notes', '')
-                    
+
                     # Save (this will trigger auto-calculation of totals and discrepancy check)
                     final_mark.save()
-                    
+                    rows_updated += 1
+
                 except Student.DoesNotExist:
                     continue
-                except (ValueError, TypeError) as e:
+                except (ValueError, TypeError):
                     continue
+            if not notes_only_request and students_marks and rows_updated == 0:
+                return JsonResponse(
+                    {
+                        'error': (
+                            'No final exam rows were saved. Check that students exist, IDs match the table, and '
+                            'the selected study centre is correct. If the problem continues, try Save again after '
+                            'a full page reload or ask an administrator to grant “Can manage semester final marks” '
+                            'or add you as a final examiner for this course.'
+                        )
+                    },
+                    status=400,
+                )
+        elif not notes_only_request:
+            return JsonResponse(
+                {'error': 'No students_data in request. If you use an ad blocker or privacy tool, try disabling it for this page.'},
+                status=400,
+            )
         
         msg = 'Remarks saved successfully' if notes_only_request else 'Final exam marks saved successfully'
         return JsonResponse({'success': True, 'message': msg})

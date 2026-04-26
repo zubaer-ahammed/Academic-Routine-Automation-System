@@ -919,7 +919,7 @@ class FinalExamMarkAdmin(admin.ModelAdmin):
         }),
         ('Theory Course - Teacher 3 Evaluation', {
             'fields': ('teacher3_q1', 'teacher3_q2', 'teacher3_q3', 'teacher3_q4', 'teacher3_q5', 'teacher3_q6', 'teacher3_q7', 'teacher3_total', 'teacher3_evaluator'),
-            'description': 'Third examiner marks (required if difference > 20% or > 14 marks)'
+            'description': 'Third examiner marks (required if |first − second| total difference exceeds 14 marks)'
         }),
         ('Lab Course Final Exam', {
             'fields': ('lab_final_exam_mark',),

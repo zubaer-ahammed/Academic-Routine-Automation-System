@@ -52,6 +52,16 @@
         transform: translateZ(0);
         will-change: scroll-position;
     }
+
+    /* Do not use strict containment in sections with hover tooltips (otherwise tooltips are clipped). */
+    .examiner-summary-section .table-responsive {
+        contain: none;
+        z-index: 0;
+    }
+    .examiner-summary-section {
+        position: relative;
+        z-index: 1;
+    }
     
     .table-responsive::-webkit-scrollbar {
         height: 8px;
@@ -69,6 +79,23 @@
     
     .table-responsive::-webkit-scrollbar-thumb:hover {
         background: #a8a8a8;
+    }
+
+    /* Hide number input spinners (Chrome, Safari, Edge, Firefox) in CA / Final exam / Summary tabs */
+    #ca-marks input[type="number"]::-webkit-outer-spin-button,
+    #ca-marks input[type="number"]::-webkit-inner-spin-button,
+    #final-exam input[type="number"]::-webkit-outer-spin-button,
+    #final-exam input[type="number"]::-webkit-inner-spin-button,
+    #examiner-summary input[type="number"]::-webkit-outer-spin-button,
+    #examiner-summary input[type="number"]::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+    #ca-marks input[type="number"],
+    #final-exam input[type="number"],
+    #examiner-summary input[type="number"] {
+        -moz-appearance: textfield;
+        appearance: textfield;
     }
 
     .ca-table {
@@ -98,6 +125,10 @@
         vertical-align: middle;
         border: 1px solid #dee2e6;
         background-color: white;
+    }
+
+    .ca-table td.student-name {
+        text-align: left;
     }
 
     .ca-table tbody tr:nth-child(even) {
@@ -377,12 +408,6 @@
     .examiner-summary-table .cell-student-id,
     .examiner-summary-table .cell-name {
         text-align: left;
-    }
-    .examiner-summary-table .variation-sub {
-        display: block;
-        font-size: 0.75rem;
-        color: #6c757d;
-        font-weight: normal;
     }
 
     .form-group label {
@@ -703,12 +728,41 @@
     .discrepancy-row td {
         background-color: inherit !important;
     }
+
+    tr.final-exam-marks-row-disabled {
+        opacity: 0.7;
+    }
+    tr.final-exam-marks-row-disabled .question-set-input,
+    tr.final-exam-marks-row-disabled .mark-input {
+        background-color: #e9ecef !important;
+        cursor: not-allowed;
+    }
+    /* Absent / disabled mark rows: no text caret in inputs, no focus via mouse (inert on <tr> also blocks; this is a fallback) */
+    tr.final-exam-marks-row-disabled .question-set-input:disabled,
+    tr.final-exam-marks-row-disabled .mark-input:disabled {
+        pointer-events: none;
+        -webkit-user-select: none;
+        user-select: none;
+    }
+    /* Read-only display cells: not selectable (avoids I-beam on ID / name text) */
+    #final-exam .ca-table tbody td.student-id,
+    #final-exam .ca-table tbody td.student-name,
+    #final-exam .ca-table tbody td.total-mark {
+        -webkit-user-select: none;
+        user-select: none;
+        cursor: default;
+    }
+    #final-exam .ca-table .teacher-total-value {
+        -webkit-user-select: none;
+        user-select: none;
+    }
     
     .discrepancy-tooltip {
         position: relative;
         display: inline-block;
         margin-left: 5px;
         cursor: help;
+        z-index: 2;
     }
     
     .discrepancy-tooltip .tooltip-icon {
@@ -719,14 +773,14 @@
     .discrepancy-tooltip .tooltip-text {
         visibility: hidden;
         width: 300px;
-        max-width: 300px;
+        max-width: min(300px, 85vw);
         background-color: #333;
         color: #fff;
         text-align: left;
         border-radius: 6px;
         padding: 8px 12px;
         position: absolute;
-        z-index: 1000;
+        z-index: 10050;
         bottom: 125%;
         left: 50%;
         margin-left: -150px;
@@ -751,6 +805,19 @@
         border-style: solid;
         border-color: #333 transparent transparent transparent;
     }
+
+    /* Last-column tooltips: anchor to the right so the box stays inside the scroll area. */
+    .examiner-summary-table .discrepancy-tooltip .tooltip-text {
+        left: auto;
+        right: 0;
+        margin-left: 0;
+        z-index: 10050;
+    }
+    .examiner-summary-table .discrepancy-tooltip .tooltip-text::after {
+        left: auto;
+        right: 14px;
+        margin-left: 0;
+    }
     
     .discrepancy-tooltip:hover .tooltip-text {
         visibility: visible;
@@ -758,6 +825,38 @@
     }
 
     .final-exam-section {
+    }
+    .semester-final-subnav {
+        gap: 0.5rem !important;
+    }
+    .semester-final-subnav .nav-link {
+        font-size: 0.9rem;
+        font-weight: 500;
+        padding: 0.5rem 0.95rem;
+        border-radius: 0.4rem;
+        border: 1px solid #b6d4fe;
+        color: #0a58ca;
+        background-color: #e7f1ff;
+    }
+    .semester-final-subnav .nav-link:hover {
+        color: #052c65;
+        background-color: #cfe2ff;
+        border-color: #6ea8fe;
+    }
+    .semester-final-subnav .nav-link:focus-visible {
+        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.35);
+        outline: none;
+    }
+    .semester-final-subnav .nav-link.active {
+        font-weight: 600;
+        color: #fff;
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+    .semester-final-subnav .nav-link.active:hover {
+        color: #fff;
+        background-color: #0b5ed7;
+        border-color: #0a58ca;
     }
 
     .teacher-role-selector {
@@ -787,6 +886,63 @@
         background-color: #e9ecef;
         color: #6c757d;
         cursor: not-allowed;
+    }
+
+    /* Semester Final Examination Marks: balanced ID / Name vs Q1–Q7 + Total */
+    #final-exam .ca-table {
+        table-layout: fixed;
+        width: 100%;
+    }
+    #final-exam .ca-table thead tr:first-child > th.student-info:nth-child(1),
+    #final-exam .ca-table tbody td.student-id {
+        width: 7.5rem;
+        max-width: 8.25rem;
+    }
+    #final-exam .ca-table thead tr:first-child > th.student-info:nth-child(2),
+    #final-exam .ca-table tbody td.student-name {
+        width: 13.5rem;
+        max-width: 16rem;
+        min-width: 10rem;
+    }
+    #final-exam .ca-table thead tr:last-child th:not(:last-child),
+    #final-exam .ca-table tbody td:nth-child(n+3):not(:last-child) {
+        padding-left: 4px;
+        padding-right: 4px;
+    }
+    #final-exam .ca-table .question-set-input {
+        width: 100%;
+        min-width: 2.75rem;
+        max-width: 4.5rem;
+        box-sizing: border-box;
+    }
+    #final-exam .ca-table .total-mark {
+        width: 4.25rem;
+    }
+
+    /* Semester Final Attendance: same ca-table look; natural column widths; select like mark inputs */
+    #final-exam .ca-table.semester-final-attendance-table {
+        table-layout: auto;
+    }
+    #final-exam .ca-table.semester-final-attendance-table td.attendance-cell {
+        text-align: center;
+        vertical-align: middle;
+    }
+    #final-exam .ca-table.semester-final-attendance-table .semester-final-atnd-select {
+        display: inline-block;
+        min-width: 8.5rem;
+        max-width: 12rem;
+        width: 100%;
+        padding: 6px 8px;
+        font-size: 0.9rem;
+        text-align: center;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        background-color: #fff;
+    }
+    #final-exam .ca-table.semester-final-attendance-table .semester-final-atnd-select:focus {
+        border-color: #80bdff;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        outline: none;
     }
 </style>
 {% endblock %}
@@ -948,11 +1104,13 @@
                                     <i class="fas fa-file-alt"></i> Semester Final Marks
                                 </button>
                             </li>
+                            {% if is_admin %}
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link" id="examiner-summary-tab" data-bs-toggle="tab" data-bs-target="#examiner-summary" type="button" role="tab" aria-controls="examiner-summary" aria-selected="false">
                                     <i class="fas fa-list-alt"></i> Final Exam Summary
                                 </button>
                             </li>
+                            {% endif %}
                             {% endif %}
                         </ul>
 
@@ -1302,343 +1460,45 @@
                             {% if show_final_exam_tab %}
                             <div class="tab-pane fade" id="final-exam" role="tabpanel" aria-labelledby="final-exam-tab">
                                 <div class="final-exam-section">
-                            {% if selected_course.is_lab %}
-                                <!-- Lab Course Final Exam -->
-                                <div class="ca-distribution">
-                                    <p><strong>Lab Course Final Exam:</strong> Maximum {{ lab_final_exam_max|default:50 }} marks</p>
-                                </div>
+                            {% if is_admin %}
+                            <ul class="nav nav-pills mb-3 flex-wrap gap-1 semester-final-subnav" id="semesterFinalSubTab" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="sfa-sub-atd-tab" data-bs-toggle="tab" data-bs-target="#sfa-sub-atd" type="button" role="tab" aria-controls="sfa-sub-atd" aria-selected="false">Semester Final Attendance</button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active" id="sfa-sub-marks-tab" data-bs-toggle="tab" data-bs-target="#sfa-sub-marks" type="button" role="tab" aria-controls="sfa-sub-marks" aria-selected="true">Semester Final Examination Marks</button>
+                                </li>
+                            </ul>
+                            <div class="tab-content" id="semesterFinalSubTabContent">
+                                <div class="tab-pane fade" id="sfa-sub-atd" role="tabpanel" aria-labelledby="sfa-sub-atd-tab" tabindex="0">
+                            {% if selected_semester_id and selected_course_id %}
+                            {% include "bou_routines_app/partials/semester_final_attendance.html" %}
                             {% else %}
-                                <!-- Theory Course Final Exam -->
-                                <div class="ca-distribution">
-                                    <p><strong>Theory Course Final Exam:</strong> Maximum 70 marks</p>
-                                    <p><small>Students can answer a maximum of 5 question sets out of 7. Each set has a maximum of 14 marks.</small></p>
-                                </div>
-                                
-                                <!-- Teacher Role Selector for Theory Course -->
-                                <div class="teacher-role-selector">
-                                    {% if can_select_evaluator %}
-                                        <!-- Admin: Can select which examiner role to view/edit -->
-                                        <div class="mb-3">
-                                            <label for="teacher-role"><strong>Select Examiner Role to View/Edit:</strong></label>
-                                            <select id="teacher-role" class="form-control" style="width: 300px; display: inline-block; margin-left: 10px;" onchange="updateTeacherRole()">
-                                                <option value="teacher1" {% if teacher_role == 'teacher1' %}selected{% endif %}>
-                                                    {% if teacher1_evaluator %}{{ teacher1_evaluator.name }} (First Examiner){% else %}Teacher 1 (First Examiner){% endif %}
-                                                </option>
-                                                <option value="teacher2" {% if teacher_role == 'teacher2' %}selected{% endif %}>
-                                                    {% if teacher2_evaluator %}{{ teacher2_evaluator.name }} (Second Examiner){% else %}Teacher 2 (Second Examiner){% endif %}
-                                                </option>
-                                                <option value="teacher3" {% if teacher_role == 'teacher3' %}selected{% endif %}>
-                                                    {% if teacher3_evaluator %}{{ teacher3_evaluator.name }} (Third Examiner){% else %}Teacher 3 (Third Examiner - TBD){% endif %}
-                                                </option>
-                                            </select>
-                                        </div>
-                                        
-                                        <!-- Admin: Can assign/change examiners -->
-                                        <div class="mb-3">
-                                            <label><strong>Assign Examiners:</strong></label>
-                                            <div class="row mt-2">
-                                                <div class="col-md-4">
-                                                    <label for="assign-teacher1" class="form-label">First Examiner:</label>
-                                                    <select id="assign-teacher1" class="form-control" onchange="assignExaminer(1, this.value)">
-                                                        <option value="">-- Select Teacher --</option>
-                                                        {% for teacher in all_teachers %}
-                                                        <option value="{{ teacher.id }}" {% if teacher1_evaluator and teacher1_evaluator.id == teacher.id %}selected{% endif %}>
-                                                            {{ teacher.name }} ({{ teacher.centre.code }})
-                                                        </option>
-                                                        {% endfor %}
-                                                    </select>
-                                                </div>
-                                                <div class="col-md-4">
-                                                    <label for="assign-teacher2" class="form-label">Second Examiner:</label>
-                                                    <select id="assign-teacher2" class="form-control" onchange="assignExaminer(2, this.value)">
-                                                        <option value="">-- Select Teacher --</option>
-                                                        {% for teacher in all_teachers %}
-                                                        <option value="{{ teacher.id }}" {% if teacher2_evaluator and teacher2_evaluator.id == teacher.id %}selected{% endif %}>
-                                                            {{ teacher.name }} ({{ teacher.centre.code }})
-                                                        </option>
-                                                        {% endfor %}
-                                                    </select>
-                                                </div>
-                                                <div class="col-md-4">
-                                                    <label for="assign-teacher3" class="form-label">Third Examiner:</label>
-                                                    <select id="assign-teacher3" class="form-control" onchange="assignExaminer(3, this.value)">
-                                                        <option value="">-- Select Teacher --</option>
-                                                        {% for teacher in all_teachers %}
-                                                        <option value="{{ teacher.id }}" {% if teacher3_evaluator and teacher3_evaluator.id == teacher.id %}selected{% endif %}>
-                                                            {{ teacher.name }} ({{ teacher.centre.code }})
-                                                        </option>
-                                                        {% endfor %}
-                                                    </select>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    {% else %}
-                                        <label for="teacher-role"><strong>Your Role:</strong></label>
-                                        <select id="teacher-role" class="form-control" style="width: 300px; display: inline-block; margin-left: 10px; background-color: #e9ecef; cursor: not-allowed;" disabled>
-                                            <option value="teacher1" {% if teacher_role == 'teacher1' %}selected{% endif %}>
-                                                {% if teacher1_evaluator %}{{ teacher1_evaluator.name }} (First Examiner - DRC){% else %}Teacher 1 (First Examiner - DRC){% endif %}
-                                            </option>
-                                            <option value="teacher2" {% if teacher_role == 'teacher2' %}selected{% endif %}>
-                                                {% if teacher2_evaluator %}{{ teacher2_evaluator.name }} (Second Examiner - DUET){% else %}Teacher 2 (Second Examiner - DUET){% endif %}
-                                            </option>
-                                            {% if is_admin %}
-                                            <option value="teacher3" {% if teacher_role == 'teacher3' %}selected{% endif %}>
-                                                {% if teacher3_evaluator %}{{ teacher3_evaluator.name }} (Third Examiner){% else %}Teacher 3 (Third Examiner - TBD){% endif %}
-                                            </option>
-                                            {% endif %}
-                                        </select>
-                                        <input type="hidden" id="hidden-teacher-role" value="{{ teacher_role }}">
-                                        <p class="mt-2 mb-0"><small class="text-info"><i class="fas fa-info-circle"></i> You can only view and enter marks for your assigned examiner role.</small></p>
-                                    {% endif %}
-                                    <p class="mt-2 mb-0"><small class="text-muted">If the difference between Teacher 1 and Teacher 2 is more than 20% (or 14 marks), Teacher 3 evaluation is required.</small></p>
-                                </div>
+                                    <p class="text-muted mb-0">Select a semester and a course to manage semester final attendance.</p>
                             {% endif %}
-
-                            <div class="table-header d-flex justify-content-between align-items-center mt-3 mb-3">
-                                <h4><i class="fas fa-file-alt"></i> Semester Final Examination Marks</h4>
-                                {% if selected_semester_id and selected_course_id %}
-                                <div class="d-flex align-items-center gap-2">
-                                    <button type="button" class="btn btn-success" onclick="saveFinalExamMarks()">
-                                        <i class="fas fa-save"></i> Save Final Exam Marks
-                                    </button>
-                                    <div class="dropdown">
-                                        <button class="btn btn-secondary dropdown-toggle" type="button" id="exportFinalExamDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                                            <i class="fas fa-download"></i> Export
-                                        </button>
-                                        <ul class="dropdown-menu" aria-labelledby="exportFinalExamDropdown">
-                                            <li>
-                                                <a class="dropdown-item" href="{% url 'export-final-exam-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}{% if teacher_role %}&teacher_role={{ teacher_role }}{% endif %}">
-                                                    <i class="fas fa-file-pdf text-danger"></i> PDF
-                                                </a>
-                                            </li>
-                                            {% if user.is_superuser or user.is_staff %}
-                                            <li>
-                                                <a class="dropdown-item" href="{% url 'export-blank-final-exam-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}{% if teacher_role %}&teacher_role={{ teacher_role }}{% endif %}">
-                                                    <i class="fas fa-file-pdf text-danger"></i> Blank PDF
-                                                </a>
-                                            </li>
-                                            {% endif %}
-                                            <li>
-                                                <a class="dropdown-item" href="{% url 'export-final-exam-excel' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}{% if teacher_role %}&teacher_role={{ teacher_role }}{% endif %}">
-                                                    <i class="fas fa-file-excel text-success"></i> Excel
-                                                </a>
-                                            </li>
-                                        </ul>
-                                    </div>
                                 </div>
-                                {% endif %}
-                            </div>
-
-                            <div class="table-responsive">
-                                <form id="final-exam-marks-form">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="semester_id" value="{{ selected_semester.id }}">
-                                    <input type="hidden" name="course_id" value="{{ selected_course.id }}">
-                                    <input type="hidden" name="teacher_role" id="hidden-teacher-role" value="{{ teacher_role|default:'teacher1' }}">
-                                    {% if not can_select_evaluator %}
-                                        <input type="hidden" id="teacher-role-disabled" value="true">
-                                    {% endif %}
-                                    
-                                    <table class="ca-table">
-                                        <thead>
-                                            <tr>
-                                                <th rowspan="2" class="student-info">Student ID</th>
-                                                <th rowspan="2" class="student-info">Name</th>
-                                                {% if selected_course.is_lab %}
-                                                    <th colspan="2">Lab Course Final Exam (Total: {{ lab_final_exam_max|default:50 }} marks)</th>
-                                                {% else %}
-                                                    <th colspan="9">Theory Course Final Exam (Total: 70 marks)</th>
-                                                {% endif %}
-                                            </tr>
-                                            {% if selected_course.is_lab %}
-                                                <tr>
-                                                    <th>Problem Solving</th>
-                                                    <th>Status</th>
-                                                </tr>
-                                            {% else %}
-                                                <tr>
-                                                    <th>Q1<br><small>(max 14)</small></th>
-                                                    <th>Q2<br><small>(max 14)</small></th>
-                                                    <th>Q3<br><small>(max 14)</small></th>
-                                                    <th>Q4<br><small>(max 14)</small></th>
-                                                    <th>Q5<br><small>(max 14)</small></th>
-                                                    <th>Q6<br><small>(max 14)</small></th>
-                                                    <th>Q7<br><small>(max 14)</small></th>
-                                                    <th>Teacher Total</th>
-                                                    <th>Status</th>
-                                                </tr>
-                                            {% endif %}
-                                        </thead>
-                                        <tbody>
-                                            {% for student in students %}
-                                                {% with final_mark=final_exam_marks|dict_key:student.id %}
-                                                <tr id="final-exam-row-{{ student.id }}" {% if final_mark and final_mark.requires_third_teacher %}class="discrepancy-row"{% endif %}>
-                                                    <td class="student-id" data-student-id="{{ student.id }}">{{ student.id }}</td>
-                                                    <td class="student-name">{{ student.name }}</td>
-                                                    
-                                                    {% if selected_course.is_lab %}
-                                                        <!-- Lab Course Final Exam -->
-                                                        <td>
-                                                            <input type="number" 
-                                                                   name="students_data[{{ student.id }}][lab_final_exam_mark]"
-                                                                   value="{% if final_mark %}{{ final_mark.lab_final_exam_mark|floatformat:2 }}{% else %}0.00{% endif %}"
-                                                                   min="0" 
-                                                                   max="{{ lab_final_exam_max|default:50 }}"
-                                                                   step="0.01"
-                                                                   class="mark-input"
-                                                                   placeholder="Problem Solving"
-                                                                   oninput="calculateFinalExamTotal(this)">
-                                                        </td>
-                                                        <td>
-                                                            <span class="badge badge-info">Single Entry</span>
-                                                        </td>
-                                                    {% else %}
-                                                        <!-- Theory Course Final Exam - 7 Question Sets -->
-                                                        <td>
-                                                            <input type="number" 
-                                                                   name="students_data[{{ student.id }}][q1]"
-                                                                   value="{% if final_mark %}{% if teacher_role == 'teacher1' and final_mark.teacher1_q1 %}{{ final_mark.teacher1_q1|floatformat:2 }}{% elif teacher_role == 'teacher2' and final_mark.teacher2_q1 %}{{ final_mark.teacher2_q1|floatformat:2 }}{% elif teacher_role == 'teacher3' and final_mark.teacher3_q1 %}{{ final_mark.teacher3_q1|floatformat:2 }}{% endif %}{% endif %}"
-                                                                   min="0" 
-                                                                   max="14"
-                                                                   step="0.01"
-                                                                   class="question-set-input"
-                                                                   data-student-id="{{ student.id }}"
-                                                                   data-question="1"
-                                                                   placeholder="Q1 (max 14)"
-                                                                   oninput="validateQuestionSet(this)">
-                                                        </td>
-                                                        <td>
-                                                            <input type="number" 
-                                                                   name="students_data[{{ student.id }}][q2]"
-                                                                   value="{% if final_mark %}{% if teacher_role == 'teacher1' and final_mark.teacher1_q2 %}{{ final_mark.teacher1_q2|floatformat:2 }}{% elif teacher_role == 'teacher2' and final_mark.teacher2_q2 %}{{ final_mark.teacher2_q2|floatformat:2 }}{% elif teacher_role == 'teacher3' and final_mark.teacher3_q2 %}{{ final_mark.teacher3_q2|floatformat:2 }}{% endif %}{% endif %}"
-                                                                   min="0" 
-                                                                   max="14"
-                                                                   step="0.01"
-                                                                   class="question-set-input"
-                                                                   data-student-id="{{ student.id }}"
-                                                                   data-question="2"
-                                                                   placeholder="Q2 (max 14)"
-                                                                   oninput="validateQuestionSet(this)">
-                                                        </td>
-                                                        <td>
-                                                            <input type="number" 
-                                                                   name="students_data[{{ student.id }}][q3]"
-                                                                   value="{% if final_mark %}{% if teacher_role == 'teacher1' and final_mark.teacher1_q3 %}{{ final_mark.teacher1_q3|floatformat:2 }}{% elif teacher_role == 'teacher2' and final_mark.teacher2_q3 %}{{ final_mark.teacher2_q3|floatformat:2 }}{% elif teacher_role == 'teacher3' and final_mark.teacher3_q3 %}{{ final_mark.teacher3_q3|floatformat:2 }}{% endif %}{% endif %}"
-                                                                   min="0" 
-                                                                   max="14"
-                                                                   step="0.01"
-                                                                   class="question-set-input"
-                                                                   data-student-id="{{ student.id }}"
-                                                                   data-question="3"
-                                                                   placeholder="Q3 (max 14)"
-                                                                   oninput="validateQuestionSet(this)">
-                                                        </td>
-                                                        <td>
-                                                            <input type="number" 
-                                                                   name="students_data[{{ student.id }}][q4]"
-                                                                   value="{% if final_mark %}{% if teacher_role == 'teacher1' and final_mark.teacher1_q4 %}{{ final_mark.teacher1_q4|floatformat:2 }}{% elif teacher_role == 'teacher2' and final_mark.teacher2_q4 %}{{ final_mark.teacher2_q4|floatformat:2 }}{% elif teacher_role == 'teacher3' and final_mark.teacher3_q4 %}{{ final_mark.teacher3_q4|floatformat:2 }}{% endif %}{% endif %}"
-                                                                   min="0" 
-                                                                   max="14"
-                                                                   step="0.01"
-                                                                   class="question-set-input"
-                                                                   data-student-id="{{ student.id }}"
-                                                                   data-question="4"
-                                                                   placeholder="Q4 (max 14)"
-                                                                   oninput="validateQuestionSet(this)">
-                                                        </td>
-                                                        <td>
-                                                            <input type="number" 
-                                                                   name="students_data[{{ student.id }}][q5]"
-                                                                   value="{% if final_mark %}{% if teacher_role == 'teacher1' and final_mark.teacher1_q5 %}{{ final_mark.teacher1_q5|floatformat:2 }}{% elif teacher_role == 'teacher2' and final_mark.teacher2_q5 %}{{ final_mark.teacher2_q5|floatformat:2 }}{% elif teacher_role == 'teacher3' and final_mark.teacher3_q5 %}{{ final_mark.teacher3_q5|floatformat:2 }}{% endif %}{% endif %}"
-                                                                   min="0" 
-                                                                   max="14"
-                                                                   step="0.01"
-                                                                   class="question-set-input"
-                                                                   data-student-id="{{ student.id }}"
-                                                                   data-question="5"
-                                                                   placeholder="Q5 (max 14)"
-                                                                   oninput="validateQuestionSet(this)">
-                                                        </td>
-                                                        <td>
-                                                            <input type="number" 
-                                                                   name="students_data[{{ student.id }}][q6]"
-                                                                   value="{% if final_mark %}{% if teacher_role == 'teacher1' and final_mark.teacher1_q6 %}{{ final_mark.teacher1_q6|floatformat:2 }}{% elif teacher_role == 'teacher2' and final_mark.teacher2_q6 %}{{ final_mark.teacher2_q6|floatformat:2 }}{% elif teacher_role == 'teacher3' and final_mark.teacher3_q6 %}{{ final_mark.teacher3_q6|floatformat:2 }}{% endif %}{% endif %}"
-                                                                   min="0" 
-                                                                   max="14"
-                                                                   step="0.01"
-                                                                   class="question-set-input"
-                                                                   data-student-id="{{ student.id }}"
-                                                                   data-question="6"
-                                                                   placeholder="Q6 (max 14)"
-                                                                   oninput="validateQuestionSet(this)">
-                                                        </td>
-                                                        <td>
-                                                            <input type="number" 
-                                                                   name="students_data[{{ student.id }}][q7]"
-                                                                   value="{% if final_mark %}{% if teacher_role == 'teacher1' and final_mark.teacher1_q7 %}{{ final_mark.teacher1_q7|floatformat:2 }}{% elif teacher_role == 'teacher2' and final_mark.teacher2_q7 %}{{ final_mark.teacher2_q7|floatformat:2 }}{% elif teacher_role == 'teacher3' and final_mark.teacher3_q7 %}{{ final_mark.teacher3_q7|floatformat:2 }}{% endif %}{% endif %}"
-                                                                   min="0" 
-                                                                   max="14"
-                                                                   step="0.01"
-                                                                   class="question-set-input"
-                                                                   data-student-id="{{ student.id }}"
-                                                                   data-question="7"
-                                                                   placeholder="Q7 (max 14)"
-                                                                   oninput="validateQuestionSet(this)">
-                                                        </td>
-                                                        <td class="total-mark">
-                                                            <span id="teacher-total-{{ student.id }}" class="teacher-total-value" data-teacher-role="{{ teacher_role }}">
-                                                                {% if final_mark %}
-                                                                    {% if teacher_role == 'teacher1' %}{{ final_mark.teacher1_total|ceil_int }}{% elif teacher_role == 'teacher2' %}{{ final_mark.teacher2_total|ceil_int }}{% elif teacher_role == 'teacher3' %}{{ final_mark.teacher3_total|ceil_int }}{% else %}0{% endif %}
-                                                                {% else %}0{% endif %}
-                                                            </span>
-                                                        </td>
-                                                        <td>
-                                                            {% if final_mark and final_mark.requires_third_teacher %}
-                                                                <span class="badge badge-warning">
-                                                                    Third Examiner Needed
-                                                                    <span class="discrepancy-tooltip">
-                                                                        <i class="fas fa-info-circle tooltip-icon"></i>
-                                                                        <span class="tooltip-text">{{ final_mark.discrepancy_reason }}</span>
-                                                                    </span>
-                                                                </span>
-                                                            {% else %}
-                                                                <span class="badge badge-info">OK</span>
-                                                            {% endif %}
-                                                        </td>
-                                                    {% endif %}
-                                                </tr>
-                                                {% endwith %}
-                                            {% endfor %}
-                                        </tbody>
-                                    </table>
-                                </form>
-                            </div>
-                            
-                                    <div class="text-right mt-3">
-                                        <button type="button" class="btn-save-ca" onclick="saveFinalExamMarks()">
-                                            <i class="fas fa-save"></i> Save Final Exam Marks
-                                        </button>
-                                    </div>
+                                <div class="tab-pane fade show active" id="sfa-sub-marks" role="tabpanel" aria-labelledby="sfa-sub-marks-tab" tabindex="0">
+                            {% include "bou_routines_app/partials/semester_final_exam_intro.html" %}
+                            {% include "bou_routines_app/partials/semester_final_exam_marks_table.html" %}
                                 </div>
                             </div>
-
+                            {% else %}
+                            {% include "bou_routines_app/partials/semester_final_exam_intro.html" %}
+                            {% include "bou_routines_app/partials/semester_final_exam_marks_table.html" %}
+                            {% endif %}
+                                </div>
+                            </div>
+                            {% if is_admin %}
                             <div class="tab-pane fade" id="examiner-summary" role="tabpanel" aria-labelledby="examiner-summary-tab">
                                 <div class="examiner-summary-section ca-table-section">
                                     <div class="table-header d-flex justify-content-between align-items-center flex-wrap gap-2">
                                         <h4><i class="fas fa-list-alt"></i> Final Exam Summary</h4>
-                                        {% if examiner_summary_rows %}
-                                        <div class="d-flex align-items-center gap-2">
-                                            <button type="button" class="btn btn-success" onclick="saveExaminerSummaryRemarks()">
-                                                <i class="fas fa-save"></i> Save remarks
-                                            </button>
-                                        </div>
-                                        {% endif %}
                                     </div>
                                     <p class="text-muted small mb-3">
-                                        Consolidated view of examiner totals. <strong>Variation</strong> is the absolute difference between the first and second examiner totals;
-                                        <strong>% of avg</strong> is that difference as a percentage of the average of those two totals.
+                                        Consolidated view of examiner totals. <strong>Variation</strong> is the absolute difference between the first and second examiner totals.
+                                        A third examiner is required when that difference is greater than 14 marks.
                                         <strong>Marks obtained</strong> matches the stored final exam total (average of first and second; if a third evaluation is required and entered, it is included in the average).
-                                        Edit remarks in the table and use <strong>Save remarks</strong> above.
+                                        <strong>Status</strong> matches the former Semester Final “Third examiner / OK” rule (or “Single entry” for lab courses).
                                     </p>
                                     {% if selected_course.is_lab %}
                                     <div class="table-responsive">
@@ -1650,7 +1510,7 @@
                                                     <th>Name</th>
                                                     <th>Lab final (max {{ lab_final_exam_max|default:50 }})</th>
                                                     <th>Marks obtained</th>
-                                                    <th>Remarks</th>
+                                                    <th>Status</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -1661,8 +1521,12 @@
                                                     <td class="cell-name">{{ row.student.name }}</td>
                                                     <td>{% if row.final_mark and row.final_mark.exam_absent %}AB{% elif row.lab_mark is not None %}{{ row.lab_mark|floatformat:2 }}{% else %}—{% endif %}</td>
                                                     <td>{% if row.final_mark and row.final_mark.exam_absent %}AB{% elif row.final_mark %}{{ row.marks_obtained|floatformat:2 }}{% else %}—{% endif %}</td>
-                                                    <td class="cell-name">
-                                                        <input type="text" class="examiner-remarks-input form-control form-control-sm" data-student-id="{{ row.student.id }}" value="{{ row.notes|default:''|escape }}" placeholder="Remarks" aria-label="Remarks for {{ row.student.id }}">
+                                                    <td>
+                                                        {% if row.final_mark and row.final_mark.exam_absent %}
+                                                            <span class="badge bg-secondary">AB</span>
+                                                        {% else %}
+                                                            <span class="badge badge-info">Single Entry</span>
+                                                        {% endif %}
                                                     </td>
                                                 </tr>
                                                 {% empty %}
@@ -1681,10 +1545,10 @@
                                                     <th>Name</th>
                                                     <th>First examiner (70)</th>
                                                     <th>Second examiner (70)</th>
-                                                    <th>Variation<br><span class="variation-sub">|Diff| / % of avg</span></th>
+                                                    <th>Variation</th>
                                                     <th>Third examiner (70)</th>
                                                     <th>Marks obtained</th>
-                                                    <th>Remarks</th>
+                                                    <th>Status</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -1700,9 +1564,6 @@
                                                             AB
                                                         {% elif row.final_mark %}
                                                             {{ row.diff_abs|floatformat:2 }}
-                                                            {% if row.t1 or row.t2 %}
-                                                            <span class="variation-sub">{{ row.diff_pct|floatformat:1 }}% of avg</span>
-                                                            {% endif %}
                                                         {% else %}
                                                             —
                                                         {% endif %}
@@ -1721,8 +1582,22 @@
                                                         {% endif %}
                                                     </td>
                                                     <td>{% if row.final_mark and row.final_mark.exam_absent %}AB{% elif row.final_mark %}{{ row.marks_obtained|floatformat:2 }}{% else %}—{% endif %}</td>
-                                                    <td class="cell-name text-start">
-                                                        <input type="text" class="examiner-remarks-input form-control form-control-sm" data-student-id="{{ row.student.id }}" value="{{ row.notes|default:''|escape }}" placeholder="Remarks" aria-label="Remarks for {{ row.student.id }}">
+                                                    <td>
+                                                        {% if row.final_mark and row.final_mark.exam_absent %}
+                                                            <span class="badge bg-secondary">AB</span>
+                                                        {% elif row.final_mark and row.final_mark.is_third_examiner_required %}
+                                                            <span class="badge badge-warning">
+                                                                Third Examiner Needed
+                                                                <span class="discrepancy-tooltip">
+                                                                    <i class="fas fa-info-circle tooltip-icon"></i>
+                                                                    <span class="tooltip-text">{{ row.final_mark.discrepancy_reason }}</span>
+                                                                </span>
+                                                            </span>
+                                                        {% elif row.final_mark %}
+                                                            <span class="badge badge-info">OK</span>
+                                                        {% else %}
+                                                            —
+                                                        {% endif %}
                                                     </td>
                                                 </tr>
                                                 {% empty %}
@@ -1734,6 +1609,7 @@
                                     {% endif %}
                                 </div>
                             </div>
+                            {% endif %}
                             {% endif %}
                         </div>
                     {% else %}
@@ -1787,7 +1663,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const finalExamPane = document.getElementById('final-exam');
         const summaryTab = document.getElementById('examiner-summary-tab');
         const summaryPane = document.getElementById('examiner-summary');
-        if (caMarksTab && caMarksPane && summaryTab && summaryPane) {
+        if (!summaryTab || !summaryPane) {
+            const u = new URL(window.location);
+            u.searchParams.delete('tab');
+            window.history.replaceState({}, '', u);
+        } else if (caMarksTab && caMarksPane && summaryTab && summaryPane) {
             caMarksTab.classList.remove('active');
             caMarksTab.setAttribute('aria-selected', 'false');
             caMarksPane.classList.remove('show', 'active');
@@ -2547,7 +2427,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // Function to update teacher role selector and reload values
 function updateTeacherRole() {
     const roleSelect = document.getElementById('teacher-role');
-    const hiddenRole = document.getElementById('hidden-teacher-role');
+    const hiddenRole = document.querySelector('#final-exam-marks-form input[name="teacher_role"]');
     if (roleSelect && hiddenRole) {
         hiddenRole.value = roleSelect.value;
         // Only reload if dropdown is enabled (for administrators)
@@ -2619,7 +2499,12 @@ function validateQuestionSet(inputElement) {
     // Calculate and update teacher's total (not final exam total)
     const teacherTotalElement = document.getElementById('teacher-total-' + studentId);
     if (teacherTotalElement) {
-        teacherTotalElement.textContent = String(Math.ceil(total));
+        const tr = inputElement && inputElement.closest ? inputElement.closest('tr') : null;
+        if (tr && tr.classList && tr.classList.contains('final-exam-marks-row-disabled')) {
+            teacherTotalElement.textContent = 'AB';
+        } else {
+            teacherTotalElement.textContent = String(Math.ceil(total));
+        }
     }
 
     // Auto-advance: if this cell is exactly one digit 2–9, the mark cannot grow with another digit
@@ -2660,16 +2545,184 @@ function calculateFinalExamTotal(inputElement) {
     }
 }
 
-// Function to save final exam marks
-function saveFinalExamMarks() {
+function updateSaveFinalExamMarksButtonStatus(isSaving) {
+    const headerBtn = document.getElementById('save-final-exam-marks-btn-header');
+    const bottomBtn = document.getElementById('save-final-exam-marks-btn-bottom');
+    [headerBtn, bottomBtn].filter(function (b) { return b; }).forEach(function (btn) {
+        if (isSaving) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        } else {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save"></i> Save Final Exam Marks';
+        }
+    });
+}
+
+// Clear pending auto-save timer and save without reload/alert (same idea as CA marks)
+function saveFinalExamMarksImmediately() {
+    if (window.autoSaveFinalExamTimer) {
+        clearTimeout(window.autoSaveFinalExamTimer);
+        window.autoSaveFinalExamTimer = null;
+    }
+    saveFinalExamMarks(false);
+}
+
+function autoSaveFinalExamMarks() {
+    saveFinalExamMarksImmediately();
+}
+
+function setFinalExamMarksRowDisabled(studentId, disabled) {
+    const row = document.getElementById('final-exam-row-' + studentId);
+    if (!row) {
+        return;
+    }
+    if (disabled) {
+        row.classList.add('final-exam-marks-row-disabled');
+    } else {
+        row.classList.remove('final-exam-marks-row-disabled');
+    }
+    try {
+        row.inert = !!disabled;
+    } catch (e) {}
+    row.querySelectorAll('input').forEach(function (inp) {
+        inp.disabled = !!disabled;
+    });
+    const tot = document.getElementById('teacher-total-' + studentId);
+    if (disabled) {
+        row.querySelectorAll('.question-set-input, .mark-input').forEach(function (inp) {
+            inp.value = '';
+        });
+        if (tot) {
+            tot.textContent = 'AB';
+        }
+    } else {
+        if (tot) {
+            tot.textContent = '0';
+        }
+    }
+}
+
+function saveSemesterFinalAttendance(selectEl, options) {
+    const opts = options || {};
     const form = document.getElementById('final-exam-marks-form');
+    if (!form) {
+        return Promise.resolve();
+    }
+    const prev = selectEl.getAttribute('data-previous') || 'present';
+    const studentId = selectEl.getAttribute('data-student-id');
+    const semesterId = form.querySelector('input[name="semester_id"]').value;
+    const courseId = form.querySelector('input[name="course_id"]').value;
+    const teacherRoleInput = form.querySelector('input[name="teacher_role"]');
+    const teacherRole = teacherRoleInput ? teacherRoleInput.value : 'teacher1';
+    const csrf = form.querySelector('input[name="csrfmiddlewaretoken"]').value;
+    const urlParamsSfa = new URLSearchParams(window.location.search);
+    const centreSelectSfa = document.getElementById('centre');
+    const pageCentreSfa = form.getAttribute('data-page-centre-id') || '';
+    const centreIdSfa = urlParamsSfa.get('centre') || (centreSelectSfa ? centreSelectSfa.value : '') || (pageCentreSfa ? String(pageCentreSfa).trim() : '');
+    const absent = selectEl.value === 'absent';
+    const postData = {
+        'csrfmiddlewaretoken': csrf,
+        'semester_id': String(semesterId),
+        'course_id': String(courseId),
+        'student_id': String(studentId),
+        'teacher_role': teacherRole,
+        'exam_absent': absent ? '1' : '0'
+    };
+    if (centreIdSfa) {
+        postData.centre_id = String(centreIdSfa);
+        postData.centre = String(centreIdSfa);
+    }
+    selectEl.disabled = true;
+    return fetch('{% url "save-semester-final-attendance" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': csrf
+        },
+        credentials: 'same-origin',
+        body: new URLSearchParams(postData).toString()
+    })
+    .then(async function (response) {
+        const data = await response.json().catch(function () { return {}; });
+        if (!response.ok) {
+            throw new Error(data.error || ('HTTP ' + response.status));
+        }
+        if (!data.success) {
+            throw new Error(data.error || 'Save failed');
+        }
+        const isAb = !!data.exam_absent;
+        selectEl.setAttribute('data-previous', isAb ? 'absent' : 'present');
+        setFinalExamMarksRowDisabled(studentId, isAb);
+        return data;
+    })
+    .catch(function (err) {
+        console.error(err);
+        if (!opts.suppressErrorAlert) {
+            alert('Could not save attendance: ' + (err.message || String(err)));
+        }
+        selectEl.value = (prev === 'absent') ? 'absent' : 'present';
+        return Promise.reject(err);
+    })
+    .finally(function () {
+        selectEl.disabled = false;
+    });
+}
+
+function saveAllSemesterFinalAttendance(buttonEl) {
+    const form = document.getElementById('final-exam-marks-form');
+    if (!form) {
+        alert('The final exam marks form is not on the page. Open the "Semester Final Examination Marks" sub-tab (or reload the page), then try again.');
+        return;
+    }
+    const selects = document.querySelectorAll('.semester-final-atnd-select');
+    if (!selects.length) {
+        return;
+    }
+    const btn = buttonEl || document.getElementById('save-semester-final-atnd-header-btn');
+    const orig = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving&hellip;';
+    }
+    const list = Array.from(selects);
+    let failCount = 0;
+    const chain = list.reduce(function (acc, sel) {
+        return acc.then(function () {
+            return saveSemesterFinalAttendance(sel, { suppressErrorAlert: true }).catch(function () {
+                failCount += 1;
+            });
+        });
+    }, Promise.resolve());
+    chain.finally(function () {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = orig;
+        }
+        if (failCount) {
+            alert('Attendance could not be saved for ' + failCount + ' row' + (failCount === 1 ? '' : 's') + '. You can try again for those students or change each row manually.');
+        }
+    });
+}
+
+// Function to save final exam marks
+function saveFinalExamMarks(reloadPage = true) {
+    const form = document.getElementById('final-exam-marks-form');
+    if (!form) {
+        return;
+    }
+    updateSaveFinalExamMarksButtonStatus(true);
     const formData = new FormData(form);
     const studentsData = {};
     const isLabCourse = {% if selected_course.is_lab %}true{% else %}false{% endif %};
-    const teacherRole = document.getElementById('hidden-teacher-role').value;
+    const teacherRoleRaw = formData.get('teacher_role');
+    const teacherRole = (teacherRoleRaw && String(teacherRoleRaw).trim()) ? String(teacherRoleRaw).trim() : 'teacher1';
     
-    // Collect all student marks
-    form.querySelectorAll('tbody tr').forEach(row => {
+    // Collect all student marks (scoped to the marks table, not other tbody in the tab)
+    form.querySelectorAll('table.ca-table tbody tr').forEach(function (row) {
+        if (row.classList && row.classList.contains('final-exam-marks-row-disabled')) {
+            return; /* Do not post marks for students marked absent in Semester Final Attendance */
+        }
         // Get student ID from the data attribute (most reliable) or fallback to text content
         const studentIdCell = row.querySelector('td.student-id[data-student-id]') || row.querySelector('td[data-student-id]') || row.querySelector('td.student-info');
         let studentId = null;
@@ -2703,17 +2756,17 @@ function saveFinalExamMarks() {
             labVal = Math.max(0, Math.min(LAB_FINAL_EXAM_MAX, labVal));
             marks['lab_final_exam_mark'] = labVal;
         } else {
-            // Theory course: collect all 7 question sets
+            // Theory course: always send all 7 Q columns so the server (and auto-save) never
+            // interpret "missing key" as "clear" while the user is still filling a row.
             for (let i = 1; i <= 7; i++) {
                 const input = row.querySelector(`input[name$="[q${i}]"]`);
+                let value = 0;
                 if (input) {
-                    let value = parseFloat(input.value);
+                    value = parseFloat(input.value);
                     if (isNaN(value)) value = 0;
                     value = Math.max(0, Math.min(14, value));
-                    if (value > 0) {
-                        marks[`q${i}`] = value;
-                    }
                 }
+                marks['q' + i] = value;
             }
         }
         
@@ -2722,28 +2775,52 @@ function saveFinalExamMarks() {
     
     const urlParamsFe = new URLSearchParams(window.location.search);
     const centreSelectFe = document.getElementById('centre');
-    const centreIdFe = urlParamsFe.get('centre') || (centreSelectFe ? centreSelectFe.value : '');
+    const pageCentre = form.getAttribute('data-page-centre-id') || '';
+    const centreIdFe = urlParamsFe.get('centre') || (centreSelectFe ? centreSelectFe.value : '') || (pageCentre ? String(pageCentre).trim() : '');
 
+    const semesterId = formData.get('semester_id');
+    const courseId = formData.get('course_id');
+    const csrfEl = form.querySelector('input[name="csrfmiddlewaretoken"]');
+    const csrf = formData.get('csrfmiddlewaretoken') || (csrfEl ? csrfEl.value : '');
+    if (!semesterId || !courseId) {
+        updateSaveFinalExamMarksButtonStatus(false);
+        alert('Semester or course is missing in the form. Please reload the page, select a semester and course, then try again.');
+        return;
+    }
+    if (!csrf) {
+        updateSaveFinalExamMarksButtonStatus(false);
+        alert('Security token (CSRF) is missing. Please reload the page and try again.');
+        return;
+    }
+    if (Object.keys(studentsData).length === 0) {
+        updateSaveFinalExamMarksButtonStatus(false);
+        alert('No student rows to save. If the table is on another tab, open the Semester Final tab first, then save.');
+        return;
+    }
+
+    // Same transport as save CAMarks: application/x-www-form-urlencoded (proven reliable with Django request.POST)
     const postData = {
-        'csrfmiddlewaretoken': formData.get('csrfmiddlewaretoken'),
-        'semester_id': formData.get('semester_id'),
-        'course_id': formData.get('course_id'),
+        'csrfmiddlewaretoken': csrf,
+        'semester_id': String(semesterId),
+        'course_id': String(courseId),
         'teacher_role': teacherRole,
         'students_data': JSON.stringify(studentsData)
     };
     if (centreIdFe) {
-        postData['centre_id'] = centreIdFe;
+        postData.centre_id = String(centreIdFe);
+        postData.centre = String(centreIdFe);
     }
     const assignT1 = document.getElementById('assign-teacher1');
+    const assignT2 = document.getElementById('assign-teacher2');
+    const assignT3 = document.getElementById('assign-teacher3');
     if (assignT1) {
-        postData['assign_teacher1_id'] = assignT1.value || '';
-        const assignT2 = document.getElementById('assign-teacher2');
-        const assignT3 = document.getElementById('assign-teacher3');
-        if (assignT2) {
-            postData['assign_teacher2_id'] = assignT2.value || '';
-        }
-        if (assignT3) {
-            postData['assign_teacher3_id'] = assignT3.value || '';
+        const a1 = (assignT1.value || '').trim();
+        const a2 = assignT2 ? (assignT2.value || '').trim() : '';
+        const a3 = assignT3 ? (assignT3.value || '').trim() : '';
+        if (a1 || a2 || a3) {
+            postData.assign_teacher1_id = a1;
+            if (assignT2) { postData.assign_teacher2_id = a2; }
+            if (assignT3) { postData.assign_teacher3_id = a3; }
         }
     }
 
@@ -2751,82 +2828,39 @@ function saveFinalExamMarks() {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-            'X-CSRFToken': postData['csrfmiddlewaretoken']
+            'X-CSRFToken': csrf
         },
+        credentials: 'same-origin',
         body: new URLSearchParams(postData).toString()
     })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert(data.message);
-            // Reload the page to show updated marks
-            window.location.reload(); 
+    .then(async function (response) {
+        if (!response.ok) {
+            var errorMessage = 'HTTP error! status: ' + response.status;
+            try {
+                var errorData = await response.json();
+                errorMessage = errorData.error || errorMessage;
+            } catch (e) {
+                errorMessage = response.statusText || errorMessage;
+            }
+            throw new Error(errorMessage);
+        }
+        return response.json();
+    })
+    .then(function (data) {
+        updateSaveFinalExamMarksButtonStatus(false);
+        if (data && data.success) {
+            if (reloadPage) {
+                alert(data.message);
+                window.location.reload();
+            }
         } else {
-            alert('Error: ' + data.error);
+            alert('Error: ' + (data && data.error ? data.error : 'Unknown error'));
         }
     })
-    .catch(error => {
+    .catch(function (error) {
+        updateSaveFinalExamMarksButtonStatus(false);
         console.error('Error saving final exam marks:', error);
-        alert('An error occurred while saving final exam marks.');
-    });
-}
-
-function saveExaminerSummaryRemarks() {
-    const form = document.getElementById('final-exam-marks-form');
-    if (!form) {
-        alert('Please select a semester and course with final exam marks first.');
-        return;
-    }
-    const formData = new FormData(form);
-    const token = formData.get('csrfmiddlewaretoken');
-    if (!token) {
-        alert('Missing security token. Reload the page and try again.');
-        return;
-    }
-    const studentsData = {};
-    document.querySelectorAll('.examiner-remarks-input').forEach(function(inp) {
-        const sid = inp.getAttribute('data-student-id');
-        if (sid) {
-            studentsData[sid] = { notes: inp.value || '' };
-        }
-    });
-    const urlParamsFe = new URLSearchParams(window.location.search);
-    const centreSelectFe = document.getElementById('centre');
-    const centreIdFe = urlParamsFe.get('centre') || (centreSelectFe ? centreSelectFe.value : '');
-    const roleEl = document.getElementById('hidden-teacher-role');
-    const postData = {
-        'csrfmiddlewaretoken': token,
-        'semester_id': formData.get('semester_id'),
-        'course_id': formData.get('course_id'),
-        'teacher_role': roleEl ? roleEl.value : 'teacher1',
-        'notes_only': '1',
-        'students_data': JSON.stringify(studentsData)
-    };
-    if (centreIdFe) {
-        postData['centre_id'] = centreIdFe;
-    }
-    fetch('{% url "save-final-exam-marks" %}', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-CSRFToken': token
-        },
-        body: new URLSearchParams(postData).toString()
-    })
-    .then(function(response) { return response.json(); })
-    .then(function(data) {
-        if (data.success) {
-            alert(data.message || 'Remarks saved');
-            const u = new URL(window.location.href);
-            u.searchParams.set('tab', 'examiner-summary');
-            window.location.href = u.toString();
-        } else {
-            alert('Error: ' + (data.error || 'Unknown error'));
-        }
-    })
-    .catch(function(err) {
-        console.error(err);
-        alert('Failed to save remarks.');
+        alert('An error occurred while saving final exam marks: ' + (error.message || String(error)));
     });
 }
 

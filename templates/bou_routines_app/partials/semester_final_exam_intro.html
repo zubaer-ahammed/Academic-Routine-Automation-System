@@ -1,0 +1,90 @@
+                            {% if selected_course.is_lab %}
+                                <!-- Lab Course Final Exam -->
+                                <div class="ca-distribution">
+                                    <p><strong>Lab Course Final Exam:</strong> Maximum {{ lab_final_exam_max|default:50 }} marks</p>
+                                </div>
+                            {% else %}
+                                <!-- Theory Course Final Exam -->
+                                <div class="ca-distribution">
+                                    <p><strong>Theory Course Final Exam:</strong> Maximum 70 marks</p>
+                                    <p><small>Students can answer a maximum of 5 question sets out of 7. Each set has a maximum of 14 marks.</small></p>
+                                </div>
+                                
+                                <!-- Teacher Role Selector for Theory Course -->
+                                <div class="teacher-role-selector">
+                                    {% if can_select_evaluator %}
+                                        <!-- Admin: Can select which examiner role to view/edit -->
+                                        <div class="mb-3">
+                                            <label for="teacher-role"><strong>Select Examiner Role to View/Edit:</strong></label>
+                                            <select id="teacher-role" class="form-control" style="width: 300px; display: inline-block; margin-left: 10px;" onchange="updateTeacherRole()">
+                                                <option value="teacher1" {% if teacher_role == 'teacher1' %}selected{% endif %}>
+                                                    {% if teacher1_evaluator %}{{ teacher1_evaluator.name }} (First Examiner){% else %}Teacher 1 (First Examiner){% endif %}
+                                                </option>
+                                                <option value="teacher2" {% if teacher_role == 'teacher2' %}selected{% endif %}>
+                                                    {% if teacher2_evaluator %}{{ teacher2_evaluator.name }} (Second Examiner){% else %}Teacher 2 (Second Examiner){% endif %}
+                                                </option>
+                                                <option value="teacher3" {% if teacher_role == 'teacher3' %}selected{% endif %}>
+                                                    {% if teacher3_evaluator %}{{ teacher3_evaluator.name }} (Third Examiner){% else %}Teacher 3 (Third Examiner - TBD){% endif %}
+                                                </option>
+                                            </select>
+                                        </div>
+                                        
+                                        <!-- Admin: Can assign/change examiners -->
+                                        <div class="mb-3">
+                                            <label><strong>Assign Examiners:</strong></label>
+                                            <div class="row mt-2">
+                                                <div class="col-md-4">
+                                                    <label for="assign-teacher1" class="form-label">First Examiner:</label>
+                                                    <select id="assign-teacher1" class="form-control" onchange="assignExaminer(1, this.value)">
+                                                        <option value="">-- Select Teacher --</option>
+                                                        {% for teacher in all_teachers %}
+                                                        <option value="{{ teacher.id }}" {% if teacher1_evaluator and teacher1_evaluator.id == teacher.id %}selected{% endif %}>
+                                                            {{ teacher.name }} ({{ teacher.centre.code }})
+                                                        </option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label for="assign-teacher2" class="form-label">Second Examiner:</label>
+                                                    <select id="assign-teacher2" class="form-control" onchange="assignExaminer(2, this.value)">
+                                                        <option value="">-- Select Teacher --</option>
+                                                        {% for teacher in all_teachers %}
+                                                        <option value="{{ teacher.id }}" {% if teacher2_evaluator and teacher2_evaluator.id == teacher.id %}selected{% endif %}>
+                                                            {{ teacher.name }} ({{ teacher.centre.code }})
+                                                        </option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label for="assign-teacher3" class="form-label">Third Examiner:</label>
+                                                    <select id="assign-teacher3" class="form-control" onchange="assignExaminer(3, this.value)">
+                                                        <option value="">-- Select Teacher --</option>
+                                                        {% for teacher in all_teachers %}
+                                                        <option value="{{ teacher.id }}" {% if teacher3_evaluator and teacher3_evaluator.id == teacher.id %}selected{% endif %}>
+                                                            {{ teacher.name }} ({{ teacher.centre.code }})
+                                                        </option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% else %}
+                                        <label for="teacher-role"><strong>Your Role:</strong></label>
+                                        <select id="teacher-role" class="form-control" style="width: 300px; display: inline-block; margin-left: 10px; background-color: #e9ecef; cursor: not-allowed;" disabled>
+                                            <option value="teacher1" {% if teacher_role == 'teacher1' %}selected{% endif %}>
+                                                {% if teacher1_evaluator %}{{ teacher1_evaluator.name }} (First Examiner - DRC){% else %}Teacher 1 (First Examiner - DRC){% endif %}
+                                            </option>
+                                            <option value="teacher2" {% if teacher_role == 'teacher2' %}selected{% endif %}>
+                                                {% if teacher2_evaluator %}{{ teacher2_evaluator.name }} (Second Examiner - DUET){% else %}Teacher 2 (Second Examiner - DUET){% endif %}
+                                            </option>
+                                            {% if is_admin %}
+                                            <option value="teacher3" {% if teacher_role == 'teacher3' %}selected{% endif %}>
+                                                {% if teacher3_evaluator %}{{ teacher3_evaluator.name }} (Third Examiner){% else %}Teacher 3 (Third Examiner - TBD){% endif %}
+                                            </option>
+                                            {% endif %}
+                                        </select>
+                                        <p class="mt-2 mb-0"><small class="text-info"><i class="fas fa-info-circle"></i> You can only view and enter marks for your assigned examiner role.</small></p>
+                                    {% endif %}
+                                    <p class="mt-2 mb-0"><small class="text-muted">If the difference between Teacher 1 and Teacher 2 totals is greater than 14 marks, Teacher 3 evaluation is required.</small></p>
+                                </div>
+                            {% endif %}

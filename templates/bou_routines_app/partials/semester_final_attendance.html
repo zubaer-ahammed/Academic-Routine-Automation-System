@@ -1,0 +1,48 @@
+{% load attendance_extras %}
+                            <div class="ca-table-section mb-4 semester-final-attendance-block">
+                                <div class="table-header">
+                                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                        <h4 class="mb-0"><i class="fas fa-user-check"></i> Semester Final Attendance</h4>
+                                        {% if selected_semester_id and selected_course_id %}
+                                        <button type="button" class="btn btn-success" id="save-semester-final-atnd-header-btn" onclick="saveAllSemesterFinalAttendance(this)">
+                                            <i class="fas fa-save"></i> Save Semester Final Attendance
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                    <p class="text-muted small mb-0 mt-2">
+                                        <strong>Present</strong> by default. Set <strong>Absent</strong> for students who did not sit the semester final; each change saves automatically. You can also use <strong>Save Semester Final Attendance</strong> to sync all rows. Absent students cannot enter final exam marks.
+                                    </p>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="ca-table semester-final-attendance-table">
+                                        <thead>
+                                            <tr>
+                                                <th class="student-info">Student ID</th>
+                                                <th class="student-info">Name</th>
+                                                <th>Semester Final Attendance</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for student in students %}
+                                                {% with amark=final_exam_marks|dict_key:student.id %}
+                                            <tr>
+                                                <td class="student-id" data-student-id="{{ student.id }}">{{ student.id }}</td>
+                                                <td class="student-name">{{ student.name }}</td>
+                                                <td class="attendance-cell">
+                                                    <label class="visually-hidden" for="semester-final-atnd-{{ student.id }}">Semester final attendance for {{ student.id }}</label>
+                                                    <select id="semester-final-atnd-{{ student.id }}"
+                                                            class="form-select form-select-sm semester-final-atnd-select"
+                                                            data-student-id="{{ student.id }}"
+                                                            data-previous="{% if amark and amark.exam_absent %}absent{% else %}present{% endif %}"
+                                                            onchange="saveSemesterFinalAttendance(this)">
+                                                        <option value="present" {% if not amark or not amark.exam_absent %}selected{% endif %}>Present</option>
+                                                        <option value="absent" {% if amark and amark.exam_absent %}selected{% endif %}>Absent</option>
+                                                    </select>
+                                                </td>
+                                            </tr>
+                                                {% endwith %}
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>

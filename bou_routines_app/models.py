@@ -743,7 +743,7 @@ class FinalExamMark(models.Model):
     teacher2_q7 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 2 - Question Set 7 (max 14)")
     teacher2_total = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Teacher 2 total (auto-calculated, max 70)")
     
-    # Teacher 3 evaluation (only if difference > 20% or > 14 marks)
+    # Teacher 3 evaluation (only if |T1 total − T2 total| > 14 marks)
     teacher3_q1 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 3 - Question Set 1 (max 14)")
     teacher3_q2 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 3 - Question Set 2 (max 14)")
     teacher3_q3 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 3 - Question Set 3 (max 14)")
@@ -769,7 +769,7 @@ class FinalExamMark(models.Model):
     notes = models.TextField(blank=True, null=True)
     
     # Flag to indicate if there's a discrepancy requiring third teacher
-    requires_third_teacher = models.BooleanField(default=False, help_text="True if difference between teacher1 and teacher2 > 20% or > 14 marks")
+    requires_third_teacher = models.BooleanField(default=False, help_text="True if absolute difference between teacher1 and teacher2 totals exceeds 14 marks")
 
     # Student absent for the final exam — UI shows "AB"; numeric totals are cleared
     exam_absent = models.BooleanField(default=False)
@@ -803,28 +803,20 @@ class FinalExamMark(models.Model):
         return total
     
     def check_discrepancy(self):
-        """Check if difference between teacher1 and teacher2 is > 20% or > 14 marks"""
+        """True when |teacher1 total − teacher2 total| is greater than 14 (theory only)."""
         if getattr(self, 'exam_absent', False):
             return False
         if not self.course.is_lab:
             teacher1_total = float(self.teacher1_total or 0)
             teacher2_total = float(self.teacher2_total or 0)
-            
-            # Calculate difference
             difference = abs(teacher1_total - teacher2_total)
-            
-            # Check if difference > 14 marks (20% of 70)
-            if difference > 14:
-                return True
-            
-            # Check if difference > 20% of the average
-            if teacher1_total > 0 or teacher2_total > 0:
-                avg = (teacher1_total + teacher2_total) / 2
-                if avg > 0:
-                    percentage_diff = (difference / avg) * 100
-                    if percentage_diff > 20:
-                        return True
+            return difference > 14
         return False
+
+    @property
+    def is_third_examiner_required(self):
+        """Current rule for UI: matches check_discrepancy() (avoids stale requires_third_teacher until next save)."""
+        return self.check_discrepancy()
     
     @property
     def discrepancy_reason(self):
@@ -839,21 +831,9 @@ class FinalExamMark(models.Model):
                 return "No marks entered yet"
             
             difference = abs(teacher1_total - teacher2_total)
-            avg = (teacher1_total + teacher2_total) / 2 if (teacher1_total > 0 or teacher2_total > 0) else 0
-            
-            reasons = []
             if difference > 14:
-                reasons.append(f"Difference of {difference:.2f} marks exceeds 14 marks (20% of 70)")
-            
-            if avg > 0:
-                percentage_diff = (difference / avg) * 100
-                if percentage_diff > 20:
-                    reasons.append(f"Difference of {percentage_diff:.1f}% exceeds 20% threshold")
-            
-            if reasons:
-                return " | ".join(reasons)
-            else:
-                return "No discrepancy detected"
+                return f"Difference of {difference:.2f} marks is greater than 14 (third examiner required)"
+            return "No discrepancy detected"
         
         return "N/A (Lab course)"
     
@@ -885,7 +865,7 @@ class FinalExamMark(models.Model):
                 evaluated_totals.append(teacher2_total)
             
             # If discrepancy exists and Teacher 3 has evaluated, include Teacher 3 in average
-            if self.requires_third_teacher and teacher3_total > 0:
+            if self.check_discrepancy() and teacher3_total > 0:
                 evaluated_totals.append(teacher3_total)
             
             # Calculate average of all evaluated teachers

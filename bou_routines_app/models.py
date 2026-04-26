@@ -817,7 +817,24 @@ class FinalExamMark(models.Model):
     def is_third_examiner_required(self):
         """Current rule for UI: matches check_discrepancy() (avoids stale requires_third_teacher until next save)."""
         return self.check_discrepancy()
-    
+
+    @property
+    def has_any_final_exam_entry(self):
+        """True if any entered Q or lab mark is non-zero (used when confirming Absent; excludes totals-only)."""
+        if getattr(self, 'exam_absent', False):
+            return False
+        if self.course.is_lab:
+            v = self.lab_final_exam_mark
+            if v is not None and float(v) > 0:
+                return True
+            return False
+        for tn in (1, 2, 3):
+            for i in range(1, 8):
+                v = getattr(self, f'teacher{tn}_q{i}', None)
+                if v is not None and float(v) > 0:
+                    return True
+        return False
+
     @property
     def discrepancy_reason(self):
         """Get the reason for discrepancy as a formatted string"""

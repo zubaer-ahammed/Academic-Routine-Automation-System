@@ -33,6 +33,7 @@
                                                     <select id="semester-final-atnd-{{ student.id }}"
                                                             class="form-select form-select-sm semester-final-atnd-select"
                                                             data-student-id="{{ student.id }}"
+                                                            data-has-marks="{% if amark and amark.has_any_final_exam_entry %}1{% else %}0{% endif %}"
                                                             data-previous="{% if amark and amark.exam_absent %}absent{% else %}present{% endif %}"
                                                             onchange="saveSemesterFinalAttendance(this)">
                                                         <option value="present" {% if not amark or not amark.exam_absent %}selected{% endif %}>Present</option>

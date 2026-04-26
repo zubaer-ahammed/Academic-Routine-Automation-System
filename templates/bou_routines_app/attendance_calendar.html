@@ -279,14 +279,15 @@
     }
 
     .date-column {
-        min-width: 70px;
-        max-width: 70px;
+        min-width: 64px;
+        max-width: 64px;
     }
 
     .summary-column {
-        min-width: 70px !important;
-        max-width: 70px !important;
-        width: 70px !important;
+        width: max-content !important;
+        min-width: max-content !important;
+        box-sizing: border-box !important;
+        padding: 2px 5px !important;
         background: #dc3545 !important;
         color: white !important;
         font-weight: bold !important;
@@ -297,14 +298,16 @@
         z-index: 18 !important;
         border-left: 2px solid #fff !important;
         box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15) !important;
+        white-space: nowrap !important;
         /* Force sticky positioning */
         transform: translateZ(0) !important;
     }
 
     .summary-cell {
-        min-width: 70px !important;
-        max-width: 70px !important;
-        width: 70px !important;
+        width: max-content !important;
+        min-width: max-content !important;
+        box-sizing: border-box !important;
+        padding: 2px 5px !important;
         background: #f8f9fa !important;
         text-align: center !important;
         position: -webkit-sticky !important;
@@ -313,6 +316,7 @@
         z-index: 13 !important;
         border-left: 2px solid #dee2e6 !important;
         box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15) !important;
+        white-space: nowrap !important;
         /* Force sticky positioning */
         transform: translateZ(0) !important;
     }
@@ -446,9 +450,9 @@
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        height: 100% !important;
-        min-height: 60px !important;
-        padding: 6px !important;
+        height: auto !important;
+        min-height: 44px !important;
+        padding: 4px 6px !important;
         cursor: pointer !important;
         transition: background-color 0.2s ease;
         border-radius: 8px;
@@ -559,10 +563,10 @@
             gap: 10px !important;
         }
         
-        /* Larger touch targets for checkboxes */
+        /* Touch-friendly but compact (avoid very tall cells) */
         .attendance-checkbox-container {
-            min-height: 80px !important;
-            padding: 12px !important;
+            min-height: 44px !important;
+            padding: 4px 6px !important;
             touch-action: manipulation;
             -webkit-tap-highlight-color: rgba(0, 123, 255, 0.3);
         }
@@ -639,10 +643,10 @@
             transform: none !important;
         }
         
-        /* Date columns wider on mobile for easier tapping */
+        /* Date columns: wide enough to tap, not wider than needed */
         .date-column {
-            min-width: 80px;
-            max-width: 80px;
+            min-width: 64px;
+            max-width: 64px;
             position: relative !important;
         }
         
@@ -761,42 +765,39 @@
             margin-top: 8px !important;
         }
         
-        /* Even larger touch targets on small phones */
         .attendance-checkbox-container {
-            min-height: 90px !important;
-            padding: 15px !important;
+            min-height: 44px !important;
+            padding: 4px 6px !important;
         }
         
         .attendance-checkbox-container input[type="checkbox"] {
-            width: 32px !important;
-            height: 32px !important;
+            width: 30px !important;
+            height: 30px !important;
         }
         
-        /* Date columns even wider on small phones for easier tapping */
         .date-column {
-            min-width: 90px !important;
-            max-width: 90px !important;
+            min-width: 72px !important;
+            max-width: 72px !important;
         }
         
-        /* Current date column even more prominent on small phones */
         .current-date-column {
-            min-width: 100px !important;
-            max-width: 100px !important;
+            min-width: 80px !important;
+            max-width: 80px !important;
         }
         
         .current-date-cell {
-            min-width: 100px !important;
-            max-width: 100px !important;
+            min-width: 80px !important;
+            max-width: 80px !important;
         }
         
         .current-date-cell .attendance-checkbox-container {
-            min-height: 110px !important;
-            padding: 18px !important;
+            min-height: 44px !important;
+            padding: 4px 6px !important;
         }
         
         .current-date-cell .attendance-checkbox-container input[type="checkbox"] {
-            width: 40px !important;
-            height: 40px !important;
+            width: 32px !important;
+            height: 32px !important;
         }
         
         /* Narrower student columns on very small screens */
@@ -1018,33 +1019,42 @@
         font-weight: bold;
     }
     
-    /* Make Total column wider */
-    .summary-cell {
-        min-width: 250px;
-        width: 250px;
-    }
-    
     .duration-based {
         margin-bottom: 2px;
-        padding: 1px 3px;
+        padding: 2px 4px;
         background-color: #e8f5e8;
         border-radius: 3px;
         display: block;
     }
     
     .simple-attendance {
-        padding: 1px 3px;
-        background-color: #f0f8ff;
+        padding: 2px 4px;
+        background-color: rgba(0, 123, 255, 0.1);
         border-radius: 3px;
         font-size: 0.9em;
         display: block;
     }
-    
-    .metric-label {
-        display: block;
+
+    /* e.g. "2/28 classes" and "1/15 days" each on one line; two lines stacked in the cell */
+    .attendance-total-line {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        align-items: baseline;
+        justify-content: flex-start;
+        gap: 0.35em;
+        white-space: nowrap;
+        line-height: 1.3;
+    }
+    .attendance-total-line .attendance-fraction {
+        white-space: nowrap;
+    }
+    .attendance-total-line .metric-label {
+        display: inline;
         font-size: 0.9em;
         color: #666;
-        margin-top: 0px;
+        font-weight: 600;
+        margin: 0;
     }
 
     .present-count {
@@ -1395,8 +1405,8 @@
         }
         
         .date-column {
-            min-width: 70px;
-            max-width: 70px;
+            min-width: 62px;
+            max-width: 62px;
         }
         
         .attendance-checkbox {
@@ -1406,8 +1416,8 @@
         }
         
         .attendance-checkbox-container {
-            min-height: 60px;
-            padding: 6px;
+            min-height: 44px;
+            padding: 4px 6px;
         }
         
         .attendance-checkbox:checked::after {
@@ -1702,13 +1712,17 @@
                         {% with attendance_totals|default_if_none:""|dict_key:student.id as student_total %}
                             <!-- Duration-based classes (main metric) -->
                             <div class="duration-based">
-                                <span class="present-count">{{ student_total.classes_attended|default:0 }}</span>/<span class="total-count">{{ student_total.number_of_classes }}</span>
-                                <small class="metric-label">classes</small>
+                                <div class="attendance-total-line">
+                                    <span class="attendance-fraction"><span class="present-count">{{ student_total.classes_attended|default:0 }}</span>/<span class="total-count">{{ student_total.number_of_classes }}</span></span>
+                                    <span class="metric-label">classes</span>
+                                </div>
                             </div>
                             <!-- Simple attendance count (reference metric) -->
                             <div class="simple-attendance">
-                                <span class="attendance-count">{{ student_total.attendance_days|default:0 }}</span>/<span class="date-count">{{ semester_dates|length }}</span>
-                                <small class="metric-label">days</small>
+                                <div class="attendance-total-line">
+                                    <span class="attendance-fraction"><span class="attendance-count">{{ student_total.attendance_days|default:0 }}</span>/<span class="date-count">{{ semester_dates|length }}</span></span>
+                                    <span class="metric-label">days</span>
+                                </div>
                             </div>
                             <!-- Debug info -->
                             <!-- DEBUG: attendance_days={{ student_total.attendance_days|default:"None" }}, classes_attended={{ student_total.classes_attended|default:"None" }} -->
@@ -2513,10 +2527,11 @@ document.addEventListener('DOMContentLoaded', function() {
         totalColumns.forEach(element => {
             element.style.right = '0px';
             element.style.zIndex = '999';
-            element.style.width = '80px';
-            element.style.minWidth = '80px';
-            element.style.maxWidth = '80px';
             element.style.position = 'sticky';
+            /* Let CSS size Total column to content; do not set a fixed width */
+            element.style.removeProperty('width');
+            element.style.removeProperty('min-width');
+            element.style.removeProperty('max-width');
         });
         
         // Force reflow

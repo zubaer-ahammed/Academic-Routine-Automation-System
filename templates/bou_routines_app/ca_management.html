@@ -2177,8 +2177,13 @@ function validateCAMark(inputElement) {
         return;
     }
     if (currentValue > maxV) {
-        inputElement.value = 0;
-        alert(`Maximum allowed value is ${maxV}. Value reset to 0.`);
+        const step = (inputElement.getAttribute('step') || '').trim();
+        if (step === '0.01' || step === 'any') {
+            inputElement.value = parseFloat(maxV).toFixed(2);
+        } else {
+            inputElement.value = String(maxV);
+        }
+        alert(`Maximum allowed for this field is ${maxV}. The value was set to the maximum.`);
     }
 }
 
@@ -2613,61 +2618,64 @@ function updateTeacherRole() {
     }
 }
 
-// Function to validate question sets (max 5 sets can have values, max 14 per set)
+// Theory final: Group A = Q1–Q3 (at most 2 with mark &gt; 0), Group B = Q4–Q6 (at most 2), Group C = Q7. Max 14 per set.
 function validateQuestionSet(inputElement) {
     const studentId = inputElement.getAttribute('data-student-id');
     const row = inputElement.closest('tr');
     const questionInputs = row.querySelectorAll('.question-set-input');
     
-    let filledCount = 0;
-    let total = 0;
+    function countPosInGroup(letter) {
+        let c = 0;
+        questionInputs.forEach(function (input) {
+            if (input.getAttribute('data-question-group') !== letter) {
+                return;
+            }
+            let v = parseFloat(input.value);
+            if (isNaN(v) || v < 0) {
+                v = 0;
+            }
+            if (v > 0) {
+                c++;
+            }
+        });
+        return c;
+    }
     
-    questionInputs.forEach(input => {
+    questionInputs.forEach(function (input) {
         let value = parseFloat(input.value);
         if (isNaN(value)) value = 0;
         if (value < 0) {
             input.value = 0;
-            value = 0;
+            return;
         }
-        if (value > 0) {
-            filledCount++;
-            total += value;
-        }
-        
-        // Validate max 14 per set
         if (value > 14) {
             input.value = 14;
             alert('Maximum mark per question set is 14.');
         }
     });
     
-    // Check if more than 5 sets are filled
-    if (filledCount > 5) {
-        // Disable the last filled input
-        let enabledCount = 0;
-        questionInputs.forEach(input => {
-            let value = parseFloat(input.value);
-            if (isNaN(value)) value = 0;
-            if (value < 0) value = 0;
-            if (value > 0) {
-                enabledCount++;
-                if (enabledCount > 5) {
-                    input.value = '';
-                    input.classList.add('disabled');
-                } else {
-                    input.classList.remove('disabled');
-                }
-            } else {
-                input.classList.remove('disabled');
-            }
-        });
-        alert('Maximum 5 question sets can be entered. Please clear one of the sets.');
+    const g = inputElement.getAttribute('data-question-group');
+    if (g === 'A' && countPosInGroup('A') > 2) {
+        inputElement.value = '';
+        inputElement.classList.remove('disabled');
+        alert('Group A (Q1–Q3): at most 2 question sets can have marks. Clear one set, then try again.');
+    } else if (g === 'B' && countPosInGroup('B') > 2) {
+        inputElement.value = '';
+        inputElement.classList.remove('disabled');
+        alert('Group B (Q4–Q6): at most 2 question sets can have marks. Clear one set, then try again.');
     } else {
-        // Enable all inputs if 5 or fewer are filled
-        questionInputs.forEach(input => {
+        questionInputs.forEach(function (input) {
             input.classList.remove('disabled');
         });
     }
+    
+    let total = 0;
+    questionInputs.forEach(function (input) {
+        const v = parseFloat(input.value);
+        if (!isNaN(v) && v > 0) {
+            total += v;
+        }
+    });
     
     // Calculate and update teacher's total (not final exam total)
     const teacherTotalElement = document.getElementById('teacher-total-' + studentId);

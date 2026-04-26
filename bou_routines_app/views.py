@@ -10219,6 +10219,32 @@ def _apply_theory_final_exam_q_fields(final_mark, teacher_role, marks_data):
         setattr(final_mark, f'{prefix}_q{i}', val)
 
 
+def _merge_theory_q_state(marks_data, final_mark, teacher_role):
+    """Q1..Q7 after applying marks_data (partial POST) on top of existing final_mark for the active teacher."""
+    prefix = {'teacher1': 'teacher1', 'teacher2': 'teacher2', 'teacher3': 'teacher3'}.get(teacher_role, 'teacher1')
+    state = {}
+    for i in range(1, 8):
+        k = f'q{i}'
+        if k in marks_data:
+            state[i] = _parse_final_exam_q_mark(marks_data.get(k))
+        else:
+            state[i] = getattr(final_mark, f'{prefix}_q{i}', None)
+    return state
+
+
+def _theory_q_group_rules_ok(state):
+    """At most two positive marks in Q1–Q3, at most two in Q4–Q6; Q7 is unrestricted (matches UI)."""
+    def is_pos(i):
+        v = state.get(i)
+        if v is None:
+            return False
+        return float(v) > 0
+
+    a = sum(1 for i in (1, 2, 3) if is_pos(i))
+    b = sum(1 for i in (4, 5, 6) if is_pos(i))
+    return a <= 2 and b <= 2
+
+
 def _is_final_exam_evaluator_for_scope(teacher, semester, course, centre_id):
     """
     True if this teacher may use the Semester Final tab in CA management (non-admins).
@@ -10995,7 +11021,19 @@ def save_final_exam_marks(request):
                                 final_mark.lab_viva_mark = max(0.0, min(viv, 5.0))
                             final_mark.marked_by = teacher
                         else:
-                            # Theory course: 7 question sets (see _apply_theory_final_exam_q_fields: key must be
+                            # Theory: Group A = Q1–Q3 (≤2 with marks), Group B = Q4–Q6 (≤2 with marks), Group C = Q7
+                            merged_q = _merge_theory_q_state(marks_data, final_mark, teacher_role)
+                            if not _theory_q_group_rules_ok(merged_q):
+                                return JsonResponse(
+                                    {
+                                        'error': (
+                                            'Theory final rules: at most 2 of Q1–Q3 and at most 2 of Q4–Q6 can have marks '
+                                            'greater than 0. Adjust Group A, Group B, and Q7, then save again.'
+                                        )
+                                    },
+                                    status=400,
+                                )
+                            # 7 question sets (see _apply_theory_final_exam_q_fields: key must be
                             # present; omitted keys are left unchanged to avoid clearing other Qs on partial save.)
                             if teacher_role == 'teacher1':
                                 _apply_theory_final_exam_q_fields(final_mark, 'teacher1', marks_data)

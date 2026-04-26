@@ -46,33 +46,39 @@
                                     
                                     <table class="ca-table">
                                         <thead>
+                                            {% if selected_course.is_lab %}
                                             <tr>
                                                 <th rowspan="2" class="student-info">Student ID</th>
                                                 <th rowspan="2" class="student-info">Name</th>
-                                                {% if selected_course.is_lab %}
-                                                    <th colspan="{% if lab_final_uses_viva %}2{% else %}1{% endif %}">Lab Course Final Exam (Total: {{ lab_final_exam_max|default:50 }} marks)</th>
-                                                {% else %}
-                                                    <th colspan="8">Theory Course Final Exam (Total: 70 marks)</th>
+                                                <th colspan="{% if lab_final_uses_viva %}2{% else %}1{% endif %}">Lab Course Final Exam (Total: {{ lab_final_exam_max|default:50 }} marks)</th>
+                                            </tr>
+                                            <tr>
+                                                <th>Problem Solving<br><small>(max {% if lab_final_uses_viva %}{{ lab_final_problem_solving_max|default:20 }}{% else %}{{ lab_final_exam_max|default:50 }}{% endif %})</small></th>
+                                                {% if lab_final_uses_viva %}
+                                                <th>Viva<br><small>(max {{ lab_final_viva_max|default:5 }})</small></th>
                                                 {% endif %}
                                             </tr>
-                                            {% if selected_course.is_lab %}
-                                                <tr>
-                                                    <th>Problem Solving<br><small>(max {% if lab_final_uses_viva %}{{ lab_final_problem_solving_max|default:20 }}{% else %}{{ lab_final_exam_max|default:50 }}{% endif %})</small></th>
-                                                    {% if lab_final_uses_viva %}
-                                                    <th>Viva<br><small>(max {{ lab_final_viva_max|default:5 }})</small></th>
-                                                    {% endif %}
-                                                </tr>
                                             {% else %}
-                                                <tr>
-                                                    <th>Q1<br><small>(max 14)</small></th>
-                                                    <th>Q2<br><small>(max 14)</small></th>
-                                                    <th>Q3<br><small>(max 14)</small></th>
-                                                    <th>Q4<br><small>(max 14)</small></th>
-                                                    <th>Q5<br><small>(max 14)</small></th>
-                                                    <th>Q6<br><small>(max 14)</small></th>
-                                                    <th>Q7<br><small>(max 14)</small></th>
-                                                    <th>Total</th>
-                                                </tr>
+                                            <tr>
+                                                <th rowspan="3" class="student-info">Student ID</th>
+                                                <th rowspan="3" class="student-info">Name</th>
+                                                <th colspan="7">Theory Course Final Exam (Total: 70 marks)</th>
+                                                <th rowspan="3" class="text-center align-middle">Total</th>
+                                            </tr>
+                                            <tr>
+                                                <th colspan="3" class="text-center">Group A<br><small>Any 2 of Q1–Q3 (max 14 per set)</small></th>
+                                                <th colspan="3" class="text-center">Group B<br><small>Any 2 of Q4–Q6 (max 14 per set)</small></th>
+                                                <th colspan="1" class="text-center">Group C<br><small>Q7 (max 14)</small></th>
+                                            </tr>
+                                            <tr>
+                                                <th>Q1</th>
+                                                <th>Q2</th>
+                                                <th>Q3</th>
+                                                <th>Q4</th>
+                                                <th>Q5</th>
+                                                <th>Q6</th>
+                                                <th>Q7</th>
+                                            </tr>
                                             {% endif %}
                                         </thead>
                                         <tbody>
@@ -111,7 +117,7 @@
                                                         </td>
                                                         {% endif %}
                                                     {% else %}
-                                                        <!-- Theory Course Final Exam - 7 Question Sets -->
+                                                        <!-- Theory: Group A (Q1–Q3), Group B (Q4–Q6), Group C (Q7) — see intro text -->
                                                         <td>
                                                             <input type="number" 
                                                                    name="students_data[{{ student.id }}][q1]"
@@ -122,6 +128,8 @@
                                                                    class="question-set-input"
                                                                    data-student-id="{{ student.id }}"
                                                                    data-question="1"
+                                                                   data-question-group="A"
+                                                                   title="Group A: any 2 of Q1–Q3 with marks &gt; 0"
                                                                    placeholder="Q1"
                                                                    oninput="validateQuestionSet(this); autoSaveFinalExamMarks();"
                                                                    onblur="saveFinalExamMarksImmediately();"{% if final_mark and final_mark.exam_absent %} disabled{% endif %}>
@@ -136,6 +144,8 @@
                                                                    class="question-set-input"
                                                                    data-student-id="{{ student.id }}"
                                                                    data-question="2"
+                                                                   data-question-group="A"
+                                                                   title="Group A: any 2 of Q1–Q3 with marks &gt; 0"
                                                                    placeholder="Q2"
                                                                    oninput="validateQuestionSet(this); autoSaveFinalExamMarks();"
                                                                    onblur="saveFinalExamMarksImmediately();"{% if final_mark and final_mark.exam_absent %} disabled{% endif %}>
@@ -150,6 +160,8 @@
                                                                    class="question-set-input"
                                                                    data-student-id="{{ student.id }}"
                                                                    data-question="3"
+                                                                   data-question-group="A"
+                                                                   title="Group A: any 2 of Q1–Q3 with marks &gt; 0"
                                                                    placeholder="Q3"
                                                                    oninput="validateQuestionSet(this); autoSaveFinalExamMarks();"
                                                                    onblur="saveFinalExamMarksImmediately();"{% if final_mark and final_mark.exam_absent %} disabled{% endif %}>
@@ -164,6 +176,8 @@
                                                                    class="question-set-input"
                                                                    data-student-id="{{ student.id }}"
                                                                    data-question="4"
+                                                                   data-question-group="B"
+                                                                   title="Group B: any 2 of Q4–Q6 with marks &gt; 0"
                                                                    placeholder="Q4"
                                                                    oninput="validateQuestionSet(this); autoSaveFinalExamMarks();"
                                                                    onblur="saveFinalExamMarksImmediately();"{% if final_mark and final_mark.exam_absent %} disabled{% endif %}>
@@ -178,6 +192,8 @@
                                                                    class="question-set-input"
                                                                    data-student-id="{{ student.id }}"
                                                                    data-question="5"
+                                                                   data-question-group="B"
+                                                                   title="Group B: any 2 of Q4–Q6 with marks &gt; 0"
                                                                    placeholder="Q5"
                                                                    oninput="validateQuestionSet(this); autoSaveFinalExamMarks();"
                                                                    onblur="saveFinalExamMarksImmediately();"{% if final_mark and final_mark.exam_absent %} disabled{% endif %}>
@@ -192,6 +208,8 @@
                                                                    class="question-set-input"
                                                                    data-student-id="{{ student.id }}"
                                                                    data-question="6"
+                                                                   data-question-group="B"
+                                                                   title="Group B: any 2 of Q4–Q6 with marks &gt; 0"
                                                                    placeholder="Q6"
                                                                    oninput="validateQuestionSet(this); autoSaveFinalExamMarks();"
                                                                    onblur="saveFinalExamMarksImmediately();"{% if final_mark and final_mark.exam_absent %} disabled{% endif %}>
@@ -206,6 +224,8 @@
                                                                    class="question-set-input"
                                                                    data-student-id="{{ student.id }}"
                                                                    data-question="7"
+                                                                   data-question-group="C"
+                                                                   title="Group C: Q7 (max 14)"
                                                                    placeholder="Q7"
                                                                    oninput="validateQuestionSet(this); autoSaveFinalExamMarks();"
                                                                    onblur="saveFinalExamMarksImmediately();"{% if final_mark and final_mark.exam_absent %} disabled{% endif %}>

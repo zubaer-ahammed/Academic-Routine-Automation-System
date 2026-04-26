@@ -371,38 +371,85 @@ footer.bg-dark {
     background-size: 0.9rem, 100% 100% !important;
 }
 
-.container-box-bou form.bou-filter-form .btn.btn-primary,
-.container-box-bou form.bou-filter-form button.btn-primary {
-    display: inline-flex !important;
+/* "Load Students" — same height, border, light field look as .bou-filter-form select (not a solid primary pill) */
+.container-box-bou form.bou-filter-form button.bou-filter-submit,
+.container-box-bou form.bou-filter-form .btn.bou-filter-submit {
+    display: flex !important;
+    width: 100%;
     align-items: center !important;
     justify-content: center !important;
-    column-gap: 0.4em !important;
+    column-gap: 0.45em !important;
     height: 38px !important;
-    min-height: 0 !important;
+    min-height: 38px !important;
     box-sizing: border-box !important;
-    padding: 0 0.95rem !important;
-    line-height: 1.2 !important;
+    margin: 0 !important;
+    padding: 0.35rem 0.75rem !important;
+    line-height: 1.4 !important;
     font-size: 0.9rem !important;
-    color: #fff !important;
-    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
-    background-image: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
-    border: none !important;
-    border-radius: 0.5rem !important;
     font-weight: 600 !important;
-    box-shadow: 0 1px 3px rgba(0, 123, 255, 0.28) !important;
-    transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, color 0.2s ease !important;
+    color: #0a58ca !important;
+    text-align: center !important;
+    cursor: pointer !important;
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    border-radius: 0.5rem !important;
+    border: 1px solid #b6d4fe !important;
+    background-color: #fff !important;
+    background-image: linear-gradient(180deg, #ffffff 0%, rgba(0, 123, 255, 0.1) 100%) !important;
+    background-repeat: no-repeat !important;
+    box-shadow: 0 1px 2px rgba(13, 110, 253, 0.08) !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease, background 0.15s ease !important;
 }
 
-.container-box-bou form.bou-filter-form .btn.btn-primary:hover,
-.container-box-bou form.bou-filter-form .btn.btn-primary:focus,
-.container-box-bou form.bou-filter-form button.btn-primary:hover,
-.container-box-bou form.bou-filter-form button.btn-primary:focus {
-    color: #fff !important;
-    background: linear-gradient(135deg, #0056b3 0%, #004085 100%) !important;
-    background-image: linear-gradient(135deg, #0056b3 0%, #004085 100%) !important;
-    box-shadow: 0 2px 6px rgba(0, 123, 255, 0.32) !important;
-    transform: translateY(-1px);
-    outline: none;
+.container-box-bou form.bou-filter-form button.bou-filter-submit:hover,
+.container-box-bou form.bou-filter-form .btn.bou-filter-submit:hover {
+    color: #084298 !important;
+    border-color: #6ea8fe !important;
+    background-image: linear-gradient(180deg, #fff 0%, rgba(0, 123, 255, 0.12) 100%) !important;
+    box-shadow: 0 1px 2px rgba(13, 110, 253, 0.12) !important;
+}
+
+.container-box-bou form.bou-filter-form button.bou-filter-submit:focus,
+.container-box-bou form.bou-filter-form .btn.bou-filter-submit:focus {
+    color: #0a58ca !important;
+    border-color: #0d6efd !important;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25) !important;
+    outline: none !important;
+}
+
+.container-box-bou form.bou-filter-form .bou-filter-actions-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px;
+    width: 100%;
+}
+
+/* Attendance: Load + Export side by side on tablet/desktop; two full-width rows on phone */
+@media screen and (min-width: 769px) {
+    .container-box-bou form.bou-filter-form .bou-filter-actions-row > .bou-filter-submit,
+    .container-box-bou form.bou-filter-form .bou-filter-actions-row > .btn.bou-filter-submit,
+    .container-box-bou form.bou-filter-form .bou-filter-actions-row > .dropdown {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
+    /* Let flex share width; avoid base `width: 100%` forcing a wrap to two lines */
+    .container-box-bou form.bou-filter-form .bou-filter-actions-row > .bou-filter-submit,
+    .container-box-bou form.bou-filter-form .bou-filter-actions-row > .btn.bou-filter-submit {
+        width: auto !important;
+    }
+
+    .container-box-bou form.bou-filter-form .bou-filter-actions-row .dropdown .dropdown-toggle {
+        width: 100%;
+    }
+}
+
+@media screen and (max-width: 768px) {
+    .container-box-bou form.bou-filter-form .bou-filter-actions-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
 }
 
 .container-box-bou form.bou-filter-form .btn-secondary.dropdown-toggle {
@@ -445,11 +492,17 @@ footer.bg-dark {
         height: 40px !important;
     }
 
-    .container-box-bou form.bou-filter-form .btn.btn-primary,
-    .container-box-bou form.bou-filter-form button.btn-primary,
+    .container-box-bou form.bou-filter-form button.bou-filter-submit,
+    .container-box-bou form.bou-filter-form .btn.bou-filter-submit {
+        min-height: 40px !important;
+        height: 40px !important;
+        width: 100% !important;
+    }
+
     .container-box-bou form.bou-filter-form .btn-secondary.dropdown-toggle {
         min-height: 44px;
         height: auto !important;
+        width: 100% !important;
     }
 }
 

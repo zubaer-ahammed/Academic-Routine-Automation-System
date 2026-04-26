@@ -20,12 +20,44 @@
     .flatpickr-calendar.open {
         z-index: 99999 !important;
     }
-    .attendance-midterm-collapse-toggle[aria-expanded="true"] .attendance-midterm-chevron {
-        transform: rotate(180deg);
-    }
-    .attendance-midterm-chevron {
-        display: inline-block;
+    /* Same chevron look as .bou-compact-summary-toggle (right → 90° when open) */
+    .attendance-midterm-header .bou-compact-chevron {
         transition: transform 0.2s ease;
+        font-size: 0.7rem;
+        color: #6c757d;
+        flex-shrink: 0;
+    }
+    .attendance-midterm-collapse-toggle[aria-expanded="true"] .bou-compact-chevron {
+        transform: rotate(90deg);
+    }
+    .attendance-midterm-collapse-title {
+        font-size: 0.9rem;
+        line-height: 1.3;
+    }
+    .attendance-midterm-header {
+        /* Match .bou-compact-summary-toggle total vertical size (10px 12px padding) */
+        padding: 10px 12px;
+    }
+    .attendance-midterm-header .attendance-midterm-collapse-toggle {
+        min-height: unset;
+        padding: 0 !important;
+        margin: 0;
+        --bs-btn-padding-y: 0;
+        --bs-btn-padding-x: 0;
+        line-height: 1.3;
+    }
+    /* Save only when the override section is expanded (toggle's aria-expanded is set by Bootstrap) */
+    .attendance-midterm-save-wrap {
+        display: none;
+    }
+    .attendance-midterm-collapse-toggle[aria-expanded="true"] + .attendance-midterm-save-wrap {
+        display: block;
+    }
+    .attendance-midterm-save-wrap .btn {
+        /* Align with compact header; avoid tall primary button expanding the bar */
+        padding: 0.3rem 0.65rem;
+        font-size: 0.82rem;
+        line-height: 1.2;
     }
     .container-box-bou {
         background: white;
@@ -43,6 +75,7 @@
     /* Exclude header buttons by targeting only form elements */
     .container-box-bou form select,
     .container-box-bou form .btn-primary,
+    .container-box-bou form .bou-filter-submit,
     .container-box-bou form .btn-secondary.dropdown-toggle {
         height: 38px;
         box-sizing: border-box;
@@ -100,6 +133,7 @@
         line-height: 1.6;
     }
 
+    /* Desktop: single-line summary row (see max-width: 991.98px for phone/tablet wrap) */
     .attendance-table-section .compact-info-content span {
         white-space: nowrap;
     }
@@ -121,23 +155,32 @@
         padding-left: 8px;
     }
 
+    .attendance-table-section .bou-compact-summary-toggle .course-type-badge {
+        margin-left: 0;
+        padding-left: 0;
+    }
+
     /* Course-type pill — same as Marks (ca_management .badge + .badge-*) */
-    .attendance-table-section .compact-info-box .course-type-badge .badge {
+    .attendance-table-section .compact-info-box .course-type-badge .badge,
+    .attendance-table-section .bou-compact-summary-toggle .course-type-badge .badge {
         font-size: 0.85rem;
         padding: 4px 8px;
         border-radius: 20px;
         font-weight: 600;
     }
-    .attendance-table-section .compact-info-box .course-type-badge .badge.badge-info {
+    .attendance-table-section .compact-info-box .course-type-badge .badge.badge-info,
+    .attendance-table-section .bou-compact-summary-toggle .course-type-badge .badge.badge-info {
         background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
         color: white;
     }
-    .attendance-table-section .compact-info-box .course-type-badge .badge.badge-warning {
+    .attendance-table-section .compact-info-box .course-type-badge .badge.badge-warning,
+    .attendance-table-section .bou-compact-summary-toggle .course-type-badge .badge.badge-warning {
         background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
         color: #000000 !important;
         font-weight: 600;
     }
-    .attendance-table-section .compact-info-box .course-type-badge .badge.badge-primary {
+    .attendance-table-section .compact-info-box .course-type-badge .badge.badge-primary,
+    .attendance-table-section .bou-compact-summary-toggle .course-type-badge .badge.badge-primary {
         background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
         color: white;
     }
@@ -153,9 +196,149 @@
         white-space: normal;
     }
 
+    .bou-compact-summary-toggle {
+        width: 100%;
+        text-align: left;
+        border: 1px solid #dee2e6;
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #212529;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .bou-compact-summary-toggle .bou-compact-chevron {
+        transition: transform 0.2s ease;
+        font-size: 0.7rem;
+        color: #6c757d;
+        flex-shrink: 0;
+    }
+
+    .bou-compact-summary-toggle[aria-expanded="true"] .bou-compact-chevron {
+        transform: rotate(90deg);
+    }
+
     .attendance-table-section .compact-info-box .compact-line-title {
         min-height: 0;
         gap: 0.25rem;
+    }
+
+    /* Phone + tablet (matches Bootstrap "below lg") */
+    @media (max-width: 991.98px) {
+        .attendance-table-section .compact-info-box {
+            min-width: 0;
+            max-width: 100%;
+            box-sizing: border-box;
+            overflow-wrap: anywhere;
+        }
+
+        .attendance-table-section .compact-info-content span {
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-wrap: break-word;
+            word-break: break-word;
+            min-width: 0;
+            max-width: 100%;
+        }
+
+        .attendance-table-section .compact-info-box .compact-line-title {
+            min-width: 0;
+            max-width: 100%;
+        }
+
+        .attendance-table-section .compact-info-box .compact-line-title > strong {
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+    }
+
+    @media (min-width: 576px) {
+        .bou-hide-faculty-export-label {
+            white-space: nowrap;
+        }
+    }
+
+    @media (max-width: 575.98px) {
+        .bou-hide-faculty-export-label {
+            font-size: 0.8rem;
+            line-height: 1.35;
+            white-space: normal;
+        }
+
+        /* One-line compact row: same height as .bou-filter-submit (40px) — selects are 36px on mobile */
+        .attendance-table-section .bou-compact-summary-toggle {
+            font-size: 0.8125rem;
+            line-height: 1.2;
+            height: 40px;
+            min-height: 40px;
+            padding: 0 8px;
+            box-sizing: border-box;
+            flex-wrap: nowrap;
+        }
+        .attendance-table-section .bou-compact-summary-toggle > span.d-flex {
+            flex-wrap: nowrap !important;
+            min-width: 0;
+        }
+        .attendance-table-section .bou-compact-summary-toggle > span.d-flex > .min-w-0 {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .attendance-table-section .bou-compact-summary-toggle .bou-compact-chevron {
+            font-size: 0.65rem;
+        }
+        .attendance-midterm-header {
+            min-height: 40px;
+            height: 40px;
+            padding: 0 8px;
+            box-sizing: border-box;
+            flex-wrap: nowrap;
+        }
+        .attendance-midterm-header .attendance-midterm-collapse-title {
+            font-size: 0.75rem;
+            line-height: 1.2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .attendance-midterm-header .attendance-midterm-collapse-toggle {
+            min-width: 0;
+            flex: 1 1 0;
+        }
+        .attendance-table-section .compact-info-box {
+            font-size: 0.8125rem;
+        }
+        .attendance-table-section .compact-info-box strong,
+        .attendance-table-section .compact-info-box .compact-line-title > strong {
+            font-size: 0.86rem;
+        }
+        .attendance-table-section .compact-info-box .fa,
+        .attendance-table-section .compact-info-box .fas,
+        .attendance-table-section .compact-info-box .far,
+        .attendance-table-section .compact-info-box .fab {
+            font-size: 0.78rem;
+        }
+        .attendance-table-section .compact-info-box .course-type-badge .badge {
+            font-size: 0.75rem;
+            padding: 3px 6px;
+        }
+        .attendance-table-section .bou-compact-summary-toggle .course-type-badge .badge {
+            font-size: 0.65rem;
+            padding: 2px 5px;
+        }
+        .attendance-calc-right .compact-info-content .calc-main-line,
+        .attendance-calc-right .compact-info-content .calc-main-line strong {
+            font-size: 0.88rem;
+        }
+        .attendance-calc-right .compact-info-content small {
+            font-size: 0.72rem;
+        }
     }
 
     /* Match full-width blocks (e.g. .alert) — no grid column side padding */
@@ -620,7 +803,8 @@
         
         /* Reduce margin for form groups with buttons */
         .container-box-bou form .form-group:has(> div[style*="display: flex"]),
-        .container-box-bou form .form-group:has(> div[style*="flex"]) {
+        .container-box-bou form .form-group:has(> div[style*="flex"]),
+        .container-box-bou form .form-group:has(.bou-filter-actions-row) {
             margin-bottom: 5px !important;
             min-height: auto !important;
             padding-bottom: 0 !important;
@@ -649,8 +833,8 @@
             height: 36px !important;
         }
         
-        /* Larger buttons for mobile */
-        .container-box-bou form .btn {
+        /* Larger buttons for mobile (not filter "Load Students" — it matches selects via .bou-filter-submit) */
+        .container-box-bou form .btn:not(.bou-filter-submit) {
             min-height: 44px;
             font-size: 14px;
             padding: 8px 16px;
@@ -670,7 +854,8 @@
         }
         
         .container-box-bou form .form-group > div[style*="display: flex"],
-        .container-box-bou form .form-group > div[style*="flex"] {
+        .container-box-bou form .form-group > div[style*="flex"],
+        .container-box-bou form .form-group > .bou-filter-actions-row {
             margin-top: 0 !important;
             margin-bottom: 0 !important;
             padding-top: 0 !important;
@@ -678,7 +863,8 @@
         }
         
         /* Reduce gap above button container row */
-        .container-box-bou form .row:has(> div:last-child .form-group > div[style*="flex"]) {
+        .container-box-bou form .row:has(> div:last-child .form-group > div[style*="flex"]),
+        .container-box-bou form .row:has(> div:last-child .form-group > .bou-filter-actions-row) {
             margin-bottom: 5px !important;
         }
         
@@ -860,6 +1046,16 @@
             font-size: 12px !important;
             padding: 5px 8px !important;
             height: 34px !important;
+        }
+
+        .attendance-table-section .bou-compact-summary-toggle {
+            font-size: 0.75rem;
+            height: 40px;
+            min-height: 40px;
+        }
+        .attendance-midterm-header {
+            min-height: 40px;
+            height: 40px;
         }
         
         .container-box-bou h2 {
@@ -1536,6 +1732,81 @@
             font-size: 16px;
         }
     }
+
+    /*
+     * Filter: Load + Export — must be last. Page .btn + Bootstrap .btn load after global.css
+     * and were overriding the field-style "Load" button. Use .bou-filter-submit only (no .btn).
+     */
+    @media screen and (max-width: 768px) {
+        .container-box-bou form.bou-filter-form .bou-filter-actions-row {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+            width: 100% !important;
+            flex-wrap: nowrap !important;
+            gap: 10px !important;
+        }
+
+        .container-box-bou form.bou-filter-form .bou-filter-actions-row > .dropdown {
+            display: block !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            flex: 0 0 auto !important;
+        }
+
+        .container-box-bou form.bou-filter-form .bou-filter-actions-row .btn-secondary.dropdown-toggle {
+            width: 100% !important;
+        }
+    }
+
+    @media screen and (max-width: 768px) {
+        .container-box-bou form.bou-filter-form .bou-filter-actions-row > button.bou-filter-submit,
+        .container-box-bou form.bou-filter-form .form-group > div button.bou-filter-submit {
+            display: flex !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            flex: 0 0 auto !important;
+            box-sizing: border-box !important;
+            min-height: 40px !important;
+            height: 40px !important;
+            padding: 0.3rem 0.75rem !important;
+            font-size: 0.88rem !important;
+            font-weight: 600 !important;
+            line-height: 1.4 !important;
+            color: #0a58ca !important;
+            text-align: center !important;
+            font-family: inherit !important;
+            border-radius: 0.5rem !important;
+            border: 1px solid #b6d4fe !important;
+            background-color: #fff !important;
+            background-image: linear-gradient(180deg, #ffffff 0%, rgba(0, 123, 255, 0.1) 100%) !important;
+            box-shadow: 0 1px 2px rgba(13, 110, 253, 0.08) !important;
+            -webkit-appearance: none !important;
+            appearance: none !important;
+            margin: 0 !important;
+            align-items: center !important;
+            justify-content: center !important;
+            column-gap: 0.45em !important;
+            cursor: pointer !important;
+        }
+    }
+
+    /* 576px–768px: align collapsed course row to Load Students (40px) — base .bou-compact-summary-toggle uses 10px 12px padding */
+    @media screen and (max-width: 768px) and (min-width: 576px) {
+        .attendance-table-section .bou-compact-summary-toggle {
+            min-height: 40px;
+            height: 40px;
+            padding: 0 8px;
+            box-sizing: border-box;
+            flex-wrap: nowrap;
+        }
+        .attendance-midterm-header {
+            min-height: 40px;
+            height: 40px;
+            padding: 0 8px;
+            box-sizing: border-box;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -1615,12 +1886,12 @@
                 <div class="col-md-3">
                     <div class="form-group">
                         <label>&nbsp;</label>
-                        <div style="display: flex; gap: 10px; align-items: flex-end;">
-                            <button type="submit" class="btn btn-primary">
+                        <div class="bou-filter-actions-row">
+                            <button type="submit" class="bou-filter-submit">
                                 <i class="fas fa-search"></i> Load Students
                             </button>
                             {% if selected_semester_id and selected_course_id %}
-                                <div class="dropdown" style="display: inline-block;">
+                                <div class="dropdown w-100">
                                     <button class="btn btn-secondary dropdown-toggle" type="button" id="exportDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                                         <i class="fas fa-download"></i> Export
                                     </button>
@@ -1650,12 +1921,12 @@
                 </div>
             </div>
             {% if selected_semester_id and selected_course_id %}
-                {% if user.is_superuser or user.is_staff %}
+                {% if is_admin %}
                 <div class="row">
                     <div class="col-md-12">
                         <div class="form-check d-flex align-items-center flex-wrap gap-2 mt-2 ps-0">
                             <input class="form-check-input flex-shrink-0 m-0" type="checkbox" id="hideFacultyCheckbox" style="float: none;">
-                            <label class="form-check-label mb-0" for="hideFacultyCheckbox" style="white-space: nowrap;">
+                            <label class="form-check-label mb-0 bou-hide-faculty-export-label" for="hideFacultyCheckbox">
                                 Hide Faculty/Teacher Name during export
                             </label>
                         </div>
@@ -1676,22 +1947,42 @@
         <!-- Comprehensive Attendance Table -->
         <div class="attendance-table-section">
             <div class="attendance-course-summary">
+                {% if is_admin and not teacher %}
+                    <div class="alert alert-info w-100 mt-1 mb-2" role="alert">
+                        <i class="fas fa-info-circle" aria-hidden="true"></i>
+                        <strong>Admin Access:</strong> You are viewing all courses as an administrator.
+                    </div>
+                {% endif %}
                 <div class="compact-info-section" style="margin-top: 8px; margin-bottom: 8px;">
+                    <button type="button"
+                            class="bou-compact-summary-toggle d-flex w-100 align-items-center flex-nowrap gap-2"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#attendanceCompactSummaryCollapse"
+                            aria-expanded="true"
+                            aria-controls="attendanceCompactSummaryCollapse"
+                            id="attendanceCompactSummaryToggle">
+                        <i class="fas fa-chevron-right bou-compact-chevron flex-shrink-0" aria-hidden="true"></i>
+                        <span class="d-flex flex-nowrap align-items-center gap-2 min-w-0 flex-grow-1 text-start">
+                            <span class="min-w-0">{{ course.code }} - {{ course.name }}</span>
+                            <span class="course-type-badge d-inline-flex align-items-center flex-shrink-0">
+                                {% if course.course_type == 'PROJECT' %}
+                                    <span class="badge badge-warning">Project Work</span>
+                                {% elif course.is_lab %}
+                                    <span class="badge badge-info">Lab</span>
+                                {% else %}
+                                    <span class="badge badge-primary">Theory</span>
+                                {% endif %}
+                            </span>
+                        </span>
+                    </button>
+                    <div class="collapse show" id="attendanceCompactSummaryCollapse">
                     <div class="attendance-summary-cols">
                         <div class="attendance-summary-col">
                             <div class="compact-info-box flex-fill w-100 attendance-summary-left">
                                 <div class="d-flex align-items-center flex-wrap compact-line-title mb-2">
                                     <i class="fas fa-graduation-cap text-primary me-2" aria-hidden="true"></i>
-                                    <strong class="mb-0 me-3">Attendance Management - {{ semester.name }}</strong>
-                                    <span class="course-type-badge">
-                                    {% if course.course_type == 'PROJECT' %}
-                                        <span class="badge badge-warning">Project Work</span>
-                                    {% elif course.is_lab %}
-                                        <span class="badge badge-info">Lab</span>
-                                    {% else %}
-                                        <span class="badge badge-primary">Theory</span>
-                                    {% endif %}
-                                    </span>
+                                    <strong class="mb-0 d-block d-lg-none">Attendance - {{ semester.name }}</strong>
+                                    <strong class="mb-0 d-none d-lg-block">Attendance Management - {{ semester.name }}</strong>
                                 </div>
                                 <div class="compact-info-content">
                                     <span><i class="fas fa-book text-muted" aria-hidden="true"></i> <strong>Course:</strong> {{ course.code }} - {{ course.name }}</span>
@@ -1740,17 +2031,12 @@
                         </div>
                     </div>
                 </div>
-                {% if is_admin and not teacher %}
-                    <div class="alert alert-info w-100 mt-1 mb-2" role="alert">
-                        <i class="fas fa-info-circle" aria-hidden="true"></i>
-                        <strong>Admin Access:</strong> You are viewing all courses as an administrator.
-                    </div>
-                {% endif %}
+                </div>
 
                 {% if is_admin and not teacher and selected_centre_id %}
                     <div class="card" style="margin-top: 12px; border: 1px solid #e9ecef;">
-                        <div class="card-body" style="padding: 12px 14px;">
-                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-0">
+                        <div class="card-body p-0">
+                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-0 attendance-midterm-header">
                                 <button type="button"
                                         class="btn btn-link text-start p-0 text-decoration-none d-flex align-items-center gap-2 min-w-0 flex-grow-1 attendance-midterm-collapse-toggle"
                                         data-bs-toggle="collapse"
@@ -1758,17 +2044,17 @@
                                         aria-expanded="false"
                                         aria-controls="attendanceMidtermOverrideCollapse"
                                         id="attendanceMidtermOverrideToggle">
-                                    <i class="fas fa-chevron-down attendance-midterm-chevron text-secondary" style="font-size: 0.7rem; flex-shrink: 0;" aria-hidden="true"></i>
-                                    <span class="fw-bold text-body">Change Mid-Term Exam Dates (Attendance only)</span>
+                                    <i class="fas fa-chevron-right bou-compact-chevron flex-shrink-0" aria-hidden="true"></i>
+                                    <span class="fw-bold text-body attendance-midterm-collapse-title min-w-0" title="Change Mid-Term Exam Dates (Attendance only)">Change Mid-Term Exam Dates (Attendance only)</span>
                                 </button>
-                                <div class="flex-shrink-0">
+                                <div class="flex-shrink-0 attendance-midterm-save-wrap">
                                     <button type="button" class="btn btn-primary" id="save-attendance-midterm-override-btn">
                                         Save
                                     </button>
                                 </div>
                             </div>
                             <div class="collapse" id="attendanceMidtermOverrideCollapse">
-                                <div class="pt-3">
+                                <div class="pt-3 px-3 pb-3">
                                     <div class="text-muted" style="font-size: 12px; line-height: 1.3;">
                                         This only affects the Attendance table date columns. Routine / academic calendar remain unchanged.
                                         <br>
@@ -2435,6 +2721,31 @@ function setupContainerClicks() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+    (function initAttendanceCompactSummary() {
+        var el = document.getElementById('attendanceCompactSummaryCollapse');
+        var tgl = document.getElementById('attendanceCompactSummaryToggle');
+        if (!el || typeof bootstrap === 'undefined' || !bootstrap.Collapse) {
+            return;
+        }
+        var phoneMq = window.matchMedia('(max-width: 575.98px)');
+        var c = bootstrap.Collapse.getOrCreateInstance(el, { toggle: false });
+        function sync() {
+            if (phoneMq.matches) {
+                c.hide();
+                if (tgl) {
+                    tgl.setAttribute('aria-expanded', 'false');
+                }
+            } else {
+                c.show();
+                if (tgl) {
+                    tgl.setAttribute('aria-expanded', 'true');
+                }
+            }
+        }
+        sync();
+        phoneMq.addEventListener('change', sync);
+    })();
+
     let selectedDate = null;
     let selectedStudent = null;
     

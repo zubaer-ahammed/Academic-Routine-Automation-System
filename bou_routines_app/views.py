@@ -4787,7 +4787,8 @@ def attendance_calendar(request):
     
     # Initialize allowed_date_range in base context (will be updated when semester/course selected)
     allowed_date_range = None
-    is_admin = request.user.is_superuser or request.user.is_staff
+    # Staff with a teacher profile are treated as teachers, not as administrators (align with ca_management)
+    is_admin = request.user.is_superuser or (request.user.is_staff and not teacher)
     
     context = {
         'teacher': teacher,
@@ -5677,6 +5678,8 @@ def export_attendance_pdf(request):
         # Get selected centre
         selected_centre = None
         teacher = get_teacher_from_user(request.user)
+        # Only non-teacher staff/superuser may use hide_faculty on PDF (teachers may not hide names on export)
+        can_apply_hide_faculty = request.user.is_superuser or (request.user.is_staff and not teacher)
         if teacher:
             # For teachers, get centre from semester_course
             semester_course = SemesterCourse.objects.filter(
@@ -5934,8 +5937,8 @@ def export_attendance_pdf(request):
                 ).select_related('teacher').first()
                 if semester_course and semester_course.teacher:
                     teacher_name = semester_course.teacher.name
-        # Check if hide_faculty parameter is set
-        hide_faculty = request.GET.get('hide_faculty') == '1'
+        # Check if hide_faculty parameter is set (ignored unless caller may apply it)
+        hide_faculty = (request.GET.get('hide_faculty') == '1') and can_apply_hide_faculty
         
         # Only show teacher if found and hide_faculty is not set
         if teacher_name and not hide_faculty:
@@ -6236,8 +6239,8 @@ def export_attendance_pdf(request):
             spaceAfter=0,
         )
         
-        # Check if hide_faculty parameter is set
-        hide_faculty = request.GET.get('hide_faculty') == '1'
+        # Check if hide_faculty parameter is set (ignored unless caller may apply it)
+        hide_faculty = (request.GET.get('hide_faculty') == '1') and can_apply_hide_faculty
         
         # Get teacher name for signature (reuse teacher_name from header if available)
         teacher_name_for_signature = teacher_name if teacher_name else "Teacher Name"
@@ -6368,6 +6371,9 @@ def export_blank_attendance_pdf(request):
         
         semester = Semester.objects.get(id=semester_id)
         course = Course.objects.get(id=course_id)
+        
+        teacher = get_teacher_from_user(request.user)
+        can_apply_hide_faculty = request.user.is_superuser or (request.user.is_staff and not teacher)
         
         # Get selected centre
         selected_centre = None
@@ -6584,8 +6590,8 @@ def export_blank_attendance_pdf(request):
                 ).select_related('teacher').first()
                 if semester_course and semester_course.teacher:
                     teacher_name = semester_course.teacher.name
-        # Check if hide_faculty parameter is set
-        hide_faculty = request.GET.get('hide_faculty') == '1'
+        # Check if hide_faculty parameter is set (ignored unless caller may apply it)
+        hide_faculty = (request.GET.get('hide_faculty') == '1') and can_apply_hide_faculty
         
         # Only show teacher if found and hide_faculty is not set
         if teacher_name and not hide_faculty:
@@ -6875,8 +6881,8 @@ def export_blank_attendance_pdf(request):
             spaceAfter=0,
         )
         
-        # Check if hide_faculty parameter is set
-        hide_faculty = request.GET.get('hide_faculty') == '1'
+        # Check if hide_faculty parameter is set (ignored unless caller may apply it)
+        hide_faculty = (request.GET.get('hide_faculty') == '1') and can_apply_hide_faculty
         
         # Get teacher name for signature (reuse teacher_name from header if available)
         teacher_name_for_signature = teacher_name if teacher_name else "Teacher Name"

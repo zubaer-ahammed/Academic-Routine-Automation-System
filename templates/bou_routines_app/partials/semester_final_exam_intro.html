@@ -14,9 +14,9 @@
                                     <p><small>Five question sets are used, with <strong>14 marks</strong> per set: <strong>Group A</strong> (Q1–Q3) — enter marks in <strong>any two</strong> of the three; <strong>Group B</strong> (Q4–Q6) — enter marks in <strong>any two</strong> of the three; <strong>Group C</strong> — <strong>Q7</strong> (one set). Q7 is always part of the paper.</small></p>
                                 </div>
                                 
-                                <!-- Teacher Role Selector for Theory Course -->
+                                <!-- Examiner role: styled panel for admins; teachers get hidden #teacher-role for scripts only -->
+                                {% if can_select_evaluator %}
                                 <div class="teacher-role-selector">
-                                    {% if can_select_evaluator %}
                                         <!-- Admin: always visible — which examiner role to view/edit -->
                                         <div class="mb-3">
                                             <label for="teacher-role"><strong>Select Examiner Role to View/Edit:</strong></label>
@@ -87,9 +87,10 @@
                                         <p class="mt-2 mb-0"><small class="text-muted">If the difference between Teacher 1 and Teacher 2 totals is greater than 14 marks, Teacher 3 evaluation is required.</small></p>
                                             </div>
                                         </div>
-                                    {% else %}
-                                        <label for="teacher-role"><strong>Your Role:</strong></label>
-                                        <select id="teacher-role" class="form-control" style="width: 300px; display: inline-block; margin-left: 10px; background-color: #e9ecef; cursor: not-allowed;" disabled>
+                                </div>
+                                {% else %}
+                                {# Non-admin / teacher: no "Your Role" panel — keep #teacher-role for page scripts #}
+                                <select id="teacher-role" class="d-none" disabled aria-hidden="true" tabindex="-1">
                                             <option value="teacher1" {% if teacher_role == 'teacher1' %}selected{% endif %}>
                                                 {% if teacher1_evaluator %}{{ teacher1_evaluator.name }} (First Examiner - DRC){% else %}Teacher 1 (First Examiner - DRC){% endif %}
                                             </option>
@@ -101,11 +102,6 @@
                                                 {% if teacher3_evaluator %}{{ teacher3_evaluator.name }} (Third Examiner){% else %}Teacher 3 (Third Examiner - TBD){% endif %}
                                             </option>
                                             {% endif %}
-                                        </select>
-                                        <p class="mt-2 mb-0"><small class="text-info"><i class="fas fa-info-circle"></i> You can only view and enter marks for your assigned examiner role.</small></p>
-                                    {% endif %}
-                                    {% if not can_select_evaluator %}
-                                    <p class="mt-2 mb-0"><small class="text-muted">If the difference between Teacher 1 and Teacher 2 totals is greater than 14 marks, Teacher 3 evaluation is required.</small></p>
-                                    {% endif %}
-                                </div>
+                                </select>
+                                {% endif %}
                             {% endif %}

@@ -265,6 +265,7 @@
         line-height: 1.6;
     }
     
+    /* Desktop: keep course/teacher on one line where space allows */
     .compact-info-content span {
         white-space: nowrap;
     }
@@ -288,6 +289,40 @@
         padding: 4px 8px;
     }
     
+    /* Phone + tablet: long course names must wrap (nowrap alone clips text in narrow columns) */
+    @media (max-width: 991.98px) {
+        .compact-info-section .row > [class*='col-'] {
+            min-width: 0;
+        }
+
+        .compact-info-box {
+            min-width: 0;
+            max-width: 100%;
+            box-sizing: border-box;
+            overflow-wrap: anywhere;
+        }
+
+        .compact-info-content {
+            min-width: 0;
+        }
+
+        .compact-info-content span {
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-wrap: break-word;
+            word-break: break-word;
+            min-width: 0;
+            max-width: 100%;
+        }
+
+        .compact-info-box .d-flex.align-items-center > strong,
+        .compact-info-box .d-flex.align-items-center.flex-wrap > strong {
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+    }
+
     @media (max-width: 768px) {
         .compact-info-content {
             flex-direction: column;
@@ -298,6 +333,83 @@
             display: block;
             width: 100%;
         }
+    }
+
+    @media (max-width: 575.98px) {
+        .compact-info-box {
+            font-size: 0.8125rem;
+        }
+        .compact-info-box strong {
+            font-size: 0.86rem;
+        }
+        .compact-info-box .fa {
+            font-size: 0.78rem;
+        }
+        .compact-info-box .badge {
+            font-size: 0.75rem;
+            padding: 3px 6px;
+        }
+        /* One-line compact row: same height as .bou-filter-submit (40px) — form selects are 36px/34px */
+        .compact-info-section .bou-compact-summary-toggle {
+            font-size: 0.8125rem; /* ~13px, same band as filter selects */
+            line-height: 1.2;
+            height: 40px;
+            min-height: 40px;
+            padding: 0 8px;
+            box-sizing: border-box;
+            flex-wrap: nowrap;
+        }
+        .compact-info-section .bou-compact-summary-toggle > span.d-flex {
+            flex-wrap: nowrap !important;
+            min-width: 0;
+        }
+        .compact-info-section .bou-compact-summary-toggle > span.d-flex > .min-w-0 {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .compact-info-section .bou-compact-summary-toggle .bou-compact-chevron {
+            font-size: 0.65rem;
+        }
+        .compact-info-section .bou-compact-summary-toggle .course-type-badge .badge {
+            font-size: 0.65rem;
+            padding: 2px 5px;
+        }
+    }
+
+    /* Collapsible one-line course summary; padding/font for sm+ only so sub-576px mobile block is not overridden */
+    .compact-info-section .bou-compact-summary-toggle {
+        width: 100%;
+        text-align: left;
+        border: 1px solid #dee2e6;
+        background: #f8f9fa;
+        border-radius: 8px;
+        font-weight: 600;
+        color: #212529;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+        box-sizing: border-box;
+    }
+    @media (min-width: 576px) {
+        .compact-info-section .bou-compact-summary-toggle {
+            padding: 10px 12px;
+            font-size: 0.9rem;
+        }
+    }
+    .compact-info-section .bou-compact-summary-toggle .bou-compact-chevron {
+        transition: transform 0.2s ease;
+        font-size: 0.7rem;
+        color: #6c757d;
+        flex-shrink: 0;
+    }
+    .compact-info-section .bou-compact-summary-toggle[aria-expanded="true"] .bou-compact-chevron {
+        transform: rotate(90deg);
+    }
+    .compact-info-section .bou-compact-summary-toggle .course-type-badge {
+        margin-left: 0;
+        padding-left: 0;
     }
 
     .btn-save-ca {
@@ -334,7 +446,8 @@
         vertical-align: middle;
     }
     
-    .container-box-bou form .btn-primary {
+    .container-box-bou form .btn-primary,
+    .container-box-bou form .bou-filter-submit {
         height: 38px;
         box-sizing: border-box;
         line-height: 1.5;
@@ -370,7 +483,8 @@
     
     /* Ensure selects and buttons have proper spacing and aren't cut */
     .container-box-bou form select,
-    .container-box-bou form .btn-primary {
+    .container-box-bou form .btn-primary,
+    .container-box-bou form .bou-filter-submit {
         margin-bottom: 0;
         overflow: visible;
     }
@@ -411,6 +525,28 @@
         border-color: #dee2e6 #dee2e6 #fff;
         border-bottom-color: transparent;
         font-weight: 600;
+    }
+
+    /* Phone: keep Marks tab labels on one line (smaller type; scroll if needed) */
+    @media (max-width: 575.98px) {
+        .container-box-bou #marksTabs.nav-tabs {
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+        }
+        .container-box-bou #marksTabs .nav-item {
+            flex-shrink: 0;
+        }
+        .container-box-bou #marksTabs .nav-link {
+            font-size: 0.7rem;
+            line-height: 1.2;
+            padding: 0.4rem 0.45rem;
+            white-space: nowrap;
+        }
+        .container-box-bou #marksTabs .nav-link i {
+            font-size: 0.9em;
+        }
     }
     
     .tab-content {
@@ -731,6 +867,12 @@
             font-size: 12px !important;
             padding: 5px 8px !important;
             height: 34px !important;
+        }
+
+        .compact-info-section .bou-compact-summary-toggle {
+            font-size: 0.75rem;
+            height: 40px;
+            min-height: 40px;
         }
         
         .container-box-bou h2 {
@@ -1058,6 +1200,47 @@
         box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
         outline: none;
     }
+
+    /* Load Students (no .btn) — reassert over any late rules on small screens */
+    @media screen and (max-width: 768px) {
+        .container-box-bou form.bou-filter-form button.bou-filter-submit {
+            display: flex !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            min-height: 40px !important;
+            height: 40px !important;
+            padding: 0.3rem 0.75rem !important;
+            font-size: 0.88rem !important;
+            font-weight: 600 !important;
+            line-height: 1.4 !important;
+            color: #0a58ca !important;
+            text-align: center !important;
+            font-family: inherit !important;
+            border-radius: 0.5rem !important;
+            border: 1px solid #b6d4fe !important;
+            background-color: #fff !important;
+            background-image: linear-gradient(180deg, #ffffff 0%, rgba(0, 123, 255, 0.1) 100%) !important;
+            box-shadow: 0 1px 2px rgba(13, 110, 253, 0.08) !important;
+            -webkit-appearance: none !important;
+            appearance: none !important;
+            margin: 0 !important;
+            align-items: center !important;
+            justify-content: center !important;
+            column-gap: 0.45em !important;
+            cursor: pointer !important;
+        }
+    }
+
+    /* 576px–768px: match collapsed course row to Load Students (40px) — default compact toggle uses 10px 12px padding */
+    @media screen and (max-width: 768px) and (min-width: 576px) {
+        .compact-info-section .bou-compact-summary-toggle {
+            min-height: 40px;
+            height: 40px;
+            padding: 0 8px;
+            box-sizing: border-box;
+            flex-wrap: nowrap;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -1139,7 +1322,7 @@
                             <div class="form-group">
                                 <label>&nbsp;</label>
                                 <div>
-                                    <button type="submit" class="btn btn-primary">
+                                    <button type="submit" class="bou-filter-submit">
                                         <i class="fas fa-search"></i> Load Students
                                     </button>
                                 </div>
@@ -1156,63 +1339,77 @@
                 </div>
 
                 {% if selected_semester and selected_course %}
-                    <!-- Compact Course Information and CA Distribution -->
+                    <!-- Compact Course Information and CA Distribution (collapsible; collapsed on small phones like Attendance) -->
                     <div class="compact-info-section" style="margin-top: 8px; margin-bottom: 8px;">
-                        <div class="row">
-                            <!-- Marks Distribution Info -->
-                            <div class="col-md-6">
-                                <div class="compact-info-box">
-                                    <div class="d-flex align-items-center mb-2 flex-wrap">
-                                        <i class="fas fa-graduation-cap text-primary mr-2"></i>
-                                        <strong class="mb-0 mr-3">Marks Distribution - {{ selected_semester.name }}</strong>
-                                        <span class="course-type-badge">
+                        <button type="button"
+                                class="bou-compact-summary-toggle d-flex w-100 align-items-center flex-nowrap gap-2"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#caCompactSummaryCollapse"
+                                aria-expanded="true"
+                                aria-controls="caCompactSummaryCollapse"
+                                id="caCompactSummaryToggle">
+                            <i class="fas fa-chevron-right bou-compact-chevron flex-shrink-0" aria-hidden="true"></i>
+                            <span class="d-flex flex-nowrap align-items-center gap-2 min-w-0 flex-grow-1 text-start">
+                                <span class="min-w-0" title="{{ selected_course.code }} - {{ selected_course.name }}">{{ selected_course.code }} - {{ selected_course.name }}</span>
+                                <span class="course-type-badge d-inline-flex align-items-center flex-shrink-0">
                                     {% if selected_course.course_type == 'PROJECT' %}
-                                                <span class="badge badge-warning">Project Work</span>
+                                        <span class="badge badge-warning">Project Work</span>
                                     {% elif selected_course.is_lab %}
-                                                <span class="badge badge-info">Lab</span>
+                                        <span class="badge badge-info">Lab</span>
                                     {% else %}
-                                                <span class="badge badge-primary">Theory</span>
+                                        <span class="badge badge-primary">Theory</span>
                                     {% endif %}
-                                        </span>
-                            </div>
-                                    <div class="compact-info-content">
-                                        <span class="mr-3"><i class="fas fa-book text-muted"></i> <strong>Course:</strong> {{ selected_course.code }} - {{ selected_course.name }}</span>
-                                        <span class="mr-3"><i class="fas fa-chalkboard-teacher text-muted"></i> <strong>Teacher:</strong> {% if course_teacher %}{{ course_teacher.name }}{% else %}{{ selected_course.teacher.name|default:"N/A" }}{% endif %}</span>
-                        </div>
-                    </div>
+                                </span>
+                            </span>
+                        </button>
+                        <div class="collapse show" id="caCompactSummaryCollapse">
+                            <div class="row">
+                                <!-- Marks Distribution Info -->
+                                <div class="col-md-6">
+                                    <div class="compact-info-box">
+                                        <div class="d-flex align-items-center mb-2 flex-wrap">
+                                            <i class="fas fa-graduation-cap text-primary mr-2"></i>
+                                            <strong class="mb-0">Marks Distribution - {{ selected_semester.name }}</strong>
+                                        </div>
+                                        <div class="compact-info-content">
+                                            <span class="mr-3"><i class="fas fa-book text-muted"></i> <strong>Course:</strong> {{ selected_course.code }} - {{ selected_course.name }}</span>
+                                            <span class="mr-3"><i class="fas fa-chalkboard-teacher text-muted"></i> <strong>Teacher:</strong> {% if course_teacher %}{{ course_teacher.name }}{% else %}{{ selected_course.teacher.name|default:"N/A" }}{% endif %}</span>
+                                        </div>
                                     </div>
-                            <!-- CA Distribution Info -->
-                            <div class="col-md-6">
-                                <div class="compact-info-box">
-                                    <div class="d-flex align-items-center mb-2">
-                                        <i class="fas fa-chart-pie text-info mr-2"></i>
-                                        <strong class="mb-0">CA Mark Distribution:</strong>
                                 </div>
-                                    <div class="compact-info-content">
-                                        {% if selected_course.course_type == 'PROJECT' %}
-                                            <span class="mr-3"><i class="fas fa-user-tie text-muted"></i> Supervisor: <strong>{{ selected_course.effective_project_supervisor_weight }}%</strong></span>
-                                            <span class="mr-3"><i class="fas fa-clipboard-check text-muted"></i> Evaluation: <strong>{{ selected_course.effective_project_evaluation_weight }}%</strong></span>
-                                            <span><i class="fas fa-presentation text-muted"></i> Presentation: <strong>{{ selected_course.effective_project_presentation_weight }}%</strong></span>
-                                        {% elif selected_course.is_lab %}
-                                            <span class="mr-3"><i class="fas fa-calendar-check text-muted"></i> Attendance: <strong>{{ selected_course.effective_lab_ca_attendance_weight }}%</strong> <small class="text-muted">(Auto)</small></span>
-                                            <span class="mr-3"><i class="fas fa-tasks text-muted"></i> Lab Assignment: <strong>{{ selected_course.effective_lab_ca_assignment_weight }}%</strong></span>
-                                            <span class="mr-3"><i class="fas fa-flask text-muted"></i> Experiment / Lab project (1st): <strong>{{ selected_course.effective_lab_ca_practical_weight }}%</strong></span>
-                                            {% if selected_course.effective_lab_ca_practical2_weight %}
-                                            <span><i class="fas fa-flask text-muted"></i> Experiment / Lab project (2nd): <strong>{{ selected_course.effective_lab_ca_practical2_weight }}%</strong></span>
-                                            {% endif %}
-                        {% else %}
-                                            <span class="mr-3"><i class="fas fa-calendar-check text-muted"></i> Attendance: <strong>{{ selected_course.effective_ca_attendance_weight }}%</strong> <small class="text-muted">(Auto)</small></span>
-                                            <span class="mr-3"><i class="fas fa-tasks text-muted"></i> Assignment: <strong>{{ selected_course.effective_ca_assignment_weight }}%</strong></span>
-                                            {% if selected_semester and selected_semester.curriculum and selected_semester.curriculum.code == 'OLD' %}
-                                                <span><i class="fas fa-file-alt text-muted"></i> Class Test: <strong>{{ selected_course.effective_ca_quiz_weight }}%</strong></span>
+                                <!-- CA Distribution Info -->
+                                <div class="col-md-6">
+                                    <div class="compact-info-box">
+                                        <div class="d-flex align-items-center mb-2">
+                                            <i class="fas fa-chart-pie text-info mr-2"></i>
+                                            <strong class="mb-0">CA Mark Distribution:</strong>
+                                        </div>
+                                        <div class="compact-info-content">
+                                            {% if selected_course.course_type == 'PROJECT' %}
+                                                <span class="mr-3"><i class="fas fa-user-tie text-muted"></i> Supervisor: <strong>{{ selected_course.effective_project_supervisor_weight }}%</strong></span>
+                                                <span class="mr-3"><i class="fas fa-clipboard-check text-muted"></i> Evaluation: <strong>{{ selected_course.effective_project_evaluation_weight }}%</strong></span>
+                                                <span><i class="fas fa-presentation text-muted"></i> Presentation: <strong>{{ selected_course.effective_project_presentation_weight }}%</strong></span>
+                                            {% elif selected_course.is_lab %}
+                                                <span class="mr-3"><i class="fas fa-calendar-check text-muted"></i> Attendance: <strong>{{ selected_course.effective_lab_ca_attendance_weight }}%</strong> <small class="text-muted">(Auto)</small></span>
+                                                <span class="mr-3"><i class="fas fa-tasks text-muted"></i> Lab Assignment: <strong>{{ selected_course.effective_lab_ca_assignment_weight }}%</strong></span>
+                                                <span class="mr-3"><i class="fas fa-flask text-muted"></i> Experiment / Lab project (1st): <strong>{{ selected_course.effective_lab_ca_practical_weight }}%</strong></span>
+                                                {% if selected_course.effective_lab_ca_practical2_weight %}
+                                                <span><i class="fas fa-flask text-muted"></i> Experiment / Lab project (2nd): <strong>{{ selected_course.effective_lab_ca_practical2_weight }}%</strong></span>
+                                                {% endif %}
                                             {% else %}
-                                                <span><i class="fas fa-file-alt text-muted"></i> Mid-Term: <strong>{{ selected_course.effective_ca_midterm_weight }}%</strong></span>
+                                                <span class="mr-3"><i class="fas fa-calendar-check text-muted"></i> Attendance: <strong>{{ selected_course.effective_ca_attendance_weight }}%</strong> <small class="text-muted">(Auto)</small></span>
+                                                <span class="mr-3"><i class="fas fa-tasks text-muted"></i> Assignment: <strong>{{ selected_course.effective_ca_assignment_weight }}%</strong></span>
+                                                {% if selected_semester and selected_semester.curriculum and selected_semester.curriculum.code == 'OLD' %}
+                                                    <span><i class="fas fa-file-alt text-muted"></i> Class Test: <strong>{{ selected_course.effective_ca_quiz_weight }}%</strong></span>
+                                                {% else %}
+                                                    <span><i class="fas fa-file-alt text-muted"></i> Mid-Term: <strong>{{ selected_course.effective_ca_midterm_weight }}%</strong></span>
+                                                {% endif %}
                                             {% endif %}
-                                        {% endif %}
+                                        </div>
                                     </div>
                                 </div>
-                                    </div>
-                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     {% if students %}
@@ -1795,6 +1992,31 @@
 <script>
 // Tab persistence: preserve selected tab in URL and restore on page load
 document.addEventListener('DOMContentLoaded', function() {
+    (function initCaCompactSummary() {
+        var el = document.getElementById('caCompactSummaryCollapse');
+        var tgl = document.getElementById('caCompactSummaryToggle');
+        if (!el || typeof bootstrap === 'undefined' || !bootstrap.Collapse) {
+            return;
+        }
+        var phoneMq = window.matchMedia('(max-width: 575.98px)');
+        var c = bootstrap.Collapse.getOrCreateInstance(el, { toggle: false });
+        function sync() {
+            if (phoneMq.matches) {
+                c.hide();
+                if (tgl) {
+                    tgl.setAttribute('aria-expanded', 'false');
+                }
+            } else {
+                c.show();
+                if (tgl) {
+                    tgl.setAttribute('aria-expanded', 'true');
+                }
+            }
+        }
+        sync();
+        phoneMq.addEventListener('change', sync);
+    })();
+
     // Get tab parameter from URL
     const urlParams = new URLSearchParams(window.location.search);
     const activeTab = urlParams.get('tab');

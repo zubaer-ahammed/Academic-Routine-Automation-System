@@ -46,7 +46,8 @@ class Curriculum(models.Model):
     # Lab Course CA Distribution (default values for old curriculum)
     lab_ca_attendance_weight = models.PositiveIntegerField(default=10, help_text="Lab CA weight for attendance (%)")
     lab_ca_assignment_weight = models.PositiveIntegerField(default=10, help_text="Lab CA weight for assignments (%)")
-    lab_ca_practical_weight = models.PositiveIntegerField(default=10, help_text="Lab CA weight for practical exams (%)")
+    lab_ca_practical_weight = models.PositiveIntegerField(default=10, help_text="Lab CA weight for first experiment / lab project portion (%)")
+    lab_ca_practical2_weight = models.PositiveIntegerField(default=0, help_text="Lab CA weight for second experiment / lab project column (0 = single column)")
     lab_ca_quiz_weight = models.PositiveIntegerField(default=10, help_text="Lab CA weight for quizzes (%)")
     
     # Project Work Distribution
@@ -175,7 +176,8 @@ class Course(models.Model):
     # Lab-specific CA distribution (if applicable)
     lab_ca_attendance_weight = models.PositiveIntegerField(default=10, help_text="Lab CA weight for attendance (%)")
     lab_ca_assignment_weight = models.PositiveIntegerField(default=30, help_text="Lab CA weight for assignments (%)")
-    lab_ca_practical_weight = models.PositiveIntegerField(default=60, help_text="Lab CA weight for practical exams (%)")
+    lab_ca_practical_weight = models.PositiveIntegerField(default=60, help_text="Lab CA weight for first experiment / lab project (%)")
+    lab_ca_practical2_weight = models.PositiveIntegerField(default=0, help_text="Lab CA weight for second experiment column (0 = use single column)")
     
     # Additional curriculum information
     prerequisite_courses = models.ManyToManyField('self', blank=True, symmetrical=False, help_text="Prerequisite courses")
@@ -245,7 +247,25 @@ class Course(models.Model):
         if self.curriculum:
             return self.curriculum.lab_ca_practical_weight
         return self.lab_ca_practical_weight
-    
+
+    @property
+    def effective_lab_ca_practical2_weight(self):
+        """Second experiment / lab project column (new curriculum); 0 = not used (old single column)."""
+        if self.curriculum:
+            return self.curriculum.lab_ca_practical2_weight
+        return self.lab_ca_practical2_weight
+
+    @property
+    def effective_lab_ca_total_marks(self):
+        """Display total of lab CA mark components (attendance + assignment + one or two experiment parts)."""
+        t = (
+            self.effective_lab_ca_attendance_weight
+            + self.effective_lab_ca_assignment_weight
+            + self.effective_lab_ca_practical_weight
+        )
+        t += self.effective_lab_ca_practical2_weight
+        return t
+
     @property
     def effective_lab_ca_quiz_weight(self):
         """Get lab CA quiz weight from curriculum"""
@@ -307,6 +327,7 @@ class Course(models.Model):
                 'attendance': self.lab_ca_attendance_weight,
                 'assignment': self.lab_ca_assignment_weight,
                 'practical': self.lab_ca_practical_weight,
+                'practical2': self.lab_ca_practical2_weight,
             }
         else:
             return {
@@ -537,7 +558,10 @@ class CAMark(models.Model):
     second_lab_assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Second Lab Assignment/Report mark")
     third_lab_assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Third Lab Assignment/Report mark")
     lab_assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Average Lab Assignment mark (auto-calculated)")
-    lab_practical_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Lab practical mark")
+    lab_practical_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Lab practical / first experiment mark")
+    second_lab_practical_mark = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0, help_text="Second experiment / lab project mark (new curriculum split)"
+    )
     
     # Project Work CA components
     project_supervisor_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Project supervisor mark")
@@ -621,12 +645,16 @@ class CAMark(models.Model):
                 self.project_presentation_mark
             )
         elif self.course.is_lab:
-            # Lab course: attendance + lab assignment + lab practical
-            return (
-                self.attendance_mark +
-                self.lab_assignment_mark +
-                self.lab_practical_mark
-            )
+            # Lab course: attendance + lab assignment + lab practical (+ optional second experiment)
+            second = self.second_lab_practical_mark
+            if self.course.effective_lab_ca_practical2_weight:
+                return (
+                    self.attendance_mark
+                    + self.lab_assignment_mark
+                    + self.lab_practical_mark
+                    + (second or 0)
+                )
+            return self.attendance_mark + self.lab_assignment_mark + self.lab_practical_mark
         else:
             # Theory course: attendance + assignment + (class_test for old curriculum OR midterm for new curriculum)
             # Determine which to use based on semester's curriculum
@@ -673,6 +701,10 @@ class CAMark(models.Model):
         self.second_lab_assignment_mark = _to_decimal(self.second_lab_assignment_mark)
         self.third_lab_assignment_mark = _to_decimal(self.third_lab_assignment_mark)
         self.lab_practical_mark = _to_decimal(self.lab_practical_mark)
+        if self.course.is_lab and not self.course.effective_lab_ca_practical2_weight:
+            self.second_lab_practical_mark = Decimal('0')
+        else:
+            self.second_lab_practical_mark = _to_decimal(self.second_lab_practical_mark)
 
         self.project_supervisor_mark = _to_decimal(self.project_supervisor_mark)
         self.project_evaluation_mark = _to_decimal(self.project_evaluation_mark)
@@ -716,7 +748,7 @@ class FinalExamMark(models.Model):
     """
     Semester Final Examination marks for students
     Theory course: 70 marks (7 question sets, max 5 can be entered, max 14 per set)
-    Lab course: 60 marks (single field)
+    Lab course: old curriculum single field (max 60); new curriculum problem solving + viva (20 + 5 = 25)
     """
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
     course = models.ForeignKey(Course, on_delete=models.CASCADE)
@@ -753,8 +785,9 @@ class FinalExamMark(models.Model):
     teacher3_q7 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 3 - Question Set 7 (max 14)")
     teacher3_total = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Teacher 3 total (auto-calculated, max 70)")
     
-    # Lab course: single field (max 60)
-    lab_final_exam_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Lab course final exam mark (max 60)")
+    # Lab course: old curriculum = single field (max 60). New curriculum = problem solving (max 20) + viva (max 5)
+    lab_final_exam_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Lab course: problem solving / old curriculum final (max 60 for OLD)")
+    lab_viva_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Lab viva (new curriculum only, max 5)")
     
     # Final total (for theory: average of teachers, for lab: single value)
     final_exam_total = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Final exam total mark")
@@ -788,6 +821,7 @@ class FinalExamMark(models.Model):
             setattr(self, f'teacher2_q{i}', None)
             setattr(self, f'teacher3_q{i}', None)
         self.lab_final_exam_mark = None
+        self.lab_viva_mark = None
 
     def calculate_teacher_total(self, teacher_num):
         """Calculate total for a specific teacher (1, 2, or 3)"""
@@ -824,9 +858,9 @@ class FinalExamMark(models.Model):
         if getattr(self, 'exam_absent', False):
             return False
         if self.course.is_lab:
-            v = self.lab_final_exam_mark
-            if v is not None and float(v) > 0:
-                return True
+            for f in (self.lab_final_exam_mark, self.lab_viva_mark):
+                if f is not None and float(f) > 0:
+                    return True
             return False
         for tn in (1, 2, 3):
             for i in range(1, 8):
@@ -862,8 +896,11 @@ class FinalExamMark(models.Model):
             return Decimal('0')
         
         if self.course.is_lab:
-            # Lab course: use single field
-            return Decimal(str(self.lab_final_exam_mark or 0))
+            if self.semester and self.semester.curriculum and self.semester.curriculum.code == 'OLD':
+                return Decimal(str(self.lab_final_exam_mark or 0))
+            ps = float(self.lab_final_exam_mark or 0)
+            viva = float(self.lab_viva_mark or 0)
+            return Decimal(str(ps + viva))
         else:
             # Theory course logic:
             # No discrepancy → Total = avg(Teacher 1, Teacher 2)
@@ -897,6 +934,20 @@ class FinalExamMark(models.Model):
 
         if getattr(self, 'exam_absent', False):
             self.requires_third_teacher = False
+
+        if self.course.is_lab and not getattr(self, 'exam_absent', False):
+            is_old_lab = self.semester and self.semester.curriculum and self.semester.curriculum.code == 'OLD'
+            if is_old_lab:
+                v = getattr(self, 'lab_final_exam_mark', None)
+                if v is not None:
+                    self.lab_final_exam_mark = Decimal(str(v))
+                self.lab_viva_mark = Decimal('0')
+            else:
+                for attr in ('lab_final_exam_mark', 'lab_viva_mark'):
+                    v = getattr(self, attr, None)
+                    if v is None:
+                        continue
+                    setattr(self, attr, Decimal(str(v)))
         
         if not self.course.is_lab:
             # Theory course: calculate totals for each teacher

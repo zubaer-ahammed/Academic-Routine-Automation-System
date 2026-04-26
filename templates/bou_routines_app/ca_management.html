@@ -1196,7 +1196,10 @@
                                         {% elif selected_course.is_lab %}
                                             <span class="mr-3"><i class="fas fa-calendar-check text-muted"></i> Attendance: <strong>{{ selected_course.effective_lab_ca_attendance_weight }}%</strong> <small class="text-muted">(Auto)</small></span>
                                             <span class="mr-3"><i class="fas fa-tasks text-muted"></i> Lab Assignment: <strong>{{ selected_course.effective_lab_ca_assignment_weight }}%</strong></span>
-                                            <span><i class="fas fa-flask text-muted"></i> Lab Practical: <strong>{{ selected_course.effective_lab_ca_practical_weight }}%</strong></span>
+                                            <span class="mr-3"><i class="fas fa-flask text-muted"></i> Experiment / Lab project (1st): <strong>{{ selected_course.effective_lab_ca_practical_weight }}%</strong></span>
+                                            {% if selected_course.effective_lab_ca_practical2_weight %}
+                                            <span><i class="fas fa-flask text-muted"></i> Experiment / Lab project (2nd): <strong>{{ selected_course.effective_lab_ca_practical2_weight }}%</strong></span>
+                                            {% endif %}
                         {% else %}
                                             <span class="mr-3"><i class="fas fa-calendar-check text-muted"></i> Attendance: <strong>{{ selected_course.effective_ca_attendance_weight }}%</strong> <small class="text-muted">(Auto)</small></span>
                                             <span class="mr-3"><i class="fas fa-tasks text-muted"></i> Assignment: <strong>{{ selected_course.effective_ca_assignment_weight }}%</strong></span>
@@ -1289,7 +1292,7 @@
                                                 {% if selected_course.course_type == 'PROJECT' %}
                                                     <th colspan="3">Project Work CA (Total: {{ selected_course.effective_project_supervisor_weight|add:selected_course.effective_project_evaluation_weight|add:selected_course.effective_project_presentation_weight }})</th>
                                                 {% elif selected_course.is_lab %}
-                                                    <th colspan="6">Lab Course CA (Total: {{ selected_course.effective_lab_ca_attendance_weight|add:selected_course.effective_lab_ca_assignment_weight|add:selected_course.effective_lab_ca_practical_weight }})</th>
+                                                    <th colspan="{% if selected_course.effective_lab_ca_practical2_weight %}7{% else %}6{% endif %}">Lab Course CA (Total: {{ selected_course.effective_lab_ca_total_marks }})</th>
                                                 {% else %}
                                                     {% if selected_semester and selected_semester.curriculum and selected_semester.curriculum.code == 'OLD' %}
                                                         <th colspan="8">Theory Course CA (Total: {{ selected_course.effective_ca_attendance_weight|add:selected_course.effective_ca_assignment_weight|add:selected_course.effective_ca_quiz_weight }})</th>
@@ -1312,6 +1315,9 @@
                                                 {% if selected_course.is_lab %}
                                                     <th colspan="4">Assignment/Lab Report<br><small>({{ selected_course.effective_lab_ca_assignment_weight }})</small></th>
                                                     <th>Experiment/Lab Project<br><small>({{ selected_course.effective_lab_ca_practical_weight }})</small></th>
+                                                    {% if selected_course.effective_lab_ca_practical2_weight %}
+                                                    <th>Experiment/Lab Project<br><small>({{ selected_course.effective_lab_ca_practical2_weight }})</small></th>
+                                                    {% endif %}
                                                 {% else %}
                                                     <th colspan="4">Assignment/Presentation<br><small>({{ selected_course.effective_ca_assignment_weight }})</small></th>
                                                     {% if selected_semester and selected_semester.curriculum and selected_semester.curriculum.code == 'OLD' %}
@@ -1329,6 +1335,9 @@
                                                 <th>Third</th>
                                                 <th>Average</th>
                                                 <th></th>
+                                                {% if selected_course.effective_lab_ca_practical2_weight %}
+                                                <th></th>
+                                                {% endif %}
                                             </tr>
                                             {% else %}
                                             <tr class="sub-header">
@@ -1452,6 +1461,19 @@
                                                                    placeholder="Experiment/Lab Project"
                                                                    oninput="validateCAMark(this); calculateStudentTotal(this); autoSaveCAMarks();"
                                                         </td>
+                                                        {% if selected_course.effective_lab_ca_practical2_weight %}
+                                                        <td>
+                                                            <input type="number" 
+                                                                   name="students_data[{{ student.id }}][second_lab_practical_mark]"
+                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.second_lab_practical_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                   min="0" 
+                                                                   max="{{ selected_course.effective_lab_ca_practical2_weight }}"
+                                                                   step="0.01"
+                                                                   class="mark-input"
+                                                                   placeholder="Experiment/Lab Project"
+                                                                   oninput="validateCAMark(this); calculateStudentTotal(this); autoSaveCAMarks();"
+                                                        </td>
+                                                        {% endif %}
                                                     {% else %}
                                                         <!-- Theory Course Marks -->
                                                         <td>
@@ -1630,7 +1652,10 @@
                                                     <th>SL.</th>
                                                     <th>Student ID</th>
                                                     <th>Name</th>
-                                                    <th>Lab final (max {{ lab_final_exam_max|default:50 }})</th>
+                                                    <th>Problem Solving (max {{ lab_final_problem_solving_max|default:20 }})</th>
+                                                    {% if lab_final_uses_viva %}
+                                                    <th>Viva (max {{ lab_final_viva_max|default:5 }})</th>
+                                                    {% endif %}
                                                     <th>Marks obtained</th>
                                                     <th>Status</th>
                                                 </tr>
@@ -1642,6 +1667,9 @@
                                                     <td class="cell-student-id">{{ row.student.id }}</td>
                                                     <td class="cell-name">{{ row.student.name }}</td>
                                                     <td>{% if row.final_mark and row.final_mark.exam_absent %}AB{% elif row.lab_mark is not None %}{{ row.lab_mark|floatformat:2 }}{% else %}—{% endif %}</td>
+                                                    {% if lab_final_uses_viva %}
+                                                    <td>{% if row.final_mark and row.final_mark.exam_absent %}AB{% elif row.viva_mark is not None %}{{ row.viva_mark|floatformat:2 }}{% else %}—{% endif %}</td>
+                                                    {% endif %}
                                                     <td>{% if row.final_mark and row.final_mark.exam_absent %}AB{% elif row.final_mark %}{{ row.marks_obtained|floatformat:2 }}{% else %}—{% endif %}</td>
                                                     <td>
                                                         {% if row.final_mark and row.final_mark.exam_absent %}
@@ -1652,7 +1680,7 @@
                                                     </td>
                                                 </tr>
                                                 {% empty %}
-                                                <tr><td colspan="6" class="text-center text-muted">No students.</td></tr>
+                                                <tr><td colspan="{% if lab_final_uses_viva %}7{% else %}6{% endif %}" class="text-center text-muted">No students.</td></tr>
                                                 {% endfor %}
                                             </tbody>
                                         </table>
@@ -2062,6 +2090,10 @@ function calculateStudentTotal(inputElement) {
         const labAssignmentMark = (firstLabAssignmentMark + secondLabAssignmentMark + thirdLabAssignmentMark) / 3;
         const labPracticalMark = nonNegativeMark(row.querySelector('input[name$="[lab_practical_mark]"]').value);
         total += labAssignmentMark + labPracticalMark;
+        const spInp = row.querySelector('input[name$="[second_lab_practical_mark]"]');
+        if (spInp) {
+            total += nonNegativeMark(spInp.value);
+        }
         
         // Update the average lab assignment mark display
         const averageLabAssignmentCell = row.querySelector('.assignment-average-value');
@@ -2204,7 +2236,7 @@ function updateClassTestBest(inputElement) {
 function initializeAverages() {
     const rows = document.querySelectorAll('tbody tr');
     rows.forEach((row, index) => {
-        const firstInput = row.querySelector('input[name$="[first_assignment_mark]"]');
+        const firstInput = row.querySelector('input[name$="[first_assignment_mark]"]') || row.querySelector('input[name$="[first_lab_assignment_mark]"]');
         if (firstInput) {
             calculateStudentTotal(firstInput);
         }
@@ -2305,6 +2337,10 @@ function saveCAMarks(reloadPage = true) {
                 marks['second_lab_assignment_mark'] = secondLabInput ? nonNegativeMark(secondLabInput.value) : 0;
                 marks['third_lab_assignment_mark'] = thirdLabInput ? nonNegativeMark(thirdLabInput.value) : 0;
                 marks['lab_practical_mark'] = labPracticalInput ? nonNegativeMark(labPracticalInput.value) : 0;
+                const spInp = row.querySelector('input[name$="[second_lab_practical_mark]"]');
+                if (spInp) {
+                    marks['second_lab_practical_mark'] = nonNegativeMark(spInp.value);
+                }
         } else {
                 const firstInput = row.querySelector('input[name$="[first_assignment_mark]"]');
                 const secondInput = row.querySelector('input[name$="[second_assignment_mark]"]');
@@ -2667,9 +2703,26 @@ function validateQuestionSet(inputElement) {
 }
 
 const LAB_FINAL_EXAM_MAX = parseInt("{{ lab_final_exam_max|default:50 }}", 10) || 50;
+const LAB_FINAL_USES_VIVA = {% if lab_final_uses_viva %}true{% else %}false{% endif %};
+const LAB_PROBLEM_MAX = parseInt("{{ lab_final_problem_solving_max|default:20 }}", 10) || 20;
+const LAB_VIVA_MAX = parseInt("{{ lab_final_viva_max|default:0 }}", 10) || 0;
 
 // Function to calculate final exam total for lab course
 function calculateFinalExamTotal(inputElement) {
+    if (LAB_FINAL_USES_VIVA) {
+        let value = parseFloat(inputElement.value);
+        if (isNaN(value)) value = 0;
+        if (value < 0) {
+            value = 0;
+            inputElement.value = 0;
+        }
+        const cap = (inputElement.name && inputElement.name.indexOf('lab_viva_mark') >= 0) ? LAB_VIVA_MAX : LAB_PROBLEM_MAX;
+        if (value > cap) {
+            inputElement.value = cap;
+            alert('Maximum for this field is ' + cap + ' (lab final total 25: problem solving ' + LAB_PROBLEM_MAX + ', viva ' + LAB_VIVA_MAX + ').');
+        }
+        return;
+    }
     let value = parseFloat(inputElement.value);
     if (isNaN(value)) value = 0;
     if (value < 0) {
@@ -2761,10 +2814,17 @@ function updateSemesterFinalAttendanceHasMarksFromForm() {
         }
         let has = false;
         if (isLab) {
-            const inp = row.querySelector('input[name$="[lab_final_exam_mark]"]');
-            if (inp) {
-                const v = parseFloat(inp.value);
+            const inpP = row.querySelector('input[name$="[lab_final_exam_mark]"]');
+            if (inpP) {
+                const v = parseFloat(inpP.value);
                 if (!isNaN(v) && v > 0) {
+                    has = true;
+                }
+            }
+            const inpV = row.querySelector('input[name$="[lab_viva_mark]"]');
+            if (inpV) {
+                const v2 = parseFloat(inpV.value);
+                if (!isNaN(v2) && v2 > 0) {
                     has = true;
                 }
             }
@@ -3010,10 +3070,21 @@ function saveFinalExamMarks(reloadPage = true) {
         const marks = {};
         
         if (isLabCourse) {
-            let labVal = parseFloat(row.querySelector('input[name$="[lab_final_exam_mark]"]').value);
-            if (isNaN(labVal)) labVal = 0;
-            labVal = Math.max(0, Math.min(LAB_FINAL_EXAM_MAX, labVal));
-            marks['lab_final_exam_mark'] = labVal;
+            if (LAB_FINAL_USES_VIVA) {
+                const inpP = row.querySelector('input[name$="[lab_final_exam_mark]"]');
+                const inpV = row.querySelector('input[name$="[lab_viva_mark]"]');
+                let p = parseFloat(inpP ? inpP.value : 0);
+                let v = parseFloat(inpV ? inpV.value : 0);
+                if (isNaN(p)) p = 0;
+                if (isNaN(v)) v = 0;
+                marks['lab_final_exam_mark'] = Math.max(0, Math.min(LAB_PROBLEM_MAX, p));
+                marks['lab_viva_mark'] = Math.max(0, Math.min(LAB_VIVA_MAX, v));
+            } else {
+                let labVal = parseFloat(row.querySelector('input[name$="[lab_final_exam_mark]"]').value);
+                if (isNaN(labVal)) labVal = 0;
+                labVal = Math.max(0, Math.min(LAB_FINAL_EXAM_MAX, labVal));
+                marks['lab_final_exam_mark'] = labVal;
+            }
         } else {
             // Theory course: always send all 7 Q columns so the server (and auto-save) never
             // interpret "missing key" as "clear" while the user is still filling a row.

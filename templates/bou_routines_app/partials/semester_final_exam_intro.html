@@ -1,7 +1,11 @@
                             {% if selected_course.is_lab %}
                                 <!-- Lab Course Final Exam -->
                                 <div class="ca-distribution">
+                                    {% if lab_final_uses_viva %}
+                                    <p><strong>Lab Course Final Exam (theory):</strong> Total {{ lab_final_exam_max|default:25 }} marks — Problem Solving (max {{ lab_final_problem_solving_max|default:20 }}) and Viva (max {{ lab_final_viva_max|default:5 }}).</p>
+                                    {% else %}
                                     <p><strong>Lab Course Final Exam:</strong> Maximum {{ lab_final_exam_max|default:50 }} marks</p>
+                                    {% endif %}
                                 </div>
                             {% else %}
                                 <!-- Theory Course Final Exam -->

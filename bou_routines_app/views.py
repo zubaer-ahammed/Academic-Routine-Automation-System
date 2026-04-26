@@ -7349,25 +7349,50 @@ def export_ca_marks_pdf(request):
             table_data.append(header_row_2)
         elif course.is_lab:
             # Lab course headers (3 rows)
-            total_ca = course.effective_lab_ca_attendance_weight + course.effective_lab_ca_assignment_weight + course.effective_lab_ca_practical_weight
-            header_row_1 = [
-                'SL. No', 'Student ID', 'Name',
-                f'Lab Course CA (Total: {total_ca})', '', '', '', '',
-                '', 'Total'
-            ]
-            header_row_2 = [
-                '', '', '',
-                f'Attendance\n({course.effective_lab_ca_attendance_weight})',
-                f'Assignment/Lab Report\n({course.effective_lab_ca_assignment_weight})', '', '', '',
-                f'Experiment/\nLab Project\n({course.effective_lab_ca_practical_weight})',
-                ''
-            ]
-            header_row_3 = [
-                '', '', '',
-                '',
-                'First', 'Second', 'Third', 'Average',
-                '', ''
-            ]
+            total_ca = course.effective_lab_ca_total_marks
+            p2w = course.effective_lab_ca_practical2_weight
+            if p2w:
+                header_row_1 = [
+                    'SL. No', 'Student ID', 'Name',
+                    f'Lab Course CA (Total: {total_ca})', '', '', '', '', '', '',
+                    'Total'
+                ]
+                header_row_2 = [
+                    '', '', '',
+                    f'Attendance\n({course.effective_lab_ca_attendance_weight})',
+                    f'Assignment/Lab Report\n({course.effective_lab_ca_assignment_weight})', '', '', '',
+                    f'Experiment/\nLab Project\n({course.effective_lab_ca_practical_weight})',
+                    f'Experiment/\nLab Project\n({p2w})',
+                    ''
+                ]
+                header_row_3 = [
+                    '', '', '', '',
+                    'First', 'Second', 'Third', 'Average', '', '', ''
+                ]
+            else:
+                total_ca = (
+                    course.effective_lab_ca_attendance_weight
+                    + course.effective_lab_ca_assignment_weight
+                    + course.effective_lab_ca_practical_weight
+                )
+                header_row_1 = [
+                    'SL. No', 'Student ID', 'Name',
+                    f'Lab Course CA (Total: {total_ca})', '', '', '', '',
+                    '', 'Total'
+                ]
+                header_row_2 = [
+                    '', '', '',
+                    f'Attendance\n({course.effective_lab_ca_attendance_weight})',
+                    f'Assignment/Lab Report\n({course.effective_lab_ca_assignment_weight})', '', '', '',
+                    f'Experiment/\nLab Project\n({course.effective_lab_ca_practical_weight})',
+                    ''
+                ]
+                header_row_3 = [
+                    '', '', '',
+                    '',
+                    'First', 'Second', 'Third', 'Average',
+                    '', ''
+                ]
             table_data.append(header_row_1)
             table_data.append(header_row_2)
             table_data.append(header_row_3)
@@ -7439,18 +7464,33 @@ def export_ca_marks_pdf(request):
                         str(int(math.ceil(float(mark.calculate_total_ca_mark() or 0))))
                     ]
                 elif course.is_lab:
-                    row = [
-                        str(sl_no),
-                        student.id,
-                        student.name.upper(),
-                        f"{mark.attendance_mark:.2f}",
-                        f"{mark.first_lab_assignment_mark:.2f}",
-                        f"{mark.second_lab_assignment_mark:.2f}",
-                        f"{mark.third_lab_assignment_mark:.2f}",
-                        f"{mark.lab_assignment_mark:.2f}",
-                        f"{mark.lab_practical_mark:.2f}",
-                        str(int(math.ceil(float(mark.calculate_total_ca_mark() or 0))))
-                    ]
+                    if course.effective_lab_ca_practical2_weight:
+                        row = [
+                            str(sl_no),
+                            student.id,
+                            student.name.upper(),
+                            f"{mark.attendance_mark:.2f}",
+                            f"{mark.first_lab_assignment_mark:.2f}",
+                            f"{mark.second_lab_assignment_mark:.2f}",
+                            f"{mark.third_lab_assignment_mark:.2f}",
+                            f"{mark.lab_assignment_mark:.2f}",
+                            f"{mark.lab_practical_mark:.2f}",
+                            f"{mark.second_lab_practical_mark:.2f}",
+                            str(int(math.ceil(float(mark.calculate_total_ca_mark() or 0))))
+                        ]
+                    else:
+                        row = [
+                            str(sl_no),
+                            student.id,
+                            student.name.upper(),
+                            f"{mark.attendance_mark:.2f}",
+                            f"{mark.first_lab_assignment_mark:.2f}",
+                            f"{mark.second_lab_assignment_mark:.2f}",
+                            f"{mark.third_lab_assignment_mark:.2f}",
+                            f"{mark.lab_assignment_mark:.2f}",
+                            f"{mark.lab_practical_mark:.2f}",
+                            str(int(math.ceil(float(mark.calculate_total_ca_mark() or 0))))
+                        ]
                 else:
                     # Theory course - check curriculum
                     is_old_curriculum = semester.curriculum and semester.curriculum.code == 'OLD'
@@ -7488,7 +7528,10 @@ def export_ca_marks_pdf(request):
                 if course.course_type == 'PROJECT':
                     row = [str(sl_no), student.id, student.name.upper(), '0.00', '0.00', '0.00', '0.00']
                 elif course.is_lab:
-                    row = [str(sl_no), student.id, student.name.upper(), '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
+                    if course.effective_lab_ca_practical2_weight:
+                        row = [str(sl_no), student.id, student.name.upper(), '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
+                    else:
+                        row = [str(sl_no), student.id, student.name.upper(), '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
                 else:
                     # Theory course - check curriculum
                     is_old_curriculum = semester.curriculum and semester.curriculum.code == 'OLD'
@@ -7554,11 +7597,19 @@ def export_ca_marks_pdf(request):
             style_commands.append(('SPAN', (0, 0), (0, 2)))  # SL
             style_commands.append(('SPAN', (1, 0), (1, 2)))  # Student ID
             style_commands.append(('SPAN', (2, 0), (2, 2)))  # Name
-            style_commands.append(('SPAN', (3, 0), (8, 0)))  # Lab Course CA header
-            style_commands.append(('SPAN', (3, 1), (3, 2)))  # Attendance
-            style_commands.append(('SPAN', (4, 1), (7, 1)))  # Assignment/Lab Report
-            style_commands.append(('SPAN', (8, 1), (8, 2)))  # Experiment/Lab Project
-            style_commands.append(('SPAN', (9, 0), (9, 2)))  # Total
+            if course.effective_lab_ca_practical2_weight:
+                style_commands.append(('SPAN', (3, 0), (9, 0)))
+                style_commands.append(('SPAN', (3, 1), (3, 2)))
+                style_commands.append(('SPAN', (4, 1), (7, 1)))
+                style_commands.append(('SPAN', (8, 1), (8, 2)))
+                style_commands.append(('SPAN', (9, 1), (9, 2)))
+                style_commands.append(('SPAN', (10, 0), (10, 2)))
+            else:
+                style_commands.append(('SPAN', (3, 0), (8, 0)))
+                style_commands.append(('SPAN', (3, 1), (3, 2)))
+                style_commands.append(('SPAN', (4, 1), (7, 1)))
+                style_commands.append(('SPAN', (8, 1), (8, 2)))
+                style_commands.append(('SPAN', (9, 0), (9, 2)))
         else:
             # Theory course - check curriculum to determine column spans
             is_old_curriculum = semester.curriculum and semester.curriculum.code == 'OLD'
@@ -7935,25 +7986,50 @@ def export_blank_ca_marks_pdf(request):
             table_data.append(header_row_1)
             table_data.append(header_row_2)
         elif course.is_lab:
-            total_ca = course.effective_lab_ca_attendance_weight + course.effective_lab_ca_assignment_weight + course.effective_lab_ca_practical_weight
-            header_row_1 = [
-                'Student ID', 'Name',
-                f'Lab Course CA (Total: {total_ca}%)', '', '', '', '',
-                '', 'Total'
-            ]
-            header_row_2 = [
-                '', '',
-                f'Attendance\n({course.effective_lab_ca_attendance_weight}%)',
-                f'Assignment/Lab Report\n({course.effective_lab_ca_assignment_weight}%)', '', '', '',
-                f'Experiment/\nLab Project\n({course.effective_lab_ca_practical_weight}%)',
-                ''
-            ]
-            header_row_3 = [
-                '', '',
-                '',
-                'First', 'Second', 'Third', 'Average',
-                '', ''
-            ]
+            total_ca = course.effective_lab_ca_total_marks
+            p2w = course.effective_lab_ca_practical2_weight
+            if p2w:
+                header_row_1 = [
+                    'Student ID', 'Name',
+                    f'Lab Course CA (Total: {total_ca}%)', '', '', '', '', '', '',
+                    'Total'
+                ]
+                header_row_2 = [
+                    '', '',
+                    f'Attendance\n({course.effective_lab_ca_attendance_weight}%)',
+                    f'Assignment/Lab Report\n({course.effective_lab_ca_assignment_weight}%)', '', '', '',
+                    f'Experiment/\nLab Project\n({course.effective_lab_ca_practical_weight}%)',
+                    f'Experiment/\nLab Project\n({p2w}%)',
+                    ''
+                ]
+                header_row_3 = [
+                    '', '', '',
+                    'First', 'Second', 'Third', 'Average', '', '', ''
+                ]
+            else:
+                total_ca = (
+                    course.effective_lab_ca_attendance_weight
+                    + course.effective_lab_ca_assignment_weight
+                    + course.effective_lab_ca_practical_weight
+                )
+                header_row_1 = [
+                    'Student ID', 'Name',
+                    f'Lab Course CA (Total: {total_ca}%)', '', '', '', '',
+                    '', 'Total'
+                ]
+                header_row_2 = [
+                    '', '',
+                    f'Attendance\n({course.effective_lab_ca_attendance_weight}%)',
+                    f'Assignment/Lab Report\n({course.effective_lab_ca_assignment_weight}%)', '', '', '',
+                    f'Experiment/\nLab Project\n({course.effective_lab_ca_practical_weight}%)',
+                    ''
+                ]
+                header_row_3 = [
+                    '', '',
+                    '',
+                    'First', 'Second', 'Third', 'Average',
+                    '', ''
+                ]
             table_data.append(header_row_1)
             table_data.append(header_row_2)
             table_data.append(header_row_3)
@@ -8014,7 +8090,10 @@ def export_blank_ca_marks_pdf(request):
             if course.course_type == 'PROJECT':
                 row = [student.id, student.name.upper(), '', '', '', '']
             elif course.is_lab:
-                row = [student.id, student.name.upper(), '', '', '', '', '', '', '']
+                if course.effective_lab_ca_practical2_weight:
+                    row = [student.id, student.name.upper(), '', '', '', '', '', '', '', '']
+                else:
+                    row = [student.id, student.name.upper(), '', '', '', '', '', '', '']
             else:
                 # Theory course - check curriculum
                 is_old_curriculum = semester.curriculum and semester.curriculum.code == 'OLD'
@@ -8074,11 +8153,19 @@ def export_blank_ca_marks_pdf(request):
         elif course.is_lab:
             style_commands.append(('SPAN', (0, 0), (0, 2)))  # Student ID
             style_commands.append(('SPAN', (1, 0), (1, 2)))  # Name
-            style_commands.append(('SPAN', (2, 0), (7, 0)))  # Lab Course CA header
-            style_commands.append(('SPAN', (2, 1), (2, 2)))  # Attendance
-            style_commands.append(('SPAN', (3, 1), (6, 1)))  # Assignment/Lab Report
-            style_commands.append(('SPAN', (7, 1), (7, 2)))  # Experiment/Lab Project
-            style_commands.append(('SPAN', (8, 0), (8, 2)))  # Total
+            if course.effective_lab_ca_practical2_weight:
+                style_commands.append(('SPAN', (2, 0), (8, 0)))
+                style_commands.append(('SPAN', (2, 1), (2, 2)))
+                style_commands.append(('SPAN', (3, 1), (6, 1)))
+                style_commands.append(('SPAN', (7, 1), (7, 2)))
+                style_commands.append(('SPAN', (8, 1), (8, 2)))
+                style_commands.append(('SPAN', (9, 0), (9, 2)))
+            else:
+                style_commands.append(('SPAN', (2, 0), (7, 0)))
+                style_commands.append(('SPAN', (2, 1), (2, 2)))
+                style_commands.append(('SPAN', (3, 1), (6, 1)))
+                style_commands.append(('SPAN', (7, 1), (7, 2)))
+                style_commands.append(('SPAN', (8, 0), (8, 2)))
         else:
             # Theory course - check curriculum
             is_old_curriculum = semester.curriculum and semester.curriculum.code == 'OLD'
@@ -8243,7 +8330,12 @@ def export_ca_marks_excel(request):
         
         # Title
         if course.is_lab:
-            headers = ['Student ID', 'Name', 'Attendance', 'Lab Assignment', 'Lab Practical', 'Total CA Mark']
+            if course.effective_lab_ca_practical2_weight:
+                headers = [
+                    'Student ID', 'Name', 'Attendance', 'Lab Assignment', 'Lab Practical 1', 'Lab Practical 2', 'Total CA Mark'
+                ]
+            else:
+                headers = ['Student ID', 'Name', 'Attendance', 'Lab Assignment', 'Lab Practical', 'Total CA Mark']
         else:
             headers = ['Student ID', 'Name', 'Attendance', 'Assignment/Presentation', 'Mid-Term Exam', 'Total CA Mark']
         
@@ -8276,6 +8368,9 @@ def export_ca_marks_excel(request):
                     col += 1
                     worksheet.write(row, col, mark.lab_practical_mark, cell_format)
                     col += 1
+                    if course.effective_lab_ca_practical2_weight:
+                        worksheet.write(row, col, mark.second_lab_practical_mark, cell_format)
+                        col += 1
                     worksheet.write(row, col, mark.calculate_total_ca_mark(), cell_format)
                 else:
                     worksheet.write(row, col, mark.attendance_mark, cell_format)
@@ -8286,7 +8381,8 @@ def export_ca_marks_excel(request):
                     col += 1
                     worksheet.write(row, col, mark.calculate_total_ca_mark(), cell_format)
             else:
-                for _ in range(4):
+                n_zero = 5 if (course.is_lab and course.effective_lab_ca_practical2_weight) else 4
+                for _ in range(n_zero):
                     worksheet.write(row, col, 0.00, cell_format)
                     col += 1
             
@@ -8661,7 +8757,10 @@ def export_final_exam_pdf(request):
         
         # Header row based on course type
         if course.is_lab:
-            header = ['SL. No', 'Student ID', 'Name', 'Lab Final Exam Mark', 'Total']
+            if semester.curriculum and semester.curriculum.code != 'OLD':
+                header = ['SL. No', 'Student ID', 'Name', 'Problem Solving', 'Viva', 'Total']
+            else:
+                header = ['SL. No', 'Student ID', 'Name', 'Lab Final Exam Mark', 'Total']
         else:
             header = ['SL. No', 'Student ID', 'Name', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Total']
         table_data.append(header)
@@ -8672,17 +8771,30 @@ def export_final_exam_pdf(request):
             if mark:
                 if getattr(mark, 'exam_absent', False):
                     if course.is_lab:
-                        row = [str(sl_no), student.id, student.name.upper(), 'AB', 'AB']
+                        if semester.curriculum and semester.curriculum.code != 'OLD':
+                            row = [str(sl_no), student.id, student.name.upper(), 'AB', 'AB', 'AB']
+                        else:
+                            row = [str(sl_no), student.id, student.name.upper(), 'AB', 'AB']
                     else:
                         row = [str(sl_no), student.id, student.name.upper(), 'AB', 'AB', 'AB', 'AB', 'AB', 'AB', 'AB', 'AB', 'AB']
                 elif course.is_lab:
-                    row = [
-                        str(sl_no),
-                        student.id,
-                        student.name.upper(),
-                        f"{mark.lab_final_exam_mark:.2f}" if mark.lab_final_exam_mark else '0.00',
-                        str(int(math.ceil(float(mark.calculate_final_total() or 0))))
-                    ]
+                    if semester.curriculum and semester.curriculum.code != 'OLD':
+                        row = [
+                            str(sl_no),
+                            student.id,
+                            student.name.upper(),
+                            f"{mark.lab_final_exam_mark:.2f}" if mark.lab_final_exam_mark else '0.00',
+                            f"{mark.lab_viva_mark:.2f}" if mark.lab_viva_mark else '0.00',
+                            str(int(math.ceil(float(mark.calculate_final_total() or 0))))
+                        ]
+                    else:
+                        row = [
+                            str(sl_no),
+                            student.id,
+                            student.name.upper(),
+                            f"{mark.lab_final_exam_mark:.2f}" if mark.lab_final_exam_mark else '0.00',
+                            str(int(math.ceil(float(mark.calculate_final_total() or 0))))
+                        ]
                 else:
                     # For theory courses, show marks based on teacher role
                     if teacher_role == 'teacher1':
@@ -8734,7 +8846,10 @@ def export_final_exam_pdf(request):
                     ]
             else:
                 if course.is_lab:
-                    row = [str(sl_no), student.id, student.name.upper(), '0.00', '0.00']
+                    if semester.curriculum and semester.curriculum.code != 'OLD':
+                        row = [str(sl_no), student.id, student.name.upper(), '0.00', '0.00', '0.00']
+                    else:
+                        row = [str(sl_no), student.id, student.name.upper(), '0.00', '0.00']
                 else:
                     row = [str(sl_no), student.id, student.name.upper(), '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
             table_data.append(row)
@@ -8742,9 +8857,14 @@ def export_final_exam_pdf(request):
         # Calculate column widths to match header/footer width
         num_cols = len(header)
         if course.is_lab:
-            # Lab: SL, Student ID, Name, Lab Final Exam Mark, Total
             sl_w = 40
-            col_widths = [sl_w, 80, 150, 120, max(40, available_width - (sl_w + 80 + 150 + 120))]
+            if semester.curriculum and semester.curriculum.code != 'OLD':
+                ps_w, v_w, tot_w = 80, 60, 60
+                used = sl_w + 80 + 150 + ps_w + v_w + tot_w
+                col_widths = [sl_w, 80, 150, ps_w, v_w, max(40, available_width - used + tot_w)]
+            else:
+                # Lab: SL, Student ID, Name, Lab Final Exam Mark, Total
+                col_widths = [sl_w, 80, 150, 120, max(40, available_width - (sl_w + 80 + 150 + 120))]
         else:
             # Theory: SL, Student ID, Name, Q1-Q7, Total
             sl_w = 40
@@ -9327,7 +9447,10 @@ def export_final_exam_excel(request):
         
         # Title
         if course.is_lab:
-            headers = ['Student ID', 'Name', 'Lab Final Exam Mark', 'Total', 'Notes']
+            if semester.curriculum and semester.curriculum.code != 'OLD':
+                headers = ['Student ID', 'Name', 'Problem Solving', 'Viva', 'Total', 'Notes']
+            else:
+                headers = ['Student ID', 'Name', 'Lab Final Exam Mark', 'Total', 'Notes']
         else:
             headers = ['Student ID', 'Name', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Total', 'Notes']
         
@@ -9356,10 +9479,18 @@ def export_final_exam_excel(request):
             if mark:
                 if getattr(mark, 'exam_absent', False):
                     if course.is_lab:
-                        worksheet.write(row, col, 'AB', cell_format)
-                        col += 1
-                        worksheet.write(row, col, 'AB', cell_format)
-                        col += 1
+                        if semester.curriculum and semester.curriculum.code != 'OLD':
+                            worksheet.write(row, col, 'AB', cell_format)
+                            col += 1
+                            worksheet.write(row, col, 'AB', cell_format)
+                            col += 1
+                            worksheet.write(row, col, 'AB', cell_format)
+                            col += 1
+                        else:
+                            worksheet.write(row, col, 'AB', cell_format)
+                            col += 1
+                            worksheet.write(row, col, 'AB', cell_format)
+                            col += 1
                         worksheet.write(row, col, mark.notes or '', cell_format)
                     else:
                         for _ in range(7):
@@ -9369,8 +9500,14 @@ def export_final_exam_excel(request):
                         col += 1
                         worksheet.write(row, col, mark.notes or '', cell_format)
                 elif course.is_lab:
-                    worksheet.write(row, col, mark.lab_final_exam_mark or 0.00, cell_format)
-                    col += 1
+                    if semester.curriculum and semester.curriculum.code != 'OLD':
+                        worksheet.write(row, col, mark.lab_final_exam_mark or 0.00, cell_format)
+                        col += 1
+                        worksheet.write(row, col, mark.lab_viva_mark or 0.00, cell_format)
+                        col += 1
+                    else:
+                        worksheet.write(row, col, mark.lab_final_exam_mark or 0.00, cell_format)
+                        col += 1
                     worksheet.write(row, col, mark.calculate_final_total(), cell_format)
                     col += 1
                     worksheet.write(row, col, mark.notes or '', cell_format)
@@ -9429,10 +9566,18 @@ def export_final_exam_excel(request):
                     worksheet.write(row, col, mark.notes or '', cell_format)
             else:
                 if course.is_lab:
-                    worksheet.write(row, col, 0.00, cell_format)
-                    col += 1
-                    worksheet.write(row, col, 0.00, cell_format)
-                    col += 1
+                    if semester.curriculum and semester.curriculum.code != 'OLD':
+                        worksheet.write(row, col, 0.00, cell_format)
+                        col += 1
+                        worksheet.write(row, col, 0.00, cell_format)
+                        col += 1
+                        worksheet.write(row, col, 0.00, cell_format)
+                        col += 1
+                    else:
+                        worksheet.write(row, col, 0.00, cell_format)
+                        col += 1
+                        worksheet.write(row, col, 0.00, cell_format)
+                        col += 1
                     worksheet.write(row, col, '', cell_format)
                 else:
                     for _ in range(7):
@@ -9785,9 +9930,25 @@ def ca_management(request):
         teacher_role = 'teacher1'
         can_select_evaluator = False
     
-    # Lab final exam cap in UI and saves: old curriculum 60 marks; new (and other non-OLD) 50 marks
+    # Lab final: OLD = single field max 60; new curriculum = problem 20 + viva 5 (25 total in UI)
     lab_final_exam_max = 50
-    if selected_semester and getattr(selected_semester, 'curriculum', None) and selected_semester.curriculum.code == 'OLD':
+    lab_final_uses_viva = False
+    lab_final_problem_solving_max = 50
+    lab_final_viva_max = 0
+    if (
+        selected_course
+        and selected_course.is_lab
+        and selected_semester
+        and getattr(selected_semester, 'curriculum', None)
+    ):
+        if selected_semester.curriculum.code == 'OLD':
+            lab_final_exam_max = 60
+        else:
+            lab_final_exam_max = 25
+            lab_final_uses_viva = True
+            lab_final_problem_solving_max = 20
+            lab_final_viva_max = 5
+    elif selected_semester and getattr(selected_semester, 'curriculum', None) and selected_semester.curriculum.code == 'OLD':
         lab_final_exam_max = 60
 
     context = {
@@ -9811,6 +9972,9 @@ def ca_management(request):
         'teacher_role': teacher_role,
         'can_select_evaluator': can_select_evaluator,
         'lab_final_exam_max': lab_final_exam_max,
+        'lab_final_uses_viva': lab_final_uses_viva,
+        'lab_final_problem_solving_max': lab_final_problem_solving_max,
+        'lab_final_viva_max': lab_final_viva_max,
     }
     
     # Get evaluator teachers for the selected course
@@ -9973,6 +10137,9 @@ def ca_management(request):
                 lab_val = None
                 if fm and fm.lab_final_exam_mark is not None:
                     lab_val = float(fm.lab_final_exam_mark)
+                viva_val = None
+                if fm and fm.lab_viva_mark is not None:
+                    viva_val = float(fm.lab_viva_mark)
                 mo = float(fm.final_exam_total or 0) if fm else 0.0
                 examiner_summary_rows.append({
                     'sl': idx,
@@ -9980,6 +10147,7 @@ def ca_management(request):
                     'final_mark': fm,
                     'is_lab': True,
                     'lab_mark': lab_val,
+                    'viva_mark': viva_val,
                     'marks_obtained': mo,
                 })
             else:
@@ -10290,6 +10458,13 @@ def save_ca_marks(request):
                     ca_mark.lab_practical_mark = _clamp_mark_float(
                         marks_data.get('lab_practical_mark', 0), course.effective_lab_ca_practical_weight
                     )
+                    if course.effective_lab_ca_practical2_weight:
+                        ca_mark.second_lab_practical_mark = _clamp_mark_float(
+                            marks_data.get('second_lab_practical_mark', 0),
+                            course.effective_lab_ca_practical2_weight,
+                        )
+                    else:
+                        ca_mark.second_lab_practical_mark = 0.0
                 else:
                     # Theory course marks
                     ca_mark.first_assignment_mark = _clamp_mark_float(
@@ -10780,7 +10955,12 @@ def save_final_exam_marks(request):
                             lrv = float(marks_data.get('lab_final_exam_mark', 0) or 0)
                         except (TypeError, ValueError):
                             lrv = 0.0
-                        if lrv > 0:
+                        lvv = 0.0
+                        try:
+                            lvv = float(marks_data.get('lab_viva_mark', 0) or 0)
+                        except (TypeError, ValueError):
+                            lvv = 0.0
+                        if lrv > 0 or lvv > 0:
                             has_positive_final = True
                     if has_positive_final:
                         final_mark.exam_absent = False
@@ -10794,13 +10974,25 @@ def save_final_exam_marks(request):
                     else:
                         # Update marks based on course type
                         if course.is_lab:
-                            # Lab course: single field (max 60 old curriculum, 50 new curriculum)
-                            lab_final_max = 60 if (semester.curriculum_id and semester.curriculum.code == 'OLD') else 50
-                            try:
-                                lab_raw = float(marks_data.get('lab_final_exam_mark', 0) or 0)
-                            except (TypeError, ValueError):
-                                lab_raw = 0.0
-                            final_mark.lab_final_exam_mark = max(0.0, min(lab_raw, float(lab_final_max)))
+                            if semester.curriculum_id and semester.curriculum.code == 'OLD':
+                                lab_final_max = 60.0
+                                try:
+                                    lab_raw = float(marks_data.get('lab_final_exam_mark', 0) or 0)
+                                except (TypeError, ValueError):
+                                    lab_raw = 0.0
+                                final_mark.lab_final_exam_mark = max(0.0, min(lab_raw, lab_final_max))
+                                final_mark.lab_viva_mark = 0.0
+                            else:
+                                try:
+                                    pr = float(marks_data.get('lab_final_exam_mark', 0) or 0)
+                                except (TypeError, ValueError):
+                                    pr = 0.0
+                                try:
+                                    viv = float(marks_data.get('lab_viva_mark', 0) or 0)
+                                except (TypeError, ValueError):
+                                    viv = 0.0
+                                final_mark.lab_final_exam_mark = max(0.0, min(pr, 20.0))
+                                final_mark.lab_viva_mark = max(0.0, min(viv, 5.0))
                             final_mark.marked_by = teacher
                         else:
                             # Theory course: 7 question sets (see _apply_theory_final_exam_q_fields: key must be

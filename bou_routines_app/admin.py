@@ -48,8 +48,8 @@ class CurriculumAdmin(admin.ModelAdmin):
             'description': 'Default CA mark distribution for Theory courses in this curriculum. Total should be 30% (for 70% final exam).'
         }),
         ('Lab CA Distribution', {
-            'fields': ('lab_ca_attendance_weight', 'lab_ca_assignment_weight', 'lab_ca_practical_weight', 'lab_ca_quiz_weight'),
-            'description': 'Default CA mark distribution for Lab courses in this curriculum. Total should be 40% (for 60% final exam).'
+            'fields': ('lab_ca_attendance_weight', 'lab_ca_assignment_weight', 'lab_ca_practical_weight', 'lab_ca_practical2_weight', 'lab_ca_quiz_weight'),
+            'description': 'Default CA mark distribution for Lab courses. Use a second experiment column (practical2) for the new 25-mark lab CA split when needed.'
         }),
         ('Project Work Distribution', {
             'fields': ('project_supervisor_weight', 'project_evaluation_weight', 'project_presentation_weight'),
@@ -103,7 +103,7 @@ class CourseAdminForm(forms.ModelForm):
         # Only hide if they exist in the form (they might be excluded)
         ca_fields_to_hide = [
             'ca_attendance_weight', 'ca_assignment_weight', 'ca_quiz_weight', 'ca_midterm_weight',
-            'lab_ca_attendance_weight', 'lab_ca_assignment_weight', 'lab_ca_practical_weight'
+            'lab_ca_attendance_weight', 'lab_ca_assignment_weight', 'lab_ca_practical_weight', 'lab_ca_practical2_weight'
         ]
         for field_name in ca_fields_to_hide:
             if field_name in self.fields:
@@ -885,7 +885,7 @@ class CAMarkAdmin(admin.ModelAdmin):
             'description': 'Marks for theory courses. Assignment mark (average) is auto-calculated from the three individual assignments. Class test mark (best of first and second) is auto-calculated. Use class tests for old curriculum, midterm for new curriculum.'
         }),
         ('Lab Course Marks', {
-            'fields': ('first_lab_assignment_mark', 'second_lab_assignment_mark', 'third_lab_assignment_mark', 'lab_assignment_mark', 'lab_practical_mark'),
+            'fields': ('first_lab_assignment_mark', 'second_lab_assignment_mark', 'third_lab_assignment_mark', 'lab_assignment_mark', 'lab_practical_mark', 'second_lab_practical_mark'),
             'description': 'Marks for lab courses. Lab assignment mark (average) is auto-calculated from the three individual lab assignments.'
         }),
         ('Total', {
@@ -922,8 +922,8 @@ class FinalExamMarkAdmin(admin.ModelAdmin):
             'description': 'Third examiner marks (required if |first − second| total difference exceeds 14 marks)'
         }),
         ('Lab Course Final Exam', {
-            'fields': ('lab_final_exam_mark',),
-            'description': 'Lab course final exam mark (max 60)'
+            'fields': ('lab_final_exam_mark', 'lab_viva_mark'),
+            'description': 'Old curriculum: single field (max 60). New curriculum: problem solving (max 20) and viva (max 5).'
         }),
         ('Totals & Status', {
             'fields': ('final_exam_total', 'requires_third_teacher')

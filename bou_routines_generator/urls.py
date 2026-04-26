@@ -26,7 +26,7 @@ def admin_logout_view(request):
     return redirect('home')
 
 urlpatterns = [
-    path('admin/logout/', admin_logout_view, name='admin:logout'),
+    path('admin/logout/', admin_logout_view, name='admin_logout'),
     path('admin/', admin.site.urls),
     path('', include('bou_routines_app.urls')),
     path('accounts/', include('django.contrib.auth.urls')),

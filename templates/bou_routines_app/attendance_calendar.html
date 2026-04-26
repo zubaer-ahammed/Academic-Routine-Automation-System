@@ -1233,7 +1233,7 @@
         background: #0056b3;
     }
 
-    .form-group {
+    .container-box-bou form:not(.bou-filter-form) .form-group {
         margin-bottom: 15px;
     }
 
@@ -1444,8 +1444,9 @@
                     </div>
                 </div>
 
+                <div class="bou-filter-stack">
                 <!-- Selection Form -->
-                <form method="get" action="{% url 'attendance-calendar' %}">
+                <form class="bou-filter-form" method="get" action="{% url 'attendance-calendar' %}">
                     <div class="row">
                 <div class="col-md-2">
                     <div class="form-group">
@@ -1540,9 +1541,9 @@
                 {% if user.is_superuser or user.is_staff %}
                 <div class="row">
                     <div class="col-md-12">
-                        <div class="form-check" style="margin-top: 10px;">
-                            <input class="form-check-input" type="checkbox" id="hideFacultyCheckbox" style="margin-top: 0;">
-                            <label class="form-check-label" for="hideFacultyCheckbox" style="margin-left: 5px; white-space: nowrap;">
+                        <div class="form-check d-flex align-items-center flex-wrap gap-2 mt-2 ps-0">
+                            <input class="form-check-input flex-shrink-0 m-0" type="checkbox" id="hideFacultyCheckbox" style="float: none;">
+                            <label class="form-check-label mb-0" for="hideFacultyCheckbox" style="white-space: nowrap;">
                                 Hide Faculty/Teacher Name during export
                             </label>
                         </div>
@@ -1551,13 +1552,13 @@
                 {% endif %}
             {% endif %}
                     </form>
-
     {% if not selected_semester_id or not selected_course_id %}
-        <div class="alert alert-info">
-            <i class="fas fa-info-circle"></i>
-            Please select a semester and course to view students and mark attendance.
+        <div class="info-message info-message--filter-hint">
+            <i class="fas fa-info-circle" aria-hidden="true"></i>
+            <span>Please select a semester and course to view students and mark attendance.</span>
         </div>
     {% endif %}
+                </div>
 
     {% if semester and course and students %}
         <!-- Comprehensive Attendance Table -->

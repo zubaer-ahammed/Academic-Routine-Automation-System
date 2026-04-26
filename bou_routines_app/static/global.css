@@ -1,6 +1,50 @@
 /* Global styles for all pages */
+/*
+ * No blinking caret in static text (h1, strong, small, labels, etc.): inherited
+ * user-select on html is often overridden. Universal opt-out + high-specificity
+ * opt-in for real text fields and copy-friendly tags.
+ */
 html {
     height: 100%;
+}
+
+/* Everything non-interactive: block caret (must use !important so Bootstrap/UA
+   can’t re-enable h1, label, .small, etc.) */
+*,
+*::before,
+*::after {
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    user-select: none !important;
+    caret-color: transparent !important;
+}
+
+/* Text you actually type in */
+input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
+textarea,
+select,
+[contenteditable="true"],
+[contenteditable=""] {
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    user-select: text !important;
+    caret-color: auto !important;
+}
+
+/* Copy/paste in code; override universal * (same or higher spec + !important) */
+pre, code, kbd, samp {
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    user-select: text !important;
+    caret-color: auto !important;
+}
+
+/* Option text when select is open */
+option {
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    user-select: text !important;
+    caret-color: auto !important;
 }
 
 body {
@@ -259,4 +303,246 @@ footer.bg-dark {
     .bou-header-content {
         padding: 8px 15px !important;
     }
-} 
+}
+
+/* ------------------------------------------------------------------
+   Shared top filter row (Attendance + Marks) — add class on <form>
+   form.bou-filter-form
+   ------------------------------------------------------------------ */
+.container-box-bou form.bou-filter-form .form-group {
+    min-height: 0 !important;
+    padding-bottom: 0 !important;
+    height: auto !important; /* override attendance template height: 100% on .form-group */
+    /* attendance_calendar.html has bare .form-group { margin-bottom: 15px } on every column */
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+.container-box-bou form.bou-filter-form .form-group label {
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    color: #5c6368 !important;
+    margin-bottom: 0.25rem !important;
+    min-height: 0 !important;
+    line-height: 1.25 !important;
+}
+
+/* Chevron (layer 1) + light blue tint (layer 2) — first image is topmost in CSS */
+.container-box-bou form.bou-filter-form select {
+    --bou-filter-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23495057'%3E%3Cpath d='M3.2 5.2L8 10l4.8-4.8'/%3E%3C/svg%3E");
+    --bou-filter-chevron-focus: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%230d6efd'%3E%3Cpath d='M3.2 5.2L8 10l4.8-4.8'/%3E%3C/svg%3E");
+    width: 100% !important;
+    height: 38px !important;
+    box-sizing: border-box !important;
+    border-radius: 0.5rem !important;
+    border: 1px solid #b6d4fe !important;
+    background-color: #fff !important;
+    background-image: var(--bou-filter-chevron), linear-gradient(180deg, #ffffff 0%, rgba(0, 123, 255, 0.1) 100%) !important;
+    background-repeat: no-repeat, no-repeat !important;
+    background-position: right 0.5rem center, 0 0 !important;
+    background-size: 0.9rem, 100% 100% !important;
+    box-shadow: 0 1px 2px rgba(13, 110, 253, 0.08) !important;
+    font-size: 0.9rem !important;
+    padding: 0.35rem 0.75rem 0.35rem 0.65rem !important;
+    line-height: 1.4 !important;
+    color: #212529 !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-image 0.15s ease !important;
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    padding-right: 1.9rem !important;
+}
+
+.container-box-bou form.bou-filter-form select:hover {
+    border-color: #6ea8fe !important;
+    background-image: var(--bou-filter-chevron), linear-gradient(180deg, #fff 0%, rgba(0, 123, 255, 0.05) 100%) !important;
+    background-repeat: no-repeat, no-repeat !important;
+    background-position: right 0.5rem center, 0 0 !important;
+    background-size: 0.9rem, 100% 100% !important;
+}
+
+.container-box-bou form.bou-filter-form select:focus {
+    border-color: #0d6efd !important;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25) !important;
+    outline: none !important;
+    background-color: #fff !important;
+    background-image: var(--bou-filter-chevron-focus), linear-gradient(180deg, #fff 0%, rgba(0, 123, 255, 0.06) 100%) !important;
+    background-repeat: no-repeat, no-repeat !important;
+    background-position: right 0.5rem center, 0 0 !important;
+    background-size: 0.9rem, 100% 100% !important;
+}
+
+.container-box-bou form.bou-filter-form .btn.btn-primary,
+.container-box-bou form.bou-filter-form button.btn-primary {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    column-gap: 0.4em !important;
+    height: 38px !important;
+    min-height: 0 !important;
+    box-sizing: border-box !important;
+    padding: 0 0.95rem !important;
+    line-height: 1.2 !important;
+    font-size: 0.9rem !important;
+    color: #fff !important;
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+    background-image: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+    border: none !important;
+    border-radius: 0.5rem !important;
+    font-weight: 600 !important;
+    box-shadow: 0 1px 3px rgba(0, 123, 255, 0.28) !important;
+    transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, color 0.2s ease !important;
+}
+
+.container-box-bou form.bou-filter-form .btn.btn-primary:hover,
+.container-box-bou form.bou-filter-form .btn.btn-primary:focus,
+.container-box-bou form.bou-filter-form button.btn-primary:hover,
+.container-box-bou form.bou-filter-form button.btn-primary:focus {
+    color: #fff !important;
+    background: linear-gradient(135deg, #0056b3 0%, #004085 100%) !important;
+    background-image: linear-gradient(135deg, #0056b3 0%, #004085 100%) !important;
+    box-shadow: 0 2px 6px rgba(0, 123, 255, 0.32) !important;
+    transform: translateY(-1px);
+    outline: none;
+}
+
+.container-box-bou form.bou-filter-form .btn-secondary.dropdown-toggle {
+    height: 38px !important;
+    box-sizing: border-box !important;
+    border: 1px solid #ced4da !important;
+    border-radius: 0.5rem !important;
+    font-weight: 600 !important;
+    background: #fff !important;
+    color: #495057 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06) !important;
+}
+
+.container-box-bou form.bou-filter-form .btn-secondary.dropdown-toggle:hover {
+    background: #f8f9fa !important;
+    border-color: #b6bfc6 !important;
+    color: #212529 !important;
+}
+
+@media screen and (max-width: 768px) {
+    .container-box-bou form.bou-filter-form .form-group label {
+        font-size: 0.72rem !important;
+    }
+
+    .container-box-bou form.bou-filter-form select {
+        font-size: 0.88rem !important;
+        height: 38px !important;
+        padding: 0.3rem 1.8rem 0.3rem 0.6rem !important;
+    }
+}
+
+@media screen and (max-width: 480px) {
+    .container-box-bou form.bou-filter-form .form-group label {
+        font-size: 0.7rem !important;
+    }
+
+    .container-box-bou form.bou-filter-form select {
+        font-size: 0.85rem !important;
+        min-height: 40px !important;
+        height: 40px !important;
+    }
+
+    .container-box-bou form.bou-filter-form .btn.btn-primary,
+    .container-box-bou form.bou-filter-form button.btn-primary,
+    .container-box-bou form.bou-filter-form .btn-secondary.dropdown-toggle {
+        min-height: 44px;
+        height: auto !important;
+    }
+}
+
+/* Spacing from filter to hint — one margin so Attendance ≈ Marks (avoids form mb + info mt piling up) */
+.container-box-bou form.bou-filter-form {
+    margin-bottom: 0.25em !important;
+}
+
+/* One flex gap between filter and hint (identical on Attendance + Marks) */
+.container-box-bou .bou-filter-stack {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch;
+    box-sizing: border-box;
+    gap: 0.5rem !important; /* 8px — !important so page <style> blocks can’t break parity */
+    row-gap: 0.5rem !important;
+    width: 100%;
+}
+
+/* Bottom-align filter row; remove stray row margins (attendance mobile rules) */
+.container-box-bou form.bou-filter-form > .row {
+    align-items: flex-end;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+/* ------------------------------------------------------------------
+   Hint strip (Marks + Attendance) — teal / compact padding
+   ------------------------------------------------------------------ */
+.container-box-bou .info-message {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.5rem;
+    background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+    border: 1px solid #bee5eb;
+    border-radius: 8px;
+    border-left: 4px solid #17a2b8;
+    margin: 10px 0 12px;
+    padding: 6px 12px 7px 10px;
+    color: #0c5460;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset;
+}
+
+.container-box-bou .info-message i.fas,
+.container-box-bou .info-message i.fa {
+    margin: 0;
+    line-height: 1;
+    color: #17a2b8;
+    flex-shrink: 0;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1em;
+    width: 1.15em;
+    height: 1.15em;
+    align-self: center;
+}
+
+.container-box-bou .info-message > span {
+    flex: 1 1 12em;
+    min-width: 0;
+}
+
+/* Filter-only hint (use margin when not inside .bou-filter-stack) */
+.container-box-bou .info-message.info-message--filter-hint {
+    margin-top: 8px !important;
+    margin-bottom: 12px !important;
+    padding: 4px 10px 4px 8px !important;
+    align-items: center !important;
+}
+
+/* Inside stack, gap does vertical spacing — no double margin-top */
+.container-box-bou .bou-filter-stack .info-message.info-message--filter-hint {
+    margin-top: 0 !important;
+    margin-bottom: 12px !important;
+    padding: 4px 10px 4px 8px !important;
+    align-items: center !important;
+}
+
+@media screen and (max-width: 768px) {
+    .container-box-bou .info-message.info-message--filter-hint {
+        margin-top: 8px !important;
+        margin-bottom: 10px !important;
+    }
+}
+
+@media screen and (max-width: 480px) {
+    .container-box-bou .info-message.info-message--filter-hint {
+        margin-top: 8px !important;
+        margin-bottom: 8px !important;
+        padding: 4px 8px 4px 6px !important;
+    }
+}

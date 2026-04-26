@@ -322,20 +322,7 @@
         transform: translateY(0);
     }
 
-    .info-message {
-        background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
-        border: 1px solid #bee5eb;
-        border-radius: 8px;
-        padding: 15px;
-        margin: 20px 0;
-        color: #0c5460;
-        border-left: 4px solid #17a2b8;
-    }
-
-    .info-message i {
-        margin-right: 8px;
-        color: #17a2b8;
-    }
+    /* .info-message — see global.css (shared with Attendance) */
 
     /* Uniform height for all form controls and alignment */
     .container-box-bou form select {
@@ -653,12 +640,16 @@
             padding: 10px 15px;
         }
         
-        /* Smaller alert/info boxes on mobile */
-        .container-box-bou .alert,
-        .container-box-bou .info-message {
+        .container-box-bou .alert {
             font-size: 13px !important;
             padding: 10px 12px !important;
             margin-bottom: 12px !important;
+        }
+
+        .container-box-bou .info-message {
+            font-size: 13px !important;
+            padding: 6px 10px 6px 8px !important;
+            margin-bottom: 10px !important;
         }
         
         .container-box-bou .alert strong,
@@ -686,12 +677,16 @@
             padding: 10px !important;
         }
         
-        /* Even smaller alert/info boxes on small phones */
-        .container-box-bou .alert,
-        .container-box-bou .info-message {
+        .container-box-bou .alert {
             font-size: 12px !important;
             padding: 8px 10px !important;
             margin-bottom: 10px !important;
+        }
+
+        .container-box-bou .info-message {
+            font-size: 12px !important;
+            padding: 5px 8px 5px 6px !important;
+            margin-bottom: 8px !important;
         }
         
         .container-box-bou .alert strong,
@@ -743,12 +738,16 @@
             margin-bottom: 10px !important;
         }
         
-        /* Even smaller alert/info boxes on small phones */
-        .container-box-bou .alert,
-        .container-box-bou .info-message {
+        .container-box-bou .alert {
             font-size: 12px !important;
             padding: 8px 10px !important;
             margin-bottom: 10px !important;
+        }
+
+        .container-box-bou .info-message {
+            font-size: 12px !important;
+            padding: 5px 8px 5px 6px !important;
+            margin-bottom: 8px !important;
         }
         
         .container-box-bou .alert strong,
@@ -1062,8 +1061,9 @@
                     </div>
                 </div>
 
+                <div class="bou-filter-stack">
                 <!-- Selection Form -->
-                <form method="get" action="{% url 'ca-management' %}" style="margin-bottom: 20px; overflow: visible;">
+                <form class="bou-filter-form" method="get" action="{% url 'ca-management' %}" style="overflow: visible;">
                     <div class="row" style="overflow: visible;">
                         <div class="col-md-2">
                             <div class="form-group">
@@ -1130,6 +1130,13 @@
                         </div>
                     </div>
                 </form>
+                {% if not selected_semester or not selected_course %}
+                    <div class="info-message info-message--filter-hint">
+                        <i class="fas fa-info-circle" aria-hidden="true"></i>
+                        <span>Please select a curriculum, semester, and course to manage CA marks.</span>
+                    </div>
+                {% endif %}
+                </div>
 
                 {% if selected_semester and selected_course %}
                     <!-- Compact Course Information and CA Distribution -->
@@ -1712,13 +1719,10 @@
                         </div>
                     {% else %}
                         <div class="info-message">
-                            <i class="fas fa-info-circle"></i> No students found for the selected semester and course.
+                            <i class="fas fa-info-circle" aria-hidden="true"></i>
+                            <span>No students found for the selected semester and course.</span>
                         </div>
                     {% endif %}
-                {% else %}
-                    <div class="info-message">
-                        <i class="fas fa-info-circle"></i> Please select a curriculum, semester, and course to manage CA marks.
-                    </div>
                 {% endif %}
             </div>
         </div>

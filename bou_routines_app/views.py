@@ -5168,8 +5168,12 @@ def attendance_calendar(request):
 @login_required
 @require_POST
 def set_attendance_midterm_override_dates(request):
-    """Admin-only: set attendance-only midterm exam dates override per SemesterCourse."""
-    if not (request.user.is_superuser or request.user.is_staff):
+    """Admin-only: set attendance-only midterm exam dates override per SemesterCourse.
+    Staff users with a teacher profile (same rule as ca_management is_admin) cannot set this.
+    """
+    t = get_teacher_from_user(request.user)
+    is_admin = request.user.is_superuser or (request.user.is_staff and not t)
+    if not is_admin:
         return JsonResponse({'success': False, 'error': 'Permission denied'}, status=403)
 
     semester_id = request.POST.get('semester_id')

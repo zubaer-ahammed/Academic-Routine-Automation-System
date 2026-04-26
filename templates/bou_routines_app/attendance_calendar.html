@@ -67,17 +67,141 @@
 
     .attendance-table-section {
         margin-top: 20px;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
     }
 
-    .table-header {
-        margin-bottom: 20px;
-        padding-bottom: 15px;
+    .attendance-course-summary {
+        margin-bottom: 0;
+        padding-bottom: 10px;
         border-bottom: 2px solid #e9ecef;
+        /* Same horizontal bounds as the table; avoid Bootstrap .row negative margins. */
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
     }
 
-    .table-header h4 {
-        color: #dc3545;
+    /* compact-info: same as Marks Distribution (ca_management .compact-info-*) */
+    .attendance-table-section .compact-info-box {
+        background: #f8f9fa;
+        padding: 10px 12px;
+        border-radius: 6px;
+        border-left: 3px solid #007bff;
+        font-size: 0.875rem;
         margin-bottom: 10px;
+    }
+
+    .attendance-table-section .compact-info-content {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        line-height: 1.6;
+    }
+
+    .attendance-table-section .compact-info-content span {
+        white-space: nowrap;
+    }
+
+    .attendance-table-section .compact-info-box strong {
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+
+    .attendance-table-section .compact-info-box .fa,
+    .attendance-table-section .compact-info-box .fas,
+    .attendance-table-section .compact-info-box .far,
+    .attendance-table-section .compact-info-box .fab {
+        font-size: 0.85rem;
+    }
+
+    .attendance-table-section .course-type-badge {
+        margin-left: 15px;
+        padding-left: 8px;
+    }
+
+    /* Course-type pill — same as Marks (ca_management .badge + .badge-*) */
+    .attendance-table-section .compact-info-box .course-type-badge .badge {
+        font-size: 0.85rem;
+        padding: 4px 8px;
+        border-radius: 20px;
+        font-weight: 600;
+    }
+    .attendance-table-section .compact-info-box .course-type-badge .badge.badge-info {
+        background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+        color: white;
+    }
+    .attendance-table-section .compact-info-box .course-type-badge .badge.badge-warning {
+        background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
+        color: #000000 !important;
+        font-weight: 600;
+    }
+    .attendance-table-section .compact-info-box .course-type-badge .badge.badge-primary {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+        color: white;
+    }
+
+    .attendance-calc-right .compact-info-content {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
+
+    .attendance-calc-right .compact-info-content .calc-main-line,
+    .attendance-calc-right .compact-info-content small {
+        white-space: normal;
+    }
+
+    .attendance-table-section .compact-info-box .compact-line-title {
+        min-height: 0;
+        gap: 0.25rem;
+    }
+
+    /* Match full-width blocks (e.g. .alert) — no grid column side padding */
+    .attendance-summary-cols {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 0.5rem;
+        width: 100%;
+        max-width: 100%;
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    .attendance-summary-cols > .attendance-summary-col {
+        flex: 1 1 0;
+        min-width: 0;
+        max-width: 100%;
+        display: flex;
+        min-height: 0;
+    }
+
+    @media (max-width: 768px) {
+        .attendance-table-section .compact-info-content {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .attendance-table-section .compact-info-content span {
+            display: block;
+            width: 100%;
+        }
+    }
+
+    @media (max-width: 767.98px) {
+        .attendance-summary-cols > .attendance-summary-col {
+            flex: 1 1 100%;
+            min-width: 100%;
+        }
+    }
+
+    .attendance-table-section .table-responsive {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
     }
 
     .table-responsive {
@@ -687,15 +811,6 @@
             z-index: 1 !important;
         }
         
-        /* Header adjustments */
-        .table-header h4 {
-            font-size: 18px;
-        }
-        
-        .table-header p {
-            font-size: 14px;
-        }
-        
         /* Smaller alert boxes on mobile */
         .container-box-bou .alert {
             font-size: 13px !important;
@@ -712,7 +827,7 @@
         }
         
         /* Add a hint about scrolling */
-        .table-header::after {
+        .attendance-course-summary::after {
             content: "💡 Scroll horizontally to view all dates and totals";
             display: block;
             margin-top: 10px;
@@ -767,7 +882,7 @@
             font-size: 10px !important;
         }
         
-        .table-header::after {
+        .attendance-course-summary::after {
             font-size: 10px !important;
             margin-top: 8px !important;
         }
@@ -854,16 +969,6 @@
                     outline: 2px solid #007bff;
                     outline-offset: 2px;
                     background-color: rgba(0, 123, 255, 0.05);
-                }
-
-                /* Header drag scroll styling */
-                .table-header {
-                    cursor: grab;
-                    user-select: none;
-                }
-
-                .table-header.dragging {
-                    cursor: grabbing;
                 }
 
                 .date-column {
@@ -1570,12 +1675,74 @@
     {% if semester and course and students %}
         <!-- Comprehensive Attendance Table -->
         <div class="attendance-table-section">
-            <div class="table-header">
-                <h4>Attendance Management - {{ semester.name }}</h4>
-                <p><strong>Course:</strong> {{ course.code }} - {{ course.name }}</p>
+            <div class="attendance-course-summary">
+                <div class="compact-info-section" style="margin-top: 8px; margin-bottom: 8px;">
+                    <div class="attendance-summary-cols">
+                        <div class="attendance-summary-col">
+                            <div class="compact-info-box flex-fill w-100 attendance-summary-left">
+                                <div class="d-flex align-items-center flex-wrap compact-line-title mb-2">
+                                    <i class="fas fa-graduation-cap text-primary me-2" aria-hidden="true"></i>
+                                    <strong class="mb-0 me-3">Attendance Management - {{ semester.name }}</strong>
+                                    <span class="course-type-badge">
+                                    {% if course.course_type == 'PROJECT' %}
+                                        <span class="badge badge-warning">Project Work</span>
+                                    {% elif course.is_lab %}
+                                        <span class="badge badge-info">Lab</span>
+                                    {% else %}
+                                        <span class="badge badge-primary">Theory</span>
+                                    {% endif %}
+                                    </span>
+                                </div>
+                                <div class="compact-info-content">
+                                    <span><i class="fas fa-book text-muted" aria-hidden="true"></i> <strong>Course:</strong> {{ course.code }} - {{ course.name }}</span>
+                                    <span><i class="fas fa-chalkboard-teacher text-muted" aria-hidden="true"></i> <strong>Teacher:</strong> {% if semester_course_scope and semester_course_scope.teacher %}{{ semester_course_scope.teacher.name }}{% elif teacher %}{{ teacher.name }}{% else %}N/A{% endif %}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="attendance-summary-col">
+                            <div class="compact-info-box flex-fill w-100 attendance-calc-right">
+                                <div class="d-flex align-items-center flex-wrap compact-line-title mb-2">
+                                    <i class="fas fa-chart-pie text-info me-2" aria-hidden="true"></i>
+                                    <strong class="mb-0">Attendance Calculation:</strong>
+                                </div>
+                                <div class="compact-info-content">
+                    {% if actual_class_duration %}
+                        {% if class_ratio != 1.0 %}
+                                    <div class="calc-main-line w-100"><strong>1 Attendance for this course = {{ class_ratio|floatformat:1 }} classes</strong></div>
+                                    <small class="text-muted">This course runs for {{ actual_class_duration }} minutes
+                                    {% if course.is_lab %}
+                                        (standard lab: {{ semester.lab_class_duration_minutes }} minutes)
+                                    {% else %}
+                                        (standard theory: {{ semester.theory_class_duration_minutes }} minutes)
+                                    {% endif %}
+                                    </small>
+                        {% else %}
+                                    <div class="calc-main-line w-100"><strong>1 Attendance for this course = 1 class</strong></div>
+                                    <small class="text-muted">This course runs for {{ actual_class_duration }} minutes
+                                    {% if course.is_lab %}
+                                        (standard lab duration)
+                                    {% else %}
+                                        (standard theory duration)
+                                    {% endif %}
+                                    </small>
+                        {% endif %}
+                    {% else %}
+                        {% if course.is_lab %}
+                                    <div class="calc-main-line w-100"><strong>1 Attendance for this course = 1 class</strong></div>
+                                    <small class="text-muted">Standard lab duration: {{ semester.lab_class_duration_minutes }} minutes</small>
+                        {% else %}
+                                    <div class="calc-main-line w-100"><strong>1 Attendance for this course = 1 class</strong></div>
+                                    <small class="text-muted">Standard theory duration: {{ semester.theory_class_duration_minutes }} minutes</small>
+                        {% endif %}
+                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 {% if is_admin and not teacher %}
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle"></i> 
+                    <div class="alert alert-info w-100 mt-1 mb-2" role="alert">
+                        <i class="fas fa-info-circle" aria-hidden="true"></i>
                         <strong>Admin Access:</strong> You are viewing all courses as an administrator.
                     </div>
                 {% endif %}
@@ -1631,41 +1798,6 @@
                             </div>
                         </div>
                     </div>
-                {% endif %}
-            </div>
-            
-            <!-- Duration-based Attendance Information -->
-            <div class="alert alert-info" style="margin-bottom: 20px;">
-                <i class="fas fa-info-circle"></i> 
-                <strong>Attendance Calculation:</strong>
-                {% if actual_class_duration %}
-                    {% if class_ratio != 1.0 %}
-                        <strong>1 Attendance for this course = {{ class_ratio|floatformat:1 }} classes</strong>
-                        <br><small>This course runs for {{ actual_class_duration }} minutes 
-                        {% if course.is_lab %}
-                            (standard lab: {{ semester.lab_class_duration_minutes }} minutes)
-                        {% else %}
-                            (standard theory: {{ semester.theory_class_duration_minutes }} minutes)
-                        {% endif %}
-                        </small>
-                    {% else %}
-                        <strong>1 Attendance for this course = 1 class</strong>
-                        <br><small>This course runs for {{ actual_class_duration }} minutes 
-                        {% if course.is_lab %}
-                            (standard lab duration)
-                        {% else %}
-                            (standard theory duration)
-                        {% endif %}
-                        </small>
-                    {% endif %}
-                {% else %}
-                    {% if course.is_lab %}
-                        <strong>1 Attendance for this course = 1 class</strong>
-                        <br><small>Standard lab duration: {{ semester.lab_class_duration_minutes }} minutes</small>
-                    {% else %}
-                        <strong>1 Attendance for this course = 1 class</strong>
-                        <br><small>Standard theory duration: {{ semester.theory_class_duration_minutes }} minutes</small>
-                    {% endif %}
                 {% endif %}
             </div>
             

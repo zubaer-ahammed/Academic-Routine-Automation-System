@@ -13,7 +13,7 @@
                                 <!-- Teacher Role Selector for Theory Course -->
                                 <div class="teacher-role-selector">
                                     {% if can_select_evaluator %}
-                                        <!-- Admin: Can select which examiner role to view/edit -->
+                                        <!-- Admin: always visible — which examiner role to view/edit -->
                                         <div class="mb-3">
                                             <label for="teacher-role"><strong>Select Examiner Role to View/Edit:</strong></label>
                                             <select id="teacher-role" class="form-control" style="width: 300px; display: inline-block; margin-left: 10px;" onchange="updateTeacherRole()">
@@ -28,11 +28,23 @@
                                                 </option>
                                             </select>
                                         </div>
-                                        
-                                        <!-- Admin: Can assign/change examiners -->
-                                        <div class="mb-3">
-                                            <label><strong>Assign Examiners:</strong></label>
-                                            <div class="row mt-2">
+                                        <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                                            <button class="btn btn-link text-start text-decoration-none p-0 d-flex align-items-center gap-2 flex-grow-1 min-w-0 final-exam-examiner-toggle"
+                                                    type="button"
+                                                    data-bs-toggle="collapse"
+                                                    data-bs-target="#finalExamAssignExaminersCollapse"
+                                                    aria-expanded="false"
+                                                    aria-controls="finalExamAssignExaminersCollapse"
+                                                    id="finalExamAssignExaminersToggle">
+                                                <i class="fas fa-chevron-down final-exam-examiner-chevron text-secondary" style="font-size: 0.7rem; flex-shrink: 0;" aria-hidden="true"></i>
+                                                <span class="fw-bold text-body">Assign Examiners: <span class="text-muted fw-normal">(First / Second / Third)</span></span>
+                                            </button>
+                                        </div>
+                                        <div class="collapse" id="finalExamAssignExaminersCollapse">
+                                            <div class="pt-1">
+                                        <!-- Admin: Can assign/change examiners (collapsed by default) -->
+                                        <div class="mb-0">
+                                            <div class="row g-2 mx-0 w-100 mt-1">
                                                 <div class="col-md-4">
                                                     <label for="assign-teacher1" class="form-label">First Examiner:</label>
                                                     <select id="assign-teacher1" class="form-control" onchange="assignExaminer(1, this.value)">
@@ -68,6 +80,9 @@
                                                 </div>
                                             </div>
                                         </div>
+                                        <p class="mt-2 mb-0"><small class="text-muted">If the difference between Teacher 1 and Teacher 2 totals is greater than 14 marks, Teacher 3 evaluation is required.</small></p>
+                                            </div>
+                                        </div>
                                     {% else %}
                                         <label for="teacher-role"><strong>Your Role:</strong></label>
                                         <select id="teacher-role" class="form-control" style="width: 300px; display: inline-block; margin-left: 10px; background-color: #e9ecef; cursor: not-allowed;" disabled>
@@ -85,6 +100,8 @@
                                         </select>
                                         <p class="mt-2 mb-0"><small class="text-info"><i class="fas fa-info-circle"></i> You can only view and enter marks for your assigned examiner role.</small></p>
                                     {% endif %}
+                                    {% if not can_select_evaluator %}
                                     <p class="mt-2 mb-0"><small class="text-muted">If the difference between Teacher 1 and Teacher 2 totals is greater than 14 marks, Teacher 3 evaluation is required.</small></p>
+                                    {% endif %}
                                 </div>
                             {% endif %}

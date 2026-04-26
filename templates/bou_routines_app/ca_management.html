@@ -920,6 +920,14 @@
         border-left: 4px solid #2196f3;
     }
 
+    #final-exam .final-exam-examiner-toggle[aria-expanded="true"] .final-exam-examiner-chevron {
+        transform: rotate(180deg);
+    }
+    #final-exam .final-exam-examiner-chevron {
+        display: inline-block;
+        transition: transform 0.2s ease;
+    }
+
     /* No blinking caret in static final-exam copy (WebKit treats it like editable text otherwise) */
     #final-exam .ca-distribution,
     #final-exam .ca-distribution * {
@@ -944,6 +952,15 @@
     #final-exam .teacher-role-selector .form-control option {
         user-select: auto;
         -webkit-user-select: auto;
+    }
+    #final-exam .final-exam-examiner-toggle,
+    #final-exam .final-exam-examiner-toggle * {
+        user-select: none;
+        -webkit-user-select: none;
+        caret-color: transparent;
+    }
+    #final-exam .final-exam-examiner-toggle {
+        cursor: pointer;
     }
 
     #final-exam .ca-distribution {

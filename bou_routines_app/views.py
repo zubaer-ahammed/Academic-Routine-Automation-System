@@ -6151,7 +6151,7 @@ def export_attendance_pdf(request):
                 if date in attendance_matrix[student.id]['attendance']:
                     status = 'P' if attendance_matrix[student.id]['attendance'][date] else 'A'
                 else:
-                    status = '-'
+                    status = 'A'
                 row.append(status)
             row.append(str(attendance_matrix[student.id]['present_count']))
             # Removed absent_count
@@ -7102,7 +7102,7 @@ def export_attendance_excel(request):
                 if date in attendance_matrix[student.id]['attendance']:
                     status = 'P' if attendance_matrix[student.id]['attendance'][date] else 'A'
                 else:
-                    status = '-'
+                    status = 'A'
                 worksheet.write(row, col, status, cell_format)
                 col += 1
             

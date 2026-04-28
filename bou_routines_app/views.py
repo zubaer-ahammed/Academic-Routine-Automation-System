@@ -3172,9 +3172,9 @@ def export_to_pdf(request, semester_id):
         table = Table(table_data, colWidths=col_widths, repeatRows=1)
         # Custom style for the table
         style = TableStyle([
-            # Headers styling
-            ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            # Headers styling (no background fill)
+            ('BACKGROUND', (0, 0), (-1, 0), colors.white),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 9),
             # Alignment and spacing
@@ -3410,7 +3410,8 @@ def export_academic_calendar_pdf(request, semester_id):
             rightMargin=54,  # 0.75 inch - same as routine
             leftMargin=54,   # 0.75 inch - same as routine
             topMargin=34,    # 0.75 inch - same as routine
-            bottomMargin=34  # Reduced from 54 - same as routine
+            # Leave room for per-page footer signatures + page number
+            bottomMargin=70
         )
         page_width, page_height = landscape(A4)
         available_width = page_width - doc.leftMargin - doc.rightMargin
@@ -5813,7 +5814,8 @@ def export_attendance_pdf(request):
             rightMargin=54,  # 0.75 inch - same as routine
             leftMargin=54,   # 0.75 inch - same as routine
             topMargin=34,    # 0.75 inch - same as routine
-            bottomMargin=34  # Reduced from 54 - same as routine
+            # Leave room for per-page footer signature + page number
+            bottomMargin=70
         )
         
         # Get page width and calculate available width
@@ -6101,7 +6103,8 @@ def export_attendance_pdf(request):
             'VerticalHeader',
             parent=styles['Normal'],
             fontSize=6,  # Small font
-            textColor=colors.white,  # White text
+            textColor=colors.black,
+            fontName='Helvetica-Bold',
             alignment=TA_CENTER,
             leading=6,
             spaceBefore=0,
@@ -6190,8 +6193,9 @@ def export_attendance_pdf(request):
         # Create table with adjusted column widths
         table = Table(table_data, colWidths=col_widths, repeatRows=1)
         table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            # Header row: no background fill
+            ('BACKGROUND', (0, 0), (-1, 0), colors.white),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
@@ -6226,42 +6230,10 @@ def export_attendance_pdf(request):
         ]))
         
         elements.append(table)
-        
-        # Add footer with signature (same style as routine PDF export, but only left signature)
-        elements.append(Spacer(1, 40))  # Increased from 24 to 40 for more space above signature
-        signature_style_left = ParagraphStyle(
-            'SignatureStyleLeft',
-            fontName='Helvetica',
-            fontSize=10,
-            alignment=0,  # Left alignment
-            leading=6,
-            spaceBefore=0,
-            spaceAfter=0,
-        )
-        
-        # Check if hide_faculty parameter is set (ignored unless caller may apply it)
+
+        # Footer signature is drawn on every page via the overlay canvas (see page-number overlay below).
         hide_faculty = (request.GET.get('hide_faculty') == '1') and can_apply_hide_faculty
-        
-        # Get teacher name for signature (reuse teacher_name from header if available)
         teacher_name_for_signature = teacher_name if teacher_name else "Teacher Name"
-        
-        # Create signature data (only Faculty line, no school/university)
-        # If hide_faculty is set, show only "Faculty:" without the name
-        if hide_faculty:
-            faculty_line = Paragraph("Faculty:", signature_style_left)
-        else:
-            faculty_line = Paragraph(f"Faculty: {teacher_name_for_signature}", signature_style_left)
-        signature_data_left = [
-            [faculty_line]
-        ]
-        signature_table_width = 250  # Same as routine PDF export
-        signature_table_left = Table(signature_data_left, colWidths=[signature_table_width], hAlign='LEFT')
-        signature_table_left.setStyle(TableStyle([
-            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
-            ('TOPPADDING', (0,0), (0,0), 4),
-        ]))
-        elements.append(signature_table_left)
         
         # Build PDF with page numbers - two pass approach
         # First pass: build to temp buffer to count pages
@@ -6272,7 +6244,7 @@ def export_attendance_pdf(request):
             rightMargin=54,
             leftMargin=54,
             topMargin=34,
-            bottomMargin=34
+            bottomMargin=70
         )
         # Build without page numbers to count pages
         temp_doc.build(elements)
@@ -6294,11 +6266,24 @@ def export_attendance_pdf(request):
             overlay_buffer = io.BytesIO()
             overlay_canvas = reportlab_canvas.Canvas(overlay_buffer, pagesize=landscape(A4))
             
+            page_width, page_height = landscape(A4)
+            footer_left_x = doc.leftMargin
+            footer_right_x = page_width - doc.rightMargin
+            footer_line_y = 48
+            footer_text_y = 34
             for page_num in range(1, total_pages + 1):
+                # Signature footer (left) on each page
+                overlay_canvas.setLineWidth(1)
+                overlay_canvas.setStrokeColor(colors.black)
+                overlay_canvas.line(footer_left_x, footer_line_y, footer_left_x + 200, footer_line_y)
+                overlay_canvas.setFont('Helvetica', 10)
+                faculty_text = "Faculty:" if hide_faculty else f"Faculty: {teacher_name_for_signature}"
+                overlay_canvas.drawString(footer_left_x, footer_text_y, faculty_text)
+
+                # Page number (right) on same line as signature
                 overlay_canvas.setFont('Helvetica', 9)
-                page_width, page_height = landscape(A4)
-                text = f"{page_num}-{total_pages}"
-                overlay_canvas.drawCentredString(page_width / 2.0, 20, text)
+                overlay_canvas.drawRightString(footer_right_x, footer_text_y, f"Page {page_num}-{total_pages}")
+
                 overlay_canvas.showPage()
             
             overlay_canvas.save()
@@ -6324,13 +6309,12 @@ def export_attendance_pdf(request):
             total_pages = max(1, len(students) // 12 + 1)
             
             def add_page_number(canvas, doc):
-                """Add page numbers in format '1-5', '2-5', etc."""
+                """Add page numbers in format 'Page 1-5', 'Page 2-5', etc."""
                 page_num = canvas.getPageNumber()
-                text = f"{page_num}-{total_pages}"
                 canvas.saveState()
                 canvas.setFont('Helvetica', 9)
                 page_width, page_height = landscape(A4)
-                canvas.drawCentredString(page_width / 2.0, 20, text)
+                canvas.drawRightString(page_width - doc.rightMargin, 34, f"Page {page_num}-{total_pages}")
                 canvas.restoreState()
             
             def on_first_page(canvas, doc):
@@ -6474,7 +6458,8 @@ def export_blank_attendance_pdf(request):
             rightMargin=54,
             leftMargin=54,
             topMargin=34,
-            bottomMargin=34
+            # Leave room for per-page footer signatures + page number
+            bottomMargin=70
         )
         
         # Get page width and calculate available width
@@ -6753,7 +6738,8 @@ def export_blank_attendance_pdf(request):
             'VerticalHeader',
             parent=styles['Normal'],
             fontSize=6,
-            textColor=colors.white,
+            textColor=colors.black,
+            fontName='Helvetica-Bold',
             alignment=TA_CENTER,
             leading=6,
             spaceBefore=0,
@@ -6833,8 +6819,9 @@ def export_blank_attendance_pdf(request):
         # Create table with adjusted column widths
         table = Table(table_data, colWidths=col_widths, repeatRows=1)
         table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            # Header row: no background fill
+            ('BACKGROUND', (0, 0), (-1, 0), colors.white),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
@@ -6868,42 +6855,10 @@ def export_blank_attendance_pdf(request):
         ]))
         
         elements.append(table)
-        
-        # Add footer with signature (same style as routine PDF export, but only left signature)
-        elements.append(Spacer(1, 40))
-        signature_style_left = ParagraphStyle(
-            'SignatureStyleLeft',
-            fontName='Helvetica',
-            fontSize=10,
-            alignment=0,  # Left alignment
-            leading=6,
-            spaceBefore=0,
-            spaceAfter=0,
-        )
-        
-        # Check if hide_faculty parameter is set (ignored unless caller may apply it)
+
+        # Footer signature is drawn on every page via the overlay canvas (see page-number overlay below).
         hide_faculty = (request.GET.get('hide_faculty') == '1') and can_apply_hide_faculty
-        
-        # Get teacher name for signature (reuse teacher_name from header if available)
         teacher_name_for_signature = teacher_name if teacher_name else "Teacher Name"
-        
-        # Create signature data (only Faculty line, no school/university)
-        # If hide_faculty is set, show only "Faculty:" without the name
-        if hide_faculty:
-            faculty_line = Paragraph("Faculty:", signature_style_left)
-        else:
-            faculty_line = Paragraph(f"Faculty: {teacher_name_for_signature}", signature_style_left)
-        signature_data_left = [
-            [faculty_line]
-        ]
-        signature_table_width = 250  # Same as routine PDF export
-        signature_table_left = Table(signature_data_left, colWidths=[signature_table_width], hAlign='LEFT')
-        signature_table_left.setStyle(TableStyle([
-            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
-            ('TOPPADDING', (0,0), (0,0), 4),
-        ]))
-        elements.append(signature_table_left)
         
         # Build PDF with page numbers - two pass approach
         # First pass: build to temp buffer to count pages
@@ -6914,7 +6869,7 @@ def export_blank_attendance_pdf(request):
             rightMargin=54,
             leftMargin=54,
             topMargin=34,
-            bottomMargin=34
+            bottomMargin=70
         )
         # Build without page numbers to count pages
         temp_doc.build(elements)
@@ -6936,11 +6891,24 @@ def export_blank_attendance_pdf(request):
             overlay_buffer = io.BytesIO()
             overlay_canvas = reportlab_canvas.Canvas(overlay_buffer, pagesize=landscape(A4))
             
+            page_width, page_height = landscape(A4)
+            footer_left_x = doc.leftMargin
+            footer_right_x = page_width - doc.rightMargin
+            footer_line_y = 48
+            footer_text_y = 34
             for page_num in range(1, total_pages + 1):
+                # Signature footer (left) on each page
+                overlay_canvas.setLineWidth(1)
+                overlay_canvas.setStrokeColor(colors.black)
+                overlay_canvas.line(footer_left_x, footer_line_y, footer_left_x + 200, footer_line_y)
+                overlay_canvas.setFont('Helvetica', 10)
+                faculty_text = "Faculty:" if hide_faculty else f"Faculty: {teacher_name_for_signature}"
+                overlay_canvas.drawString(footer_left_x, footer_text_y, faculty_text)
+
+                # Page number (right) on same line as signature
                 overlay_canvas.setFont('Helvetica', 9)
-                page_width, page_height = landscape(A4)
-                text = f"{page_num}-{total_pages}"
-                overlay_canvas.drawCentredString(page_width / 2.0, 20, text)
+                overlay_canvas.drawRightString(footer_right_x, footer_text_y, f"Page {page_num}-{total_pages}")
+
                 overlay_canvas.showPage()
             
             overlay_canvas.save()
@@ -6966,13 +6934,12 @@ def export_blank_attendance_pdf(request):
             total_pages = max(1, len(students) // 12 + 1)
             
             def add_page_number(canvas, doc):
-                """Add page numbers in format '1-5', '2-5', etc."""
+                """Add page numbers in format 'Page 1-5', 'Page 2-5', etc."""
                 page_num = canvas.getPageNumber()
-                text = f"{page_num}-{total_pages}"
                 canvas.saveState()
                 canvas.setFont('Helvetica', 9)
                 page_width, page_height = landscape(A4)
-                canvas.drawCentredString(page_width / 2.0, 20, text)
+                canvas.drawRightString(page_width - doc.rightMargin, 34, f"Page {page_num}-{total_pages}")
                 canvas.restoreState()
             
             def on_first_page(canvas, doc):
@@ -7206,7 +7173,8 @@ def export_ca_marks_pdf(request):
             rightMargin=54,  # 0.75 inch - same as routine
             leftMargin=54,   # 0.75 inch - same as routine
             topMargin=34,    # 0.75 inch - same as routine
-            bottomMargin=34  # Reduced from 54 - same as routine
+            # Leave room for per-page footer signature + page number
+            bottomMargin=70
         )
         
         # Get page width and calculate available width
@@ -7586,7 +7554,12 @@ def export_ca_marks_pdf(request):
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
             # Data rows styling
             ('FONTSIZE', (0, header_rows), (-1, -1), 8),
-            ('FONTSIZE', (1, header_rows), (1, -1), 7),  # Smaller font for Name column
+            # Student ID: bold + slightly larger (match Attendance export)
+            ('FONTSIZE', (1, header_rows), (1, -1), 9),
+            ('FONTNAME', (1, header_rows), (1, -1), 'Helvetica-Bold'),
+            # Name: bold, compact
+            ('FONTSIZE', (2, header_rows), (2, -1), 7),
+            ('FONTNAME', (2, header_rows), (2, -1), 'Helvetica-Bold'),
             ('ROWBACKGROUNDS', (0, header_rows), (-1, -1), [colors.white, colors.lightgrey]),
         ]
         
@@ -7641,49 +7614,78 @@ def export_ca_marks_pdf(request):
         table.setStyle(TableStyle(style_commands))
         
         elements.append(table)
-        
-        # Add footer with signatures
-        elements.append(Spacer(1, 40))  # Increased from 24 to 40 for more space above signature
-        signature_style = ParagraphStyle(
-            'SignatureStyle',
-            fontName='Helvetica',
-            fontSize=10,
-            alignment=TA_RIGHT,
-            leading=6,
-            spaceBefore=0,
-            spaceAfter=0,
+
+        # Build PDF with total-pages page numbering + per-page signature (two-pass overlay)
+        temp_buffer = io.BytesIO()
+        temp_doc = SimpleDocTemplate(
+            temp_buffer,
+            pagesize=landscape(A4),
+            rightMargin=doc.rightMargin,
+            leftMargin=doc.leftMargin,
+            topMargin=doc.topMargin,
+            bottomMargin=doc.bottomMargin,
         )
-        signature_style_left = ParagraphStyle(
-            'SignatureStyleLeft',
-            fontName='Helvetica',
-            fontSize=10,
-            alignment=0,
-            leading=6,
-            spaceBefore=0,
-            spaceAfter=0,
-        )
-        teacher_sig_line = Paragraph("Signature of the course teacher", signature_style_left)
-        sig_width = 280
-        signature_table_left = Table(
-            [[teacher_sig_line, '']],
-            colWidths=[sig_width, max(0, available_width - sig_width)],
-            hAlign='LEFT',
-        )
-        signature_table_left.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 0),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-            # Short line only above the left signature cell
-            ('LINEABOVE', (0, 0), (0, 0), 1, colors.black),
-            ('TOPPADDING', (0, 0), (0, 0), 4),
-        ]))
-        elements.append(signature_table_left)
-        
-        # Build PDF
-        doc.build(elements, onFirstPage=_pdf_add_page_number, onLaterPages=_pdf_add_page_number)
-        buffer.seek(0)
-        
-        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        temp_doc.build(elements)
+        temp_buffer.seek(0)
+
+        total_pages = 1
+        try:
+            try:
+                from PyPDF2 import PdfWriter, PdfReader
+            except ImportError:
+                from pypdf import PdfWriter, PdfReader
+
+            reader = PdfReader(temp_buffer)
+            total_pages = len(reader.pages)
+
+            from reportlab.pdfgen import canvas as reportlab_canvas
+            overlay_buffer = io.BytesIO()
+            overlay_canvas = reportlab_canvas.Canvas(overlay_buffer, pagesize=landscape(A4))
+
+            page_width, _page_height = landscape(A4)
+            left_x = doc.leftMargin
+            right_x = page_width - doc.rightMargin
+            footer_y_line = 48
+            footer_y_text = 34
+            line_w = 280
+
+            for page_num in range(1, total_pages + 1):
+                # Signature line + label (left)
+                overlay_canvas.setLineWidth(1)
+                overlay_canvas.setStrokeColor(colors.black)
+                overlay_canvas.line(left_x, footer_y_line, left_x + line_w, footer_y_line)
+                overlay_canvas.setFont('Helvetica', 10)
+                overlay_canvas.drawString(left_x, footer_y_text, "Signature of the course teacher")
+
+                # Page number (right) on the same baseline as signature label
+                overlay_canvas.setFont('Helvetica', 9)
+                overlay_canvas.drawRightString(right_x, footer_y_text, f"Page {page_num}-{total_pages}")
+
+                overlay_canvas.showPage()
+
+            overlay_canvas.save()
+            overlay_buffer.seek(0)
+
+            overlay_reader = PdfReader(overlay_buffer)
+            temp_buffer.seek(0)
+            base_reader = PdfReader(temp_buffer)
+
+            writer = PdfWriter()
+            for i in range(total_pages):
+                page = base_reader.pages[i]
+                page.merge_page(overlay_reader.pages[i])
+                writer.add_page(page)
+
+            out_buffer = io.BytesIO()
+            writer.write(out_buffer)
+            out_buffer.seek(0)
+            pdf_bytes = out_buffer.getvalue()
+        except Exception:
+            # Fallback: return the base PDF without X-Y numbering if merge fails
+            temp_buffer.seek(0)
+            pdf_bytes = temp_buffer.getvalue()
+
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
         filename = f"CA_Marks_{course.code}_{semester.name}.pdf"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
@@ -7728,7 +7730,8 @@ def export_blank_ca_marks_pdf(request):
             rightMargin=54,
             leftMargin=54,
             topMargin=34,
-            bottomMargin=34
+            # Leave room for per-page footer signature + page number
+            bottomMargin=70
         )
         
         # Get page width and calculate available width
@@ -8146,7 +8149,12 @@ def export_blank_ca_marks_pdf(request):
             ('TOPPADDING', (0, 0), (-1, header_rows - 1), 8),
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
             ('FONTSIZE', (0, header_rows), (-1, -1), 8),
-            ('FONTSIZE', (1, header_rows), (1, -1), 7),  # Smaller font for Name column
+            # Student ID: bold + slightly larger (match Attendance export)
+            ('FONTSIZE', (1, header_rows), (1, -1), 9),
+            ('FONTNAME', (1, header_rows), (1, -1), 'Helvetica-Bold'),
+            # Name: bold, compact
+            ('FONTSIZE', (2, header_rows), (2, -1), 7),
+            ('FONTNAME', (2, header_rows), (2, -1), 'Helvetica-Bold'),
             ('ROWBACKGROUNDS', (0, header_rows), (-1, -1), [colors.white, colors.lightgrey]),
         ]
         
@@ -8474,7 +8482,8 @@ def export_final_exam_pdf(request):
             rightMargin=54,  # 0.75 inch - same as routine
             leftMargin=54,   # 0.75 inch - same as routine
             topMargin=34,    # 0.75 inch - same as routine
-            bottomMargin=34  # Reduced from 54 - same as routine
+            # Leave room for per-page footer signatures + page number
+            bottomMargin=90
         )
         
         # Get page width and calculate available width
@@ -8887,64 +8896,84 @@ def export_final_exam_pdf(request):
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
             ('FONTSIZE', (0, 1), (-1, -1), 8),
+            # Student ID: bold + slightly larger (match Attendance export)
+            ('FONTSIZE', (1, 1), (1, -1), 9),
+            ('FONTNAME', (1, 1), (1, -1), 'Helvetica-Bold'),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
         ]))
         
         elements.append(table)
         
-        # Add footer with signatures
-        elements.append(Spacer(1, 40))
-        signature_style = ParagraphStyle(
-            'SignatureStyle',
-            fontName='Helvetica',
-            fontSize=10,
-            alignment=TA_RIGHT,
-            leading=6,
-            spaceBefore=0,
-            spaceAfter=0,
+        # Build PDF with total-pages numbering + per-page signatures (two-pass overlay)
+        temp_buffer = io.BytesIO()
+        temp_doc = SimpleDocTemplate(
+            temp_buffer,
+            pagesize=landscape(A4),
+            rightMargin=doc.rightMargin,
+            leftMargin=doc.leftMargin,
+            topMargin=doc.topMargin,
+            bottomMargin=doc.bottomMargin,
         )
-        signature_style_left = ParagraphStyle(
-            'SignatureStyleLeft',
-            fontName='Helvetica',
-            fontSize=10,
-            alignment=0,
-            leading=6,
-            spaceBefore=0,
-            spaceAfter=0,
-        )
-        signature_data = [[Paragraph("External Examiner", signature_style)]]
-        signature_data_left = [[Paragraph("Internal Examiner", signature_style_left)]]
-        signature_table_width = 250
-        signature_table = Table(signature_data, colWidths=[signature_table_width])
-        signature_table.setStyle(TableStyle([
-            ('ALIGN', (0,0), (-1,-1), 'RIGHT'),
-            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
-            ('TOPPADDING', (0,0), (0,0), 4),
-        ]))
-        signature_table_left = Table(signature_data_left, colWidths=[signature_table_width])
-        signature_table_left.setStyle(TableStyle([
-            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
-            ('TOPPADDING', (0,0), (0,0), 4),
-        ]))
-        wrapper_col_widths = [available_width - signature_table_width * 2, signature_table_width, signature_table_width]
-        signature_wrapper_table = Table([[signature_table_left, '', signature_table]], colWidths=wrapper_col_widths)
-        signature_wrapper_table.setStyle(TableStyle([
-            ('ALIGN', (0,0), (0,0), 'LEFT'),
-            ('ALIGN', (2,0), (2,0), 'RIGHT'),
-            ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
-            ('LEFTPADDING', (0,0), (-1,-1), 0),
-            ('RIGHTPADDING', (0,0), (-1,-1), 0),
-            ('TOPPADDING', (0,0), (-1,-1), 0),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-        ]))
-        elements.append(signature_wrapper_table)
-        
-        # Build PDF
-        doc.build(elements, onFirstPage=_pdf_add_page_number, onLaterPages=_pdf_add_page_number)
-        buffer.seek(0)
-        
-        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        temp_doc.build(elements)
+        temp_buffer.seek(0)
+
+        total_pages = 1
+        try:
+            try:
+                from PyPDF2 import PdfWriter, PdfReader
+            except ImportError:
+                from pypdf import PdfWriter, PdfReader
+
+            base_reader = PdfReader(temp_buffer)
+            total_pages = len(base_reader.pages)
+
+            from reportlab.pdfgen import canvas as reportlab_canvas
+            overlay_buffer = io.BytesIO()
+            overlay_canvas = reportlab_canvas.Canvas(overlay_buffer, pagesize=landscape(A4))
+
+            page_width, _page_height = landscape(A4)
+            left_x = doc.leftMargin
+            right_x_end = page_width - doc.rightMargin
+            right_x = right_x_end - 250
+            footer_y_line = 48
+            footer_y_text = 34
+
+            for page_num in range(1, total_pages + 1):
+                # Signature lines + labels
+                overlay_canvas.setLineWidth(1)
+                overlay_canvas.setStrokeColor(colors.black)
+                overlay_canvas.line(left_x, footer_y_line, left_x + 250, footer_y_line)
+                overlay_canvas.line(right_x, footer_y_line, right_x_end, footer_y_line)
+
+                overlay_canvas.setFont('Helvetica', 10)
+                overlay_canvas.drawString(left_x, footer_y_text, "Internal Examiner")
+                overlay_canvas.drawRightString(right_x_end, footer_y_text, "External Examiner")
+
+                # Page number centered between signatures
+                overlay_canvas.setFont('Helvetica', 9)
+                overlay_canvas.drawCentredString(page_width / 2.0, footer_y_text, f"Page {page_num}-{total_pages}")
+
+                overlay_canvas.showPage()
+
+            overlay_canvas.save()
+            overlay_buffer.seek(0)
+            overlay_reader = PdfReader(overlay_buffer)
+
+            writer = PdfWriter()
+            for i in range(total_pages):
+                page = base_reader.pages[i]
+                page.merge_page(overlay_reader.pages[i])
+                writer.add_page(page)
+
+            out_buffer = io.BytesIO()
+            writer.write(out_buffer)
+            out_buffer.seek(0)
+            pdf_bytes = out_buffer.getvalue()
+        except Exception:
+            temp_buffer.seek(0)
+            pdf_bytes = temp_buffer.getvalue()
+
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
         filename = f"Final_Exam_Marks_{course.code}_{semester.name}.pdf"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
@@ -8990,7 +9019,8 @@ def export_blank_final_exam_pdf(request):
             rightMargin=54,
             leftMargin=54,
             topMargin=34,
-            bottomMargin=34
+            # Leave room for per-page footer signatures + page number
+            bottomMargin=90
         )
         
         # Get page width and calculate available width
@@ -9308,8 +9338,9 @@ def export_blank_final_exam_pdf(request):
         # Create table with explicit column widths
         table = Table(table_data, colWidths=col_widths)
         table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            # Header row: no background fill
+            ('BACKGROUND', (0, 0), (-1, 0), colors.white),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 9),
@@ -9318,64 +9349,82 @@ def export_blank_final_exam_pdf(request):
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
             ('FONTSIZE', (0, 1), (-1, -1), 8),
             ('FONTSIZE', (1, 1), (1, -1), 7),  # Smaller font for Name column
+            # Student ID: bold + slightly larger (match Attendance export)
+            ('FONTSIZE', (1, 1), (1, -1), 9),
+            ('FONTNAME', (1, 1), (1, -1), 'Helvetica-Bold'),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
         ]))
         
         elements.append(table)
         
-        # Add footer with signatures (same as regular export)
-        elements.append(Spacer(1, 40))
-        signature_style = ParagraphStyle(
-            'SignatureStyle',
-            fontName='Helvetica',
-            fontSize=10,
-            alignment=TA_RIGHT,
-            leading=6,
-            spaceBefore=0,
-            spaceAfter=0,
+        # Build PDF with total-pages numbering + per-page signatures (two-pass overlay)
+        temp_buffer = io.BytesIO()
+        temp_doc = SimpleDocTemplate(
+            temp_buffer,
+            pagesize=landscape(A4),
+            rightMargin=doc.rightMargin,
+            leftMargin=doc.leftMargin,
+            topMargin=doc.topMargin,
+            bottomMargin=doc.bottomMargin,
         )
-        signature_style_left = ParagraphStyle(
-            'SignatureStyleLeft',
-            fontName='Helvetica',
-            fontSize=10,
-            alignment=0,
-            leading=6,
-            spaceBefore=0,
-            spaceAfter=0,
-        )
-        signature_data = [[Paragraph("External Examiner", signature_style)]]
-        signature_data_left = [[Paragraph("Internal Examiner", signature_style_left)]]
-        signature_table_width = 250
-        signature_table = Table(signature_data, colWidths=[signature_table_width])
-        signature_table.setStyle(TableStyle([
-            ('ALIGN', (0,0), (-1,-1), 'RIGHT'),
-            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
-            ('TOPPADDING', (0,0), (0,0), 4),
-        ]))
-        signature_table_left = Table(signature_data_left, colWidths=[signature_table_width])
-        signature_table_left.setStyle(TableStyle([
-            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-            ('LINEABOVE', (0,0), (0,0), 1, colors.black),
-            ('TOPPADDING', (0,0), (0,0), 4),
-        ]))
-        wrapper_col_widths = [available_width - signature_table_width * 2, signature_table_width, signature_table_width]
-        signature_wrapper_table = Table([[signature_table_left, '', signature_table]], colWidths=wrapper_col_widths)
-        signature_wrapper_table.setStyle(TableStyle([
-            ('ALIGN', (0,0), (0,0), 'LEFT'),
-            ('ALIGN', (2,0), (2,0), 'RIGHT'),
-            ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
-            ('LEFTPADDING', (0,0), (-1,-1), 0),
-            ('RIGHTPADDING', (0,0), (-1,-1), 0),
-            ('TOPPADDING', (0,0), (-1,-1), 0),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-        ]))
-        elements.append(signature_wrapper_table)
-        
-        # Build PDF
-        doc.build(elements, onFirstPage=_pdf_add_page_number, onLaterPages=_pdf_add_page_number)
-        buffer.seek(0)
-        
-        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        temp_doc.build(elements)
+        temp_buffer.seek(0)
+
+        total_pages = 1
+        try:
+            try:
+                from PyPDF2 import PdfWriter, PdfReader
+            except ImportError:
+                from pypdf import PdfWriter, PdfReader
+
+            base_reader = PdfReader(temp_buffer)
+            total_pages = len(base_reader.pages)
+
+            from reportlab.pdfgen import canvas as reportlab_canvas
+            overlay_buffer = io.BytesIO()
+            overlay_canvas = reportlab_canvas.Canvas(overlay_buffer, pagesize=landscape(A4))
+
+            page_width, _page_height = landscape(A4)
+            left_x = doc.leftMargin
+            right_x_end = page_width - doc.rightMargin
+            right_x = right_x_end - 250
+            footer_y_line = 48
+            footer_y_text = 34
+
+            for page_num in range(1, total_pages + 1):
+                overlay_canvas.setLineWidth(1)
+                overlay_canvas.setStrokeColor(colors.black)
+                overlay_canvas.line(left_x, footer_y_line, left_x + 250, footer_y_line)
+                overlay_canvas.line(right_x, footer_y_line, right_x_end, footer_y_line)
+
+                overlay_canvas.setFont('Helvetica', 10)
+                overlay_canvas.drawString(left_x, footer_y_text, "Internal Examiner")
+                overlay_canvas.drawRightString(right_x_end, footer_y_text, "External Examiner")
+
+                overlay_canvas.setFont('Helvetica', 9)
+                overlay_canvas.drawCentredString(page_width / 2.0, footer_y_text, f"Page {page_num}-{total_pages}")
+
+                overlay_canvas.showPage()
+
+            overlay_canvas.save()
+            overlay_buffer.seek(0)
+            overlay_reader = PdfReader(overlay_buffer)
+
+            writer = PdfWriter()
+            for i in range(total_pages):
+                page = base_reader.pages[i]
+                page.merge_page(overlay_reader.pages[i])
+                writer.add_page(page)
+
+            out_buffer = io.BytesIO()
+            writer.write(out_buffer)
+            out_buffer.seek(0)
+            pdf_bytes = out_buffer.getvalue()
+        except Exception:
+            temp_buffer.seek(0)
+            pdf_bytes = temp_buffer.getvalue()
+
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
         filename = f"Blank_Final_Exam_Marks_{course.code}_{semester.name}.pdf"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response

@@ -611,8 +611,15 @@ class CAMark(models.Model):
         
         if total_classes > 0:
             # Simple percentage calculation: attendance_weight * (attended_days / total_classes)
+            # Cap at max attendance weight to avoid exceeding max due to makeup/extra attendance rows.
             attendance_weight = self.course.effective_ca_attendance_weight if not self.course.is_lab else self.course.effective_lab_ca_attendance_weight
-            return (attended_days / total_classes) * attendance_weight
+            w = float(attendance_weight or 0)
+            mark = (attended_days / total_classes) * w
+            if mark > w:
+                return w
+            if mark < 0:
+                return 0
+            return mark
         return 0
     
     def calculate_assignment_mark(self):

@@ -1175,6 +1175,24 @@
         width: 4.25rem;
     }
 
+    /* Mobile: force horizontal scrolling for Final Marks like CA Marks */
+    @media screen and (max-width: 768px) {
+        #final-exam .table-responsive {
+            overflow-x: auto;
+            overflow-y: visible;
+            -webkit-overflow-scrolling: touch;
+        }
+        /* Allow table to be wider than viewport so inputs remain usable */
+        #final-exam .ca-table {
+            table-layout: auto;
+            width: max-content;
+            min-width: 980px; /* enough for ID + Name + Q1–Q7 + Total */
+        }
+        #final-exam .ca-table .question-set-input {
+            min-width: 3.1rem;
+        }
+    }
+
     /* Semester Final Attendance: same ca-table look; natural column widths; select like mark inputs */
     #final-exam .ca-table.semester-final-attendance-table {
         table-layout: auto;

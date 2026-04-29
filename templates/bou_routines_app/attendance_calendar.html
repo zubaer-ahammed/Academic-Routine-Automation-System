@@ -16,6 +16,11 @@
 
 {% block extra_css %}
 <style>
+    /* base.html uses flex body; min-width allows wide content to widen the scrollport horizontally */
+    body .main-content-wrapper {
+        min-width: 0;
+    }
+
     /* Keep flatpickr above sticky headers */
     .flatpickr-calendar.open {
         z-index: 99999 !important;
@@ -395,11 +400,12 @@
         border: 1px solid #dee2e6;
         border-radius: 8px;
         -webkit-overflow-scrolling: touch;
-        /* Ensure sticky positioning works properly */
-        contain: layout style paint;
-        /* Force hardware acceleration for better sticky positioning */
-        transform: translateZ(0);
-        will-change: scroll-position;
+    }
+
+    /* Wide table: horizontal scroll must be on the root scrollport, not this wrapper — any
+       overflow:auto on an ancestor breaks viewport-relative position:sticky(top) on <thead>. */
+    #main-table-container.table-responsive {
+        overflow: visible !important;
     }
     
     /* Ensure sticky positioning works */
@@ -557,7 +563,20 @@
         font-weight: bold;
         position: sticky;
         top: 0;
-        z-index: 10;
+        /* Above tbody sticky cells (≤15) so the pinned header row is not covered when scrolling */
+        z-index: 30;
+    }
+
+    .attendance-table thead th.student-id-column {
+        z-index: 36 !important;
+    }
+
+    .attendance-table thead th.student-name-column {
+        z-index: 35 !important;
+    }
+
+    .attendance-table thead th.summary-column {
+        z-index: 35 !important;
     }
 
     .student-id-column {
@@ -688,20 +707,34 @@
         background-color: #f8f9fa !important;
     }
 
-    /* Ensure sticky elements stay on top during scroll */
-    .attendance-table thead th:first-child,
-    .attendance-table tbody td:first-child {
+    /* Sticky left columns: header row must stack above body sticky cells when thead is pinned */
+    .attendance-table thead th:first-child {
         left: 0px !important;
-        z-index: 25 !important;
+        z-index: 36 !important;
         position: -webkit-sticky !important;
         position: sticky !important;
         transform: translateZ(0) !important;
     }
 
-    .attendance-table thead th:nth-child(2),
+    .attendance-table thead th:nth-child(2) {
+        left: 160px !important;
+        z-index: 35 !important;
+        position: -webkit-sticky !important;
+        position: sticky !important;
+        transform: translateZ(0) !important;
+    }
+
+    .attendance-table tbody td:first-child {
+        left: 0px !important;
+        z-index: 15 !important;
+        position: -webkit-sticky !important;
+        position: sticky !important;
+        transform: translateZ(0) !important;
+    }
+
     .attendance-table tbody td:nth-child(2) {
         left: 160px !important;
-        z-index: 24 !important;
+        z-index: 14 !important;
         position: -webkit-sticky !important;
         position: sticky !important;
         transform: translateZ(0) !important;
@@ -1897,19 +1930,19 @@
                                     </button>
                                     <ul class="dropdown-menu" aria-labelledby="exportDropdown">
                                         <li>
-                                            <a class="dropdown-item export-link" data-export-type="pdf" data-url="{% url 'export-attendance-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}">
+                                            <a class="dropdown-item export-link" href="{% url 'export-attendance-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}" data-export-type="pdf" data-url="{% url 'export-attendance-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}">
                                                 <i class="fas fa-file-pdf text-danger"></i> PDF
                                             </a>
                                         </li>
                                         {% if user.is_superuser or user.is_staff %}
                                         <li>
-                                            <a class="dropdown-item export-link" data-export-type="blank-pdf" data-url="{% url 'export-blank-attendance-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}">
+                                            <a class="dropdown-item export-link" href="{% url 'export-blank-attendance-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}" data-export-type="blank-pdf" data-url="{% url 'export-blank-attendance-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}">
                                                 <i class="fas fa-file-pdf text-danger"></i> Blank PDF
                                             </a>
                                         </li>
                                         {% endif %}
                                         <li>
-                                            <a class="dropdown-item export-link" data-export-type="excel" data-url="{% url 'export-attendance-excel' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}">
+                                            <a class="dropdown-item export-link" href="{% url 'export-attendance-excel' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}" data-export-type="excel" data-url="{% url 'export-attendance-excel' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}">
                                                 <i class="fas fa-file-excel text-success"></i> Excel
                                             </a>
                                         </li>
@@ -2183,6 +2216,11 @@
 </div>
 
 <script>
+/** Horizontal panning uses the root scrollport so thead can stay position:sticky(top) on page scroll. */
+function attendanceHScrollHost() {
+    return document.scrollingElement || document.documentElement;
+}
+
 // Function to load semesters for a selected curriculum
     function loadSemestersForCurriculum(curriculumId) {
         console.log('loadSemestersForCurriculum called with curriculumId:', curriculumId);
@@ -2327,8 +2365,9 @@ function autoScrollToWeekContext() {
     const mainContainer = document.getElementById('main-table-container');
     const topScrollbar = document.getElementById('top-scrollbar');
     const attendanceTable = document.getElementById('attendance-table');
-    
-    if (!mainContainer || !attendanceTable) {
+    const hHost = attendanceHScrollHost();
+
+    if (!attendanceTable || !hHost) {
         console.warn('Table elements not found for auto-scroll');
         return;
     }
@@ -2351,11 +2390,11 @@ function autoScrollToWeekContext() {
             if (currentWeekColumn) {
                 // Scroll to the current week column
                 // Reset scroll to 0 first to get accurate measurements
-                const originalScrollLeft = mainContainer.scrollLeft;
-                mainContainer.scrollLeft = 0;
+                const originalScrollLeft = hHost.scrollLeft;
+                hHost.scrollLeft = 0;
                 
                 // Force a reflow to ensure measurements are accurate
-                void mainContainer.offsetHeight;
+                void attendanceTable.offsetHeight;
                 void currentWeekColumn.offsetLeft;
                 
                 // Get the column's position relative to the table container
@@ -2369,14 +2408,14 @@ function autoScrollToWeekContext() {
                 targetScrollPosition = Math.max(0, columnOffset - stickyColumnsWidth - padding);
                 
                 // Restore original scroll temporarily (will be set to targetScrollPosition below)
-                mainContainer.scrollLeft = originalScrollLeft;
+                hHost.scrollLeft = originalScrollLeft;
                 
                 console.log('=== AUTO-SCROLL TO CURRENT WEEK ===');
                 console.log('Current week column found');
                 console.log('Column offsetLeft:', Math.round(columnOffset));
                 console.log('Sticky columns width:', stickyColumnsWidth);
                 console.log('Calculated scroll position:', Math.round(targetScrollPosition));
-                console.log('Container width:', mainContainer.clientWidth);
+                console.log('Viewport width:', hHost.clientWidth);
             } else {
                 // Fallback: Find the closest upcoming date to today
                 const allDateColumns = Array.from(document.querySelectorAll('.date-column[data-date]'));
@@ -2406,7 +2445,7 @@ function autoScrollToWeekContext() {
                 if (closestUpcomingIndex >= 0) {
                     const targetColumn = allDateColumns[closestUpcomingIndex];
                     const columnOffset = targetColumn.offsetLeft;
-                    const viewportWidth = mainContainer.clientWidth - stickyColumnsWidth;
+                    const viewportWidth = hHost.clientWidth - stickyColumnsWidth;
                     
                     // Estimate column width
                     const estimatedColumnWidth = (attendanceTable.scrollWidth - stickyColumnsWidth) / allDateColumns.length;
@@ -2422,7 +2461,7 @@ function autoScrollToWeekContext() {
                     console.log('Target scroll position:', Math.round(targetScrollPosition));
                 } else {
                     // Fallback: scroll to show recent dates (last 25% of the semester)
-                    const maxScrollLeft = attendanceTable.scrollWidth - mainContainer.clientWidth;
+                    const maxScrollLeft = Math.max(0, hHost.scrollWidth - hHost.clientWidth);
                     targetScrollPosition = Math.max(0, maxScrollLeft * 0.75);
                     console.log('No upcoming dates found, using fallback position:', Math.round(targetScrollPosition));
                 }
@@ -2430,38 +2469,40 @@ function autoScrollToWeekContext() {
             
             // Apply the scroll position with multiple attempts to ensure it sticks
             if (targetScrollPosition >= 0) {
+                const maxSL = Math.max(0, hHost.scrollWidth - hHost.clientWidth);
+                const clamped = Math.min(maxSL, Math.max(0, targetScrollPosition));
                 // Mark that we're doing an auto-scroll to prevent interference
-                mainContainer._autoScrolling = true;
+                attendanceTable._bouAutoScrolling = true;
                 
                 // First attempt: immediate scroll
-                mainContainer.scrollLeft = targetScrollPosition;
+                hHost.scrollLeft = clamped;
                 if (topScrollbar) {
-                    topScrollbar.scrollLeft = targetScrollPosition;
+                    topScrollbar.scrollLeft = clamped;
                 }
-                console.log('Auto-scrolled to position (attempt 1):', Math.round(targetScrollPosition));
+                console.log('Auto-scrolled to position (attempt 1):', Math.round(clamped));
                 
                 // Second attempt: after a frame to ensure layout is complete
                 requestAnimationFrame(() => {
-                    mainContainer.scrollLeft = targetScrollPosition;
+                    hHost.scrollLeft = clamped;
                     if (topScrollbar) {
-                        topScrollbar.scrollLeft = targetScrollPosition;
+                        topScrollbar.scrollLeft = clamped;
                     }
-                    console.log('Auto-scrolled to position (attempt 2):', Math.round(targetScrollPosition));
+                    console.log('Auto-scrolled to position (attempt 2):', Math.round(clamped));
                     
                     // Third attempt: after a short delay to ensure it stuck
                     setTimeout(() => {
-                        if (Math.abs(mainContainer.scrollLeft - targetScrollPosition) > 5) {
+                        if (Math.abs(hHost.scrollLeft - clamped) > 5) {
                             console.log('Scroll position drifted, correcting (attempt 3)...');
-                            mainContainer.scrollLeft = targetScrollPosition;
+                            hHost.scrollLeft = clamped;
                             if (topScrollbar) {
-                                topScrollbar.scrollLeft = targetScrollPosition;
+                                topScrollbar.scrollLeft = clamped;
                             }
                         } else {
-                            console.log('Scroll position confirmed:', Math.round(mainContainer.scrollLeft));
+                            console.log('Scroll position confirmed:', Math.round(hHost.scrollLeft));
                         }
                         // Clear the flag after a delay
                         setTimeout(() => {
-                            mainContainer._autoScrolling = false;
+                            attendanceTable._bouAutoScrolling = false;
                         }, 500);
                     }, 200);
                 });
@@ -2478,9 +2519,18 @@ function autoScrollToWeekContext() {
             const mainContainer = document.getElementById('main-table-container');
             const topScrollbar = document.getElementById('top-scrollbar');
             const currentWeekColumn = document.querySelector('.current-week-column');
+            const hHost = attendanceHScrollHost();
+            if (!hHost) return;
+
+            const maxSL = () => Math.max(0, hHost.scrollWidth - hHost.clientWidth);
+            const setH = (v) => {
+                const c = Math.min(maxSL(), Math.max(0, v));
+                hHost.scrollLeft = c;
+                if (topScrollbar) topScrollbar.scrollLeft = c;
+            };
             
             // Don't interfere if we're already auto-scrolling or if scroll position is not at 0
-            if (mainContainer && !mainContainer._autoScrolling && Math.abs(mainContainer.scrollLeft) < 50) {
+            if (mainContainer && !attendanceTable._bouAutoScrolling && Math.abs(hHost.scrollLeft) < 50) {
                 if (currentWeekColumn) {
                     // If we have a current week column but scroll is still at 0, force scroll again
                     console.log('Backup: Current week column exists but scroll is at 0, forcing scroll...');
@@ -2491,17 +2541,14 @@ function autoScrollToWeekContext() {
                     if (studentIdColumn) stickyColumnsWidth += studentIdColumn.offsetWidth;
                     if (studentNameColumn) stickyColumnsWidth += studentNameColumn.offsetWidth;
                     
-                    mainContainer.scrollLeft = 0;
-                    void mainContainer.offsetHeight;
+                    hHost.scrollLeft = 0;
+                    void attendanceTable.offsetHeight;
                     
                     const columnOffset = currentWeekColumn.offsetLeft;
                     const padding = 15;
                     const targetPosition = Math.max(0, columnOffset - stickyColumnsWidth - padding);
                     
-                    mainContainer.scrollLeft = targetPosition;
-                    if (topScrollbar) {
-                        topScrollbar.scrollLeft = targetPosition;
-                    }
+                    setH(targetPosition);
                     console.log('Backup: Forced scroll to current week column:', Math.round(targetPosition));
                 } else {
                     // No current week column, apply small default scroll
@@ -2516,13 +2563,10 @@ function autoScrollToWeekContext() {
                     const smallScrollAmount = 200; // pixels
                     const targetPosition = Math.max(0, smallScrollAmount);
                     
-                    mainContainer.scrollLeft = targetPosition;
-                    if (topScrollbar) {
-                        topScrollbar.scrollLeft = targetPosition;
-                    }
+                    setH(targetPosition);
                     console.log('Backup: Applied default scroll:', Math.round(targetPosition));
                 }
-            } else if (mainContainer && Math.abs(mainContainer.scrollLeft) < 50 && !currentWeekColumn) {
+            } else if (mainContainer && Math.abs(hHost.scrollLeft) < 50 && !currentWeekColumn) {
                 // If still at the beginning and no current week column, apply a small scroll
                 const studentIdColumn = document.querySelector('.student-id-column');
                 const studentNameColumn = document.querySelector('.student-name-column');
@@ -2535,12 +2579,9 @@ function autoScrollToWeekContext() {
                 const smallScrollAmount = 200; // pixels
                 const targetPosition = Math.max(0, smallScrollAmount);
                 
-                mainContainer.scrollLeft = targetPosition;
-                if (topScrollbar) {
-                    topScrollbar.scrollLeft = targetPosition;
-                }
+                setH(targetPosition);
                 console.log('Backup auto-scroll applied:', Math.round(targetPosition));
-            } else if (currentWeekColumn && Math.abs(mainContainer.scrollLeft) < 50) {
+            } else if (currentWeekColumn && Math.abs(hHost.scrollLeft) < 50) {
                 // If we have a current week column but scroll is still at 0, force scroll again
                 console.log('Current week column exists but scroll is at 0, forcing scroll...');
                 const studentIdColumn = document.querySelector('.student-id-column');
@@ -2550,17 +2591,14 @@ function autoScrollToWeekContext() {
                 if (studentIdColumn) stickyColumnsWidth += studentIdColumn.offsetWidth;
                 if (studentNameColumn) stickyColumnsWidth += studentNameColumn.offsetWidth;
                 
-                mainContainer.scrollLeft = 0;
-                void mainContainer.offsetHeight;
+                hHost.scrollLeft = 0;
+                void attendanceTable.offsetHeight;
                 
                 const columnOffset = currentWeekColumn.offsetLeft;
                 const padding = 15;
                 const targetPosition = Math.max(0, columnOffset - stickyColumnsWidth - padding);
                 
-                mainContainer.scrollLeft = targetPosition;
-                if (topScrollbar) {
-                    topScrollbar.scrollLeft = targetPosition;
-                }
+                setH(targetPosition);
                 console.log('Forced scroll to current week column:', Math.round(targetPosition));
             }
         } catch (error) {
@@ -2571,12 +2609,12 @@ function autoScrollToWeekContext() {
 
 function setupHeaderDragScroll() {
     // Set up drag-to-scroll functionality on the table header
-    const mainContainer = document.getElementById('main-table-container');
+    const hHost = attendanceHScrollHost();
     const topScrollbar = document.getElementById('top-scrollbar');
     const tableHeader = document.querySelector('thead');
     const dateColumns = document.querySelectorAll('.date-column');
     
-    if (!mainContainer || !tableHeader) {
+    if (!hHost || !tableHeader) {
         console.warn('Table elements not found for header drag scroll');
         return;
     }
@@ -2594,7 +2632,7 @@ function setupHeaderDragScroll() {
         
         // Get the starting position
         startX = e.type === 'mousedown' ? e.pageX : e.touches[0].pageX;
-        startScrollLeft = mainContainer.scrollLeft;
+        startScrollLeft = hHost.scrollLeft;
         
         // Prevent text selection and default behaviors
         e.preventDefault();
@@ -2617,10 +2655,12 @@ function setupHeaderDragScroll() {
         const deltaX = currentX - startX;
         
         // Calculate new scroll position (invert delta for natural scrolling)
-        const newScrollLeft = startScrollLeft - deltaX;
+        const raw = startScrollLeft - deltaX;
+        const maxSL = Math.max(0, hHost.scrollWidth - hHost.clientWidth);
+        const newScrollLeft = Math.min(maxSL, Math.max(0, raw));
         
         // Apply scroll to both containers
-        mainContainer.scrollLeft = newScrollLeft;
+        hHost.scrollLeft = newScrollLeft;
         if (topScrollbar) {
             topScrollbar.scrollLeft = newScrollLeft;
         }
@@ -3004,6 +3044,77 @@ document.addEventListener('DOMContentLoaded', function() {
     // Also apply after a short delay to ensure everything is loaded
     setTimeout(forceStyleRefresh, 100);
 
+    /** Wheel, keyboard, and edge-shadow sync use the root horizontal scrollport (see #main-table-container CSS). */
+    function setupAttendanceRootHorizontalScroll() {
+        const mainContainer = document.getElementById('main-table-container');
+        const hHost = attendanceHScrollHost();
+        if (!mainContainer || !hHost) return;
+
+        function maxHS() {
+            return Math.max(0, hHost.scrollWidth - hHost.clientWidth);
+        }
+
+        function updateEdgeShadows() {
+            const sl = hHost.scrollLeft;
+            const mx = maxHS();
+            mainContainer.classList.toggle('scroll-left', sl > 1);
+            mainContainer.classList.toggle('scroll-right', mx > 1 && sl < mx - 1);
+        }
+
+        hHost.addEventListener('scroll', updateEdgeShadows, { passive: true });
+        window.addEventListener('resize', updateEdgeShadows);
+
+        function smoothScrollToH(targetScrollLeft) {
+            const maxSL = maxHS();
+            const t = Math.min(maxSL, Math.max(0, targetScrollLeft));
+            const startScrollLeft = hHost.scrollLeft;
+            const distance = t - startScrollLeft;
+            const duration = 300;
+            let startTime = null;
+
+            function animation(currentTime) {
+                if (startTime === null) startTime = currentTime;
+                const timeElapsed = currentTime - startTime;
+                const progress = Math.min(timeElapsed / duration, 1);
+                const ease = 1 - Math.pow(1 - progress, 3);
+                hHost.scrollLeft = startScrollLeft + (distance * ease);
+                if (progress < 1) {
+                    requestAnimationFrame(animation);
+                } else {
+                    updateEdgeShadows();
+                }
+            }
+            requestAnimationFrame(animation);
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (!e.target.closest('.attendance-table')) return;
+            if (e.key === 'ArrowLeft' && e.ctrlKey) {
+                e.preventDefault();
+                smoothScrollToH(Math.max(0, hHost.scrollLeft - 200));
+            } else if (e.key === 'ArrowRight' && e.ctrlKey) {
+                e.preventDefault();
+                smoothScrollToH(Math.min(maxHS(), hHost.scrollLeft + 200));
+            } else if (e.key === 'Home' && e.ctrlKey) {
+                e.preventDefault();
+                smoothScrollToH(0);
+            } else if (e.key === 'End' && e.ctrlKey) {
+                e.preventDefault();
+                smoothScrollToH(maxHS());
+            }
+        });
+
+        mainContainer.addEventListener('wheel', function(e) {
+            if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+                e.preventDefault();
+                const scrollAmount = e.deltaY || e.deltaX;
+                smoothScrollToH(hHost.scrollLeft + scrollAmount);
+            }
+        }, { passive: false });
+
+        updateEdgeShadows();
+    }
+
     // Enhanced dual scrollbar functionality with intuitive UX
     function setupDualScrollbars() {
         const topScrollbar = document.getElementById('top-scrollbar');
@@ -3012,8 +3123,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const attendanceTable = document.getElementById('attendance-table');
         const leftIndicator = document.getElementById('scroll-left-indicator');
         const rightIndicator = document.getElementById('scroll-right-indicator');
+        const hHost = attendanceHScrollHost();
 
-        if (!topScrollbar || !mainContainer || !topScrollbarContent || !attendanceTable) {
+        if (!topScrollbar || !mainContainer || !hHost || !topScrollbarContent || !attendanceTable) {
             return;
         }
 
@@ -3026,8 +3138,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Update scroll indicators and shadows
         function updateScrollIndicators() {
-            const scrollLeft = mainContainer.scrollLeft;
-            const maxScrollLeft = mainContainer.scrollWidth - mainContainer.clientWidth;
+            const scrollLeft = hHost.scrollLeft;
+            const maxScrollLeft = Math.max(0, hHost.scrollWidth - hHost.clientWidth);
             
             // Update visual shadows
             mainContainer.classList.toggle('scroll-left', scrollLeft > 0);
@@ -3045,8 +3157,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Smooth scroll function
         function smoothScrollTo(targetScrollLeft) {
-            const startScrollLeft = mainContainer.scrollLeft;
-            const distance = targetScrollLeft - startScrollLeft;
+            const maxSL = Math.max(0, hHost.scrollWidth - hHost.clientWidth);
+            const t = Math.min(maxSL, Math.max(0, targetScrollLeft));
+            const startScrollLeft = hHost.scrollLeft;
+            const distance = t - startScrollLeft;
             const duration = 300;
             let startTime = null;
 
@@ -3059,7 +3173,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const ease = 1 - Math.pow(1 - progress, 3);
                 
                 const currentScrollLeft = startScrollLeft + (distance * ease);
-                mainContainer.scrollLeft = currentScrollLeft;
+                hHost.scrollLeft = currentScrollLeft;
                 topScrollbar.scrollLeft = currentScrollLeft;
 
                 if (progress < 1) {
@@ -3069,57 +3183,23 @@ document.addEventListener('DOMContentLoaded', function() {
             requestAnimationFrame(animation);
         }
 
-        // Sync scrolling from top scrollbar to main container
+        const topBarSync = { locked: false };
+        // Sync scrolling from top scrollbar to root
         topScrollbar.addEventListener('scroll', function() {
-            if (!mainContainer._syncing) {
-                topScrollbar._syncing = true;
-                mainContainer.scrollLeft = topScrollbar.scrollLeft;
-                updateScrollIndicators();
-                setTimeout(() => {
-                    topScrollbar._syncing = false;
-                }, 10);
-            }
+            if (topBarSync.locked) return;
+            topBarSync.locked = true;
+            hHost.scrollLeft = topScrollbar.scrollLeft;
+            updateScrollIndicators();
+            setTimeout(() => { topBarSync.locked = false; }, 10);
         });
 
-        // Sync scrolling from main container to top scrollbar
-        mainContainer.addEventListener('scroll', function() {
-            if (!topScrollbar._syncing) {
-                mainContainer._syncing = true;
-                topScrollbar.scrollLeft = mainContainer.scrollLeft;
-                updateScrollIndicators();
-                setTimeout(() => {
-                    mainContainer._syncing = false;
-                }, 10);
-            }
-        });
-
-        // Keyboard navigation
-        document.addEventListener('keydown', function(e) {
-            if (e.target.closest('.attendance-table')) {
-                if (e.key === 'ArrowLeft' && e.ctrlKey) {
-                    e.preventDefault();
-                    smoothScrollTo(Math.max(0, mainContainer.scrollLeft - 200));
-                } else if (e.key === 'ArrowRight' && e.ctrlKey) {
-                    e.preventDefault();
-                    const maxScroll = mainContainer.scrollWidth - mainContainer.clientWidth;
-                    smoothScrollTo(Math.min(maxScroll, mainContainer.scrollLeft + 200));
-                } else if (e.key === 'Home' && e.ctrlKey) {
-                    e.preventDefault();
-                    smoothScrollTo(0);
-                } else if (e.key === 'End' && e.ctrlKey) {
-                    e.preventDefault();
-                    smoothScrollTo(mainContainer.scrollWidth - mainContainer.clientWidth);
-                }
-            }
-        });
-
-        // Mouse wheel horizontal scrolling
-        mainContainer.addEventListener('wheel', function(e) {
-            if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
-                e.preventDefault();
-                const scrollAmount = e.deltaY || e.deltaX;
-                smoothScrollTo(mainContainer.scrollLeft + scrollAmount);
-            }
+        // Sync scrolling from root to top scrollbar
+        hHost.addEventListener('scroll', function() {
+            if (topBarSync.locked) return;
+            topBarSync.locked = true;
+            topScrollbar.scrollLeft = hHost.scrollLeft;
+            updateScrollIndicators();
+            setTimeout(() => { topBarSync.locked = false; }, 10);
         });
 
         // Update top scrollbar width on load and resize
@@ -3131,6 +3211,7 @@ document.addEventListener('DOMContentLoaded', function() {
         setTimeout(updateScrollIndicators, 600);
     }
 
+    setupAttendanceRootHorizontalScroll();
     // Initialize dual scrollbars
     setupDualScrollbars();
     setTimeout(setupDualScrollbars, 200);
@@ -3278,28 +3359,30 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Handle export links with hide_faculty parameter
+    // Optional hide_faculty for admin PDF exports; teachers have no checkbox — use normal navigation (href).
     const hideFacultyCheckbox = document.getElementById('hideFacultyCheckbox');
     const exportLinks = document.querySelectorAll('.export-link');
-    
-    if (hideFacultyCheckbox && exportLinks.length > 0) {
+    if (exportLinks.length > 0) {
         exportLinks.forEach(function(link) {
             link.addEventListener('click', function(e) {
-                e.preventDefault();
-                let url = this.getAttribute('data-url');
-                
-                // Only add hide_faculty parameter for PDF exports
                 const exportType = this.getAttribute('data-export-type');
-                if ((exportType === 'pdf' || exportType === 'blank-pdf') && hideFacultyCheckbox.checked) {
-                    // Add or update hide_faculty parameter
-                    if (url.includes('?')) {
-                        url += '&hide_faculty=1';
-                    } else {
-                        url += '?hide_faculty=1';
-                    }
+                const baseUrl = this.getAttribute('data-url') || this.getAttribute('href');
+                if (!hideFacultyCheckbox || exportType === 'excel') {
+                    return;
                 }
-                
-                // Navigate to the URL
+                if (exportType !== 'pdf' && exportType !== 'blank-pdf') {
+                    return;
+                }
+                if (!hideFacultyCheckbox.checked) {
+                    return;
+                }
+                e.preventDefault();
+                let url = baseUrl;
+                if (url.includes('?')) {
+                    url += '&hide_faculty=1';
+                } else {
+                    url += '?hide_faculty=1';
+                }
                 window.location.href = url;
             });
         });

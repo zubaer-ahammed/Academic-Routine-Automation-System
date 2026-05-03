@@ -1177,6 +1177,30 @@
         max-width: 4.5rem;
         box-sizing: border-box;
     }
+    /* Lab semester final: .mark-input is otherwise 70px — use column width + room for placeholders */
+    #final-exam .ca-table.semester-final-exam-marks-table .mark-input {
+        width: 100%;
+        max-width: none;
+        min-width: 6.25rem;
+        box-sizing: border-box;
+    }
+    #final-exam .ca-table.semester-final-exam-marks-table .mark-input[data-lab-field="ps"] {
+        min-width: 11rem;
+    }
+    #final-exam .ca-table.semester-final-exam-marks-table .mark-input[data-lab-field="viva"] {
+        min-width: 7rem;
+    }
+    #final-exam .ca-table.semester-final-exam-marks-table .mark-input::placeholder {
+        color: #adb5bd;
+        opacity: 1;
+        text-align: center;
+    }
+    #final-exam .ca-table.semester-final-exam-marks-table td:has(> .mark-input[data-lab-field="ps"]) {
+        width: 34%;
+    }
+    #final-exam .ca-table.semester-final-exam-marks-table td:has(> .mark-input[data-lab-field="viva"]) {
+        width: 24%;
+    }
     #final-exam .ca-table .total-mark {
         width: 4.25rem;
     }

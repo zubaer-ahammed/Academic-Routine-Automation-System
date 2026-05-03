@@ -2483,9 +2483,18 @@ function initializeAverages() {
     });
 }
 
-// Initialize averages when page loads
+// Initialize averages when page loads; sync lab final totals from inputs (row-scoped totals)
 document.addEventListener('DOMContentLoaded', function() {
     initializeAverages();
+    var feForm = document.getElementById('final-exam-marks-form');
+    if (feForm) {
+        var rp0 = currentFinalExamLabRolePrefix();
+        feForm.querySelectorAll(
+            'input[name*="[' + rp0 + '_lab_final_exam_mark]"], input[name*="[' + rp0 + '_lab_viva_mark]"]'
+        ).forEach(function (inp) {
+            calculateFinalExamTotal(inp);
+        });
+    }
 });
 
 // Function to update Save CA Marks button status
@@ -2960,55 +2969,83 @@ function validateQuestionSet(inputElement) {
 const LAB_FINAL_EXAM_MAX = parseInt("{{ lab_final_exam_max|default:50 }}", 10) || 50;
 const LAB_FINAL_USES_VIVA = {% if lab_final_uses_viva %}true{% else %}false{% endif %};
 const LAB_PROBLEM_MAX = parseInt("{{ lab_final_problem_solving_max|default:20 }}", 10) || 20;
-const LAB_VIVA_MAX = parseInt("{{ lab_final_viva_max|default:0 }}", 10) || 0;
+const LAB_VIVA_MAX = LAB_FINAL_USES_VIVA ? (parseInt("{{ lab_final_viva_max|default:5 }}", 10) || 5) : 0;
+
+/** Lab row input names include [teacher1_…] or [teacher2_…]; keep in sync with save payload keys. */
+function currentFinalExamLabRolePrefix() {
+    var feForm = document.getElementById('final-exam-marks-form');
+    var h = feForm ? feForm.querySelector('input[name="teacher_role"]') : null;
+    if (h && String(h.value || '').trim() === 'teacher2') {
+        return 'teacher2';
+    }
+    try {
+        var u = new URLSearchParams(window.location.search);
+        if (u.get('teacher_role') === 'teacher2') {
+            return 'teacher2';
+        }
+    } catch (e) { /* ignore */ }
+    return 'teacher1';
+}
 
 // Function to calculate final exam total for lab course
 function calculateFinalExamTotal(inputElement) {
-    const row = inputElement.closest ? inputElement.closest('tr') : null;
+    if (!inputElement || !inputElement.name) {
+        return;
+    }
+    var studentId = inputElement.getAttribute('data-student-id');
+    if (!studentId) {
+        var nameMatch = inputElement.name.match(/students_data\[([^\]]+)\]/);
+        if (nameMatch) {
+            studentId = nameMatch[1];
+        }
+    }
+    var rowFromClosest = inputElement.closest ? inputElement.closest('tr') : null;
+    var wrapRow = rowFromClosest || (studentId ? document.getElementById('final-exam-row-' + studentId) : null);
+    var totEl = studentId ? document.getElementById('teacher-total-' + studentId) : null;
+    if (!wrapRow || !totEl) {
+        return;
+    }
+    if (wrapRow.classList && wrapRow.classList.contains('final-exam-marks-row-disabled')) {
+        totEl.textContent = 'AB';
+        return;
+    }
     if (LAB_FINAL_USES_VIVA) {
-        let value = parseFloat(inputElement.value);
+        var value = parseFloat(inputElement.value);
         if (isNaN(value)) value = 0;
         if (value < 0) {
             value = 0;
             inputElement.value = 0;
         }
-        const cap = (inputElement.name && inputElement.name.indexOf('_lab_viva_mark') >= 0) ? LAB_VIVA_MAX : LAB_PROBLEM_MAX;
+        var cap = (inputElement.name && inputElement.name.indexOf('_lab_viva_mark') >= 0) ? LAB_VIVA_MAX : LAB_PROBLEM_MAX;
         if (value > cap) {
             inputElement.value = cap;
             alert('Maximum for this field is ' + cap + ' (lab final total 25: problem solving ' + LAB_PROBLEM_MAX + ', viva ' + LAB_VIVA_MAX + ').');
         }
-        if (row) {
-            const inpP = row.querySelector('input[name$="_lab_final_exam_mark"]');
-            const inpV = row.querySelector('input[name$="_lab_viva_mark"]');
-            const totEl = row.querySelector('[id^="teacher-total-"]');
-            if (inpP && totEl && !row.classList.contains('final-exam-marks-row-disabled')) {
-                let p = parseFloat(inpP.value);
-                let v = inpV ? parseFloat(inpV.value) : 0;
-                if (isNaN(p)) p = 0;
-                if (isNaN(v)) v = 0;
-                totEl.textContent = String(Math.ceil(p + v));
-            }
-        }
+        var rp = currentFinalExamLabRolePrefix();
+        var inpP = wrapRow.querySelector('input[name*="[' + rp + '_lab_final_exam_mark]"]');
+        var inpV = wrapRow.querySelector('input[name*="[' + rp + '_lab_viva_mark]"]');
+        var p = inpP ? parseFloat(inpP.value) : 0;
+        var v = inpV ? parseFloat(inpV.value) : 0;
+        if (isNaN(p)) p = 0;
+        if (isNaN(v)) v = 0;
+        totEl.textContent = String(Math.ceil(p + v));
         return;
     }
-    let value = parseFloat(inputElement.value);
-    if (isNaN(value)) value = 0;
-    if (value < 0) {
-        value = 0;
+    var singleLab = parseFloat(inputElement.value);
+    if (isNaN(singleLab)) singleLab = 0;
+    if (singleLab < 0) {
+        singleLab = 0;
         inputElement.value = 0;
     }
-    if (value > LAB_FINAL_EXAM_MAX) {
+    if (singleLab > LAB_FINAL_EXAM_MAX) {
         inputElement.value = LAB_FINAL_EXAM_MAX;
         alert('Maximum mark for lab final exam is ' + LAB_FINAL_EXAM_MAX + '.');
     }
-    if (row) {
-        const inpLab = row.querySelector('input[name$="_lab_final_exam_mark"]');
-        const totEl = row.querySelector('[id^="teacher-total-"]');
-        if (inpLab && totEl && !row.classList.contains('final-exam-marks-row-disabled')) {
-            let v = parseFloat(inpLab.value);
-            if (isNaN(v)) v = 0;
-            totEl.textContent = String(Math.ceil(v));
-        }
+    var inpLab = wrapRow.querySelector('input[name*="[' + currentFinalExamLabRolePrefix() + '_lab_final_exam_mark]"]');
+    if (inpLab && totEl) {
+        var labVal = parseFloat(inpLab.value);
+        if (isNaN(labVal)) labVal = 0;
+        totEl.textContent = String(Math.ceil(labVal));
     }
 }
 
@@ -3331,8 +3368,12 @@ function saveFinalExamMarks(reloadPage = true) {
     const teacherRoleRaw = formData.get('teacher_role') || urlParamsFe.get('teacher_role');
     const teacherRole = (teacherRoleRaw && String(teacherRoleRaw).trim()) ? String(teacherRoleRaw).trim() : 'teacher1';
     
-    // Collect all student marks (scoped to the marks table, not other tbody in the tab)
-    form.querySelectorAll('table.ca-table tbody tr').forEach(function (row) {
+    // Collect all student marks (scoped to the semester final exam marks table; fallback if class missing)
+    var markRows = form.querySelectorAll('table.semester-final-exam-marks-table tbody tr');
+    if (!markRows.length) {
+        markRows = form.querySelectorAll('tbody tr[id^="final-exam-row-"]');
+    }
+    markRows.forEach(function (row) {
         if (row.classList && row.classList.contains('final-exam-marks-row-disabled')) {
             return; /* Do not post marks for students marked absent in Semester Final Attendance */
         }
@@ -3366,8 +3407,8 @@ function saveFinalExamMarks(reloadPage = true) {
         if (isLabCourse) {
             const rolePrefix = (teacherRole === 'teacher2') ? 'teacher2' : 'teacher1';
             if (LAB_FINAL_USES_VIVA) {
-                const inpP = row.querySelector('input[name$="_lab_final_exam_mark"]');
-                const inpV = row.querySelector('input[name$="_lab_viva_mark"]');
+                const inpP = row.querySelector('input[name*="[' + rolePrefix + '_lab_final_exam_mark]"]');
+                const inpV = row.querySelector('input[name*="[' + rolePrefix + '_lab_viva_mark]"]');
                 let p = parseFloat(inpP ? inpP.value : 0);
                 let v = parseFloat(inpV ? inpV.value : 0);
                 if (isNaN(p)) p = 0;
@@ -3375,7 +3416,7 @@ function saveFinalExamMarks(reloadPage = true) {
                 marks[rolePrefix + '_lab_final_exam_mark'] = Math.max(0, Math.min(LAB_PROBLEM_MAX, p));
                 marks[rolePrefix + '_lab_viva_mark'] = Math.max(0, Math.min(LAB_VIVA_MAX, v));
             } else {
-                const inpLab = row.querySelector('input[name$="_lab_final_exam_mark"]');
+                const inpLab = row.querySelector('input[name*="[' + rolePrefix + '_lab_final_exam_mark]"]');
                 let labVal = parseFloat(inpLab ? inpLab.value : 0);
                 if (isNaN(labVal)) labVal = 0;
                 labVal = Math.max(0, Math.min(LAB_FINAL_EXAM_MAX, labVal));

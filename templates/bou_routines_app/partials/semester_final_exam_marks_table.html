@@ -44,7 +44,7 @@
                                         <input type="hidden" id="teacher-role-disabled" value="true">
                                     {% endif %}
                                     
-                                    <table class="ca-table">
+                                    <table class="ca-table semester-final-exam-marks-table">
                                         <thead>
                                             {% if selected_course.is_lab %}
                                             <tr>
@@ -99,6 +99,7 @@
                                                                    max="{% if lab_final_uses_viva %}{{ lab_final_problem_solving_max|default:20 }}{% else %}{{ lab_final_exam_max|default:50 }}{% endif %}"
                                                                    step="0.01"
                                                                    class="mark-input"
+                                                                   data-student-id="{{ student.id }}"
                                                                    placeholder="Problem Solving"
                                                                    data-lab-field="ps"
                                                                    oninput="calculateFinalExamTotal(this); autoSaveFinalExamMarks();"
@@ -113,6 +114,7 @@
                                                                    max="{{ lab_final_viva_max|default:5 }}"
                                                                    step="0.01"
                                                                    class="mark-input"
+                                                                   data-student-id="{{ student.id }}"
                                                                    placeholder="Viva"
                                                                    data-lab-field="viva"
                                                                    oninput="calculateFinalExamTotal(this); autoSaveFinalExamMarks();"

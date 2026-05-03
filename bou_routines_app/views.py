@@ -10919,14 +10919,11 @@ def save_final_exam_marks(request):
         if not can_post:
             return JsonResponse({'error': 'Permission denied'}, status=403)
         
-        # Get teacher based on role
+        # Teacher for marked_by / evaluator FKs.
+        # Staff/superuser must resolve from SemesterCourse (lab internal/external at selected centre; theory DRC/DUET)
+        # even if they also have user.teacher — otherwise the first branch skipped SC and mis-attributed lab saves.
         teacher = None
-        if hasattr(request.user, 'teacher'):
-            # Regular teacher users use their own profile
-            teacher = request.user.teacher
-        elif request.user.is_superuser or request.user.is_staff:
-            # Lab: prefer Internal/External from SemesterCourse for the selected study centre.
-            # Theory: DRC/DUET course teachers by role; teacher3 from marks or POST.
+        if request.user.is_superuser or request.user.is_staff:
             drc_centre = Centre.objects.filter(code='DRC').first()
             duet_centre = Centre.objects.filter(code='DUET').first()
             centre_id_post = request.POST.get('centre_id') or request.POST.get('centre')
@@ -10978,8 +10975,7 @@ def save_final_exam_marks(request):
                             teacher = Teacher.objects.get(id=teacher_id)
                         except Teacher.DoesNotExist:
                             pass
-            
-            # Fallback: if still no teacher found, try to get from any SemesterCourse
+
             if not teacher:
                 centre_id = request.POST.get('centre_id') or request.POST.get('centre')
                 semester_course = None
@@ -10993,16 +10989,22 @@ def save_final_exam_marks(request):
                         ).select_related('teacher').first()
                     except Centre.DoesNotExist:
                         pass
-                
+
                 if not semester_course:
                     semester_course = SemesterCourse.objects.filter(
                         semester=semester,
                         course=course
                     ).select_related('teacher').first()
-                
+
                 if semester_course:
                     teacher = semester_course.teacher
-        
+
+            if not teacher and hasattr(request.user, 'teacher'):
+                teacher = request.user.teacher
+
+        elif hasattr(request.user, 'teacher'):
+            teacher = request.user.teacher
+
         if not teacher:
             return JsonResponse({'error': 'Teacher not found'}, status=400)
         
@@ -11183,8 +11185,6 @@ def save_final_exam_marks(request):
                     rows_updated += 1
 
                 except Student.DoesNotExist:
-                    continue
-                except (ValueError, TypeError):
                     continue
             if not notes_only_request and students_marks and rows_updated == 0:
                 return JsonResponse(

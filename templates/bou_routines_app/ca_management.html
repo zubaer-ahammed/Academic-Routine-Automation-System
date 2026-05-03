@@ -1867,11 +1867,10 @@
                                                     <th>SL.</th>
                                                     <th>Student ID</th>
                                                     <th>Name</th>
-                                                    <th>Problem Solving (max {{ lab_final_problem_solving_max|default:20 }})</th>
-                                                    {% if lab_final_uses_viva %}
-                                                    <th>Viva (max {{ lab_final_viva_max|default:5 }})</th>
-                                                    {% endif %}
-                                                    <th>Marks obtained</th>
+                                                    <th>Internal (max {{ lab_final_exam_max|default:25 }})</th>
+                                                    <th>External (max {{ lab_final_exam_max|default:25 }})</th>
+                                                    <th>Variation</th>
+                                                    <th>Final total</th>
                                                     <th>Status</th>
                                                 </tr>
                                             </thead>
@@ -1881,21 +1880,20 @@
                                                     <td>{{ row.sl }}</td>
                                                     <td class="cell-student-id">{{ row.student.id }}</td>
                                                     <td class="cell-name">{{ row.student.name }}</td>
-                                                    <td>{% if row.final_mark and row.final_mark.exam_absent %}AB{% elif row.lab_mark is not None %}{{ row.lab_mark|floatformat:2 }}{% else %}—{% endif %}</td>
-                                                    {% if lab_final_uses_viva %}
-                                                    <td>{% if row.final_mark and row.final_mark.exam_absent %}AB{% elif row.viva_mark is not None %}{{ row.viva_mark|floatformat:2 }}{% else %}—{% endif %}</td>
-                                                    {% endif %}
+                                                    <td>{% if row.final_mark and row.final_mark.exam_absent %}AB{% else %}{{ row.lab_internal_total|floatformat:2 }}{% endif %}</td>
+                                                    <td>{% if row.final_mark and row.final_mark.exam_absent %}AB{% else %}{{ row.lab_external_total|floatformat:2 }}{% endif %}</td>
+                                                    <td>{% if row.final_mark and row.final_mark.exam_absent %}AB{% else %}{{ row.lab_diff|floatformat:2 }}{% endif %}</td>
                                                     <td>{% if row.final_mark and row.final_mark.exam_absent %}AB{% elif row.final_mark %}{{ row.marks_obtained|floatformat:2 }}{% else %}—{% endif %}</td>
                                                     <td>
                                                         {% if row.final_mark and row.final_mark.exam_absent %}
                                                             <span class="badge bg-secondary">AB</span>
                                                         {% else %}
-                                                            <span class="badge badge-info">Single Entry</span>
+                                                            <span class="badge bg-info">OK</span>
                                                         {% endif %}
                                                     </td>
                                                 </tr>
                                                 {% empty %}
-                                                <tr><td colspan="{% if lab_final_uses_viva %}7{% else %}6{% endif %}" class="text-center text-muted">No students.</td></tr>
+                                                <tr><td colspan="8" class="text-center text-muted">No students.</td></tr>
                                                 {% endfor %}
                                             </tbody>
                                         </table>
@@ -2957,6 +2955,7 @@ const LAB_VIVA_MAX = parseInt("{{ lab_final_viva_max|default:0 }}", 10) || 0;
 
 // Function to calculate final exam total for lab course
 function calculateFinalExamTotal(inputElement) {
+    const row = inputElement.closest ? inputElement.closest('tr') : null;
     if (LAB_FINAL_USES_VIVA) {
         let value = parseFloat(inputElement.value);
         if (isNaN(value)) value = 0;
@@ -2964,10 +2963,22 @@ function calculateFinalExamTotal(inputElement) {
             value = 0;
             inputElement.value = 0;
         }
-        const cap = (inputElement.name && inputElement.name.indexOf('lab_viva_mark') >= 0) ? LAB_VIVA_MAX : LAB_PROBLEM_MAX;
+        const cap = (inputElement.name && inputElement.name.indexOf('_lab_viva_mark') >= 0) ? LAB_VIVA_MAX : LAB_PROBLEM_MAX;
         if (value > cap) {
             inputElement.value = cap;
             alert('Maximum for this field is ' + cap + ' (lab final total 25: problem solving ' + LAB_PROBLEM_MAX + ', viva ' + LAB_VIVA_MAX + ').');
+        }
+        if (row) {
+            const inpP = row.querySelector('input[name$="_lab_final_exam_mark"]');
+            const inpV = row.querySelector('input[name$="_lab_viva_mark"]');
+            const totEl = row.querySelector('[id^="teacher-total-"]');
+            if (inpP && inpV && totEl && !row.classList.contains('final-exam-marks-row-disabled')) {
+                let p = parseFloat(inpP.value);
+                let v = parseFloat(inpV.value);
+                if (isNaN(p)) p = 0;
+                if (isNaN(v)) v = 0;
+                totEl.textContent = String(Math.ceil(p + v));
+            }
         }
         return;
     }
@@ -2980,6 +2991,15 @@ function calculateFinalExamTotal(inputElement) {
     if (value > LAB_FINAL_EXAM_MAX) {
         inputElement.value = LAB_FINAL_EXAM_MAX;
         alert('Maximum mark for lab final exam is ' + LAB_FINAL_EXAM_MAX + '.');
+    }
+    if (row) {
+        const inpLab = row.querySelector('input[name$="_lab_final_exam_mark"]');
+        const totEl = row.querySelector('[id^="teacher-total-"]');
+        if (inpLab && totEl && !row.classList.contains('final-exam-marks-row-disabled')) {
+            let v = parseFloat(inpLab.value);
+            if (isNaN(v)) v = 0;
+            totEl.textContent = String(Math.ceil(v));
+        }
     }
 }
 
@@ -3062,20 +3082,12 @@ function updateSemesterFinalAttendanceHasMarksFromForm() {
         }
         let has = false;
         if (isLab) {
-            const inpP = row.querySelector('input[name$="[lab_final_exam_mark]"]');
-            if (inpP) {
-                const v = parseFloat(inpP.value);
+            row.querySelectorAll('input[name$="_lab_final_exam_mark"], input[name$="_lab_viva_mark"]').forEach(function (inp) {
+                const v = parseFloat(inp.value);
                 if (!isNaN(v) && v > 0) {
                     has = true;
                 }
-            }
-            const inpV = row.querySelector('input[name$="[lab_viva_mark]"]');
-            if (inpV) {
-                const v2 = parseFloat(inpV.value);
-                if (!isNaN(v2) && v2 > 0) {
-                    has = true;
-                }
-            }
+            });
         } else {
             for (var qi = 1; qi <= 7; qi++) {
                 const inp = row.querySelector('input[name$="[q' + qi + ']"]');
@@ -3318,20 +3330,22 @@ function saveFinalExamMarks(reloadPage = true) {
         const marks = {};
         
         if (isLabCourse) {
+            const rolePrefix = (teacherRole === 'teacher2') ? 'teacher2' : 'teacher1';
             if (LAB_FINAL_USES_VIVA) {
-                const inpP = row.querySelector('input[name$="[lab_final_exam_mark]"]');
-                const inpV = row.querySelector('input[name$="[lab_viva_mark]"]');
+                const inpP = row.querySelector('input[name$="_lab_final_exam_mark"]');
+                const inpV = row.querySelector('input[name$="_lab_viva_mark"]');
                 let p = parseFloat(inpP ? inpP.value : 0);
                 let v = parseFloat(inpV ? inpV.value : 0);
                 if (isNaN(p)) p = 0;
                 if (isNaN(v)) v = 0;
-                marks['lab_final_exam_mark'] = Math.max(0, Math.min(LAB_PROBLEM_MAX, p));
-                marks['lab_viva_mark'] = Math.max(0, Math.min(LAB_VIVA_MAX, v));
+                marks[rolePrefix + '_lab_final_exam_mark'] = Math.max(0, Math.min(LAB_PROBLEM_MAX, p));
+                marks[rolePrefix + '_lab_viva_mark'] = Math.max(0, Math.min(LAB_VIVA_MAX, v));
             } else {
-                let labVal = parseFloat(row.querySelector('input[name$="[lab_final_exam_mark]"]').value);
+                const inpLab = row.querySelector('input[name$="_lab_final_exam_mark"]');
+                let labVal = parseFloat(inpLab ? inpLab.value : 0);
                 if (isNaN(labVal)) labVal = 0;
                 labVal = Math.max(0, Math.min(LAB_FINAL_EXAM_MAX, labVal));
-                marks['lab_final_exam_mark'] = labVal;
+                marks[rolePrefix + '_lab_final_exam_mark'] = labVal;
             }
         } else {
             // Theory course: always send all 7 Q columns so the server (and auto-save) never

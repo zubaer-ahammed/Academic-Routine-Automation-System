@@ -793,8 +793,13 @@ class FinalExamMark(models.Model):
     teacher3_total = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Teacher 3 total (auto-calculated, max 70)")
     
     # Lab course: old curriculum = single field (max 60). New curriculum = problem solving (max 20) + viva (max 5)
-    lab_final_exam_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Lab course: problem solving / old curriculum final (max 60 for OLD)")
-    lab_viva_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Lab viva (new curriculum only, max 5)")
+    # Per examiner (internal = teacher1, external = teacher2); legacy lab_* are denormalized averages for exports.
+    teacher1_lab_final_exam_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Internal examiner — problem solving / old curriculum final")
+    teacher1_lab_viva_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Internal examiner — viva (new curriculum)")
+    teacher2_lab_final_exam_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="External examiner — problem solving / old curriculum final")
+    teacher2_lab_viva_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="External examiner — viva (new curriculum)")
+    lab_final_exam_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Lab course: denormalized avg problem solving / old curriculum (legacy readers)")
+    lab_viva_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Lab viva: denormalized average (legacy readers)")
     
     # Final total (for theory: average of teachers, for lab: single value)
     final_exam_total = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Final exam total mark")
@@ -829,6 +834,64 @@ class FinalExamMark(models.Model):
             setattr(self, f'teacher3_q{i}', None)
         self.lab_final_exam_mark = None
         self.lab_viva_mark = None
+        self.teacher1_lab_final_exam_mark = None
+        self.teacher1_lab_viva_mark = None
+        self.teacher2_lab_final_exam_mark = None
+        self.teacher2_lab_viva_mark = None
+
+    def lab_total_display_int(self, examiner_num):
+        """Ceiling of lab split total for template Total column (1=internal, 2=external)."""
+        import math
+
+        if getattr(self, 'exam_absent', False):
+            return 0
+        v = float(self.lab_examiner_split_total(examiner_num) or 0)
+        return int(math.ceil(v))
+
+    @property
+    def lab_internal_total_display_int(self):
+        return self.lab_total_display_int(1)
+
+    @property
+    def lab_external_total_display_int(self):
+        return self.lab_total_display_int(2)
+
+    def lab_examiner_split_total(self, examiner_num):
+        """Lab-only: combined total for internal (1) or external (2) examiner."""
+        from decimal import Decimal
+
+        if getattr(self, 'exam_absent', False):
+            return Decimal('0')
+        is_old = (
+            self.semester
+            and self.semester.curriculum
+            and self.semester.curriculum.code == 'OLD'
+        )
+        if examiner_num not in (1, 2):
+            examiner_num = 1
+        ps = getattr(self, f'teacher{examiner_num}_lab_final_exam_mark', None)
+        viv = getattr(self, f'teacher{examiner_num}_lab_viva_mark', None)
+        if is_old:
+            return Decimal(str(ps or 0))
+        return Decimal(str(float(ps or 0) + float(viv or 0)))
+
+    def _sync_legacy_denormalized_lab_fields(self):
+        """Average internal/external columns into legacy lab_* for older export paths."""
+        from decimal import Decimal
+
+        def avg_or_one(a, b):
+            fa = float(a or 0)
+            fb = float(b or 0)
+            if fa > 0 and fb > 0:
+                return (fa + fb) / 2.0
+            return fa if fa > 0 else fb
+
+        t1p = float(self.teacher1_lab_final_exam_mark or 0)
+        t2p = float(self.teacher2_lab_final_exam_mark or 0)
+        t1v = float(self.teacher1_lab_viva_mark or 0)
+        t2v = float(self.teacher2_lab_viva_mark or 0)
+        self.lab_final_exam_mark = Decimal(str(avg_or_one(t1p, t2p)))
+        self.lab_viva_mark = Decimal(str(avg_or_one(t1v, t2v)))
 
     def calculate_teacher_total(self, teacher_num):
         """Calculate total for a specific teacher (1, 2, or 3)"""
@@ -865,7 +928,14 @@ class FinalExamMark(models.Model):
         if getattr(self, 'exam_absent', False):
             return False
         if self.course.is_lab:
-            for f in (self.lab_final_exam_mark, self.lab_viva_mark):
+            for f in (
+                self.lab_final_exam_mark,
+                self.lab_viva_mark,
+                self.teacher1_lab_final_exam_mark,
+                self.teacher1_lab_viva_mark,
+                self.teacher2_lab_final_exam_mark,
+                self.teacher2_lab_viva_mark,
+            ):
                 if f is not None and float(f) > 0:
                     return True
             return False
@@ -903,7 +973,18 @@ class FinalExamMark(models.Model):
             return Decimal('0')
         
         if self.course.is_lab:
-            if self.semester and self.semester.curriculum and self.semester.curriculum.code == 'OLD':
+            is_old = self.semester and self.semester.curriculum and self.semester.curriculum.code == 'OLD'
+            t1 = float(self.lab_examiner_split_total(1) or 0)
+            t2 = float(self.lab_examiner_split_total(2) or 0)
+            evaluated = []
+            if t1 > 0:
+                evaluated.append(t1)
+            if t2 > 0:
+                evaluated.append(t2)
+            if evaluated:
+                return Decimal(str(sum(evaluated) / len(evaluated)))
+            # Legacy single-column data (pre–dual examiner), still on teacher1 after migration
+            if is_old:
                 return Decimal(str(self.lab_final_exam_mark or 0))
             ps = float(self.lab_final_exam_mark or 0)
             viva = float(self.lab_viva_mark or 0)
@@ -944,17 +1025,15 @@ class FinalExamMark(models.Model):
 
         if self.course.is_lab and not getattr(self, 'exam_absent', False):
             is_old_lab = self.semester and self.semester.curriculum and self.semester.curriculum.code == 'OLD'
-            if is_old_lab:
-                v = getattr(self, 'lab_final_exam_mark', None)
-                if v is not None:
-                    self.lab_final_exam_mark = Decimal(str(v))
-                self.lab_viva_mark = Decimal('0')
-            else:
-                for attr in ('lab_final_exam_mark', 'lab_viva_mark'):
+            for prefix in ('teacher1', 'teacher2'):
+                for attr in (f'{prefix}_lab_final_exam_mark', f'{prefix}_lab_viva_mark'):
                     v = getattr(self, attr, None)
                     if v is None:
                         continue
                     setattr(self, attr, Decimal(str(v)))
+                if is_old_lab:
+                    setattr(self, f'{prefix}_lab_viva_mark', Decimal('0'))
+            self._sync_legacy_denormalized_lab_fields()
         
         if not self.course.is_lab:
             # Theory course: calculate totals for each teacher

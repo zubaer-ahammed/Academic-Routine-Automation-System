@@ -50,13 +50,14 @@
                                             <tr>
                                                 <th rowspan="2" class="student-info">Student ID</th>
                                                 <th rowspan="2" class="student-info">Name</th>
-                                                <th colspan="{% if lab_final_uses_viva %}2{% else %}1{% endif %}">Lab Course Final Exam (Total: {{ lab_final_exam_max|default:50 }} marks)</th>
+                                                <th colspan="{% if lab_final_uses_viva %}3{% else %}2{% endif %}">Lab Course Final Exam (Total: {{ lab_final_exam_max|default:50 }} marks)</th>
                                             </tr>
                                             <tr>
                                                 <th>Problem Solving<br><small>(max {% if lab_final_uses_viva %}{{ lab_final_problem_solving_max|default:20 }}{% else %}{{ lab_final_exam_max|default:50 }}{% endif %})</small></th>
                                                 {% if lab_final_uses_viva %}
                                                 <th>Viva<br><small>(max {{ lab_final_viva_max|default:5 }})</small></th>
                                                 {% endif %}
+                                                <th class="text-center">Total<br><small>(this examiner)</small></th>
                                             </tr>
                                             {% else %}
                                             <tr>
@@ -89,33 +90,38 @@
                                                     <td class="student-name">{{ student.name }}</td>
                                                     
                                                     {% if selected_course.is_lab %}
-                                                        <!-- Lab Course Final Exam -->
+                                                        <!-- Lab Course Final Exam (internal / external columns depend on teacher_role) -->
                                                         <td>
                                                             <input type="number" 
-                                                                   name="students_data[{{ student.id }}][lab_final_exam_mark]"
-                                                                   value="{% if final_mark %}{{ final_mark.lab_final_exam_mark|floatformat:2 }}{% else %}0.00{% endif %}"
+                                                                   name="students_data[{{ student.id }}][{% if teacher_role == 'teacher2' %}teacher2{% else %}teacher1{% endif %}_lab_final_exam_mark]"
+                                                                   value="{% if final_mark %}{% if teacher_role == 'teacher2' %}{{ final_mark.teacher2_lab_final_exam_mark|floatformat:2 }}{% else %}{{ final_mark.teacher1_lab_final_exam_mark|floatformat:2 }}{% endif %}{% else %}0.00{% endif %}"
                                                                    min="0" 
                                                                    max="{% if lab_final_uses_viva %}{{ lab_final_problem_solving_max|default:20 }}{% else %}{{ lab_final_exam_max|default:50 }}{% endif %}"
                                                                    step="0.01"
                                                                    class="mark-input"
                                                                    placeholder="Problem Solving"
+                                                                   data-lab-field="ps"
                                                                    oninput="calculateFinalExamTotal(this); autoSaveFinalExamMarks();"
                                                                    onblur="saveFinalExamMarksImmediately();"{% if final_mark and final_mark.exam_absent %} disabled{% endif %}>
                                                         </td>
                                                         {% if lab_final_uses_viva %}
                                                         <td>
                                                             <input type="number" 
-                                                                   name="students_data[{{ student.id }}][lab_viva_mark]"
-                                                                   value="{% if final_mark %}{{ final_mark.lab_viva_mark|floatformat:2 }}{% else %}0.00{% endif %}"
+                                                                   name="students_data[{{ student.id }}][{% if teacher_role == 'teacher2' %}teacher2{% else %}teacher1{% endif %}_lab_viva_mark]"
+                                                                   value="{% if final_mark %}{% if teacher_role == 'teacher2' %}{{ final_mark.teacher2_lab_viva_mark|floatformat:2 }}{% else %}{{ final_mark.teacher1_lab_viva_mark|floatformat:2 }}{% endif %}{% else %}0.00{% endif %}"
                                                                    min="0" 
                                                                    max="{{ lab_final_viva_max|default:5 }}"
                                                                    step="0.01"
                                                                    class="mark-input"
                                                                    placeholder="Viva"
+                                                                   data-lab-field="viva"
                                                                    oninput="calculateFinalExamTotal(this); autoSaveFinalExamMarks();"
                                                                    onblur="saveFinalExamMarksImmediately();"{% if final_mark and final_mark.exam_absent %} disabled{% endif %}>
                                                         </td>
                                                         {% endif %}
+                                                        <td class="total-mark">
+                                                            <span id="teacher-total-{{ student.id }}" class="teacher-total-value">{% if final_mark and final_mark.exam_absent %}AB{% elif final_mark %}{% if teacher_role == 'teacher2' %}{{ final_mark.lab_external_total_display_int }}{% else %}{{ final_mark.lab_internal_total_display_int }}{% endif %}{% else %}0{% endif %}</span>
+                                                        </td>
                                                     {% else %}
                                                         <!-- Theory: Group A (Q1–Q3), Group B (Q4–Q6), Group C (Q7) — see intro text -->
                                                         <td>

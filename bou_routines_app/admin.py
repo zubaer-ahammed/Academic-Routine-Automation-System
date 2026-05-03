@@ -922,8 +922,12 @@ class FinalExamMarkAdmin(admin.ModelAdmin):
             'description': 'Third examiner marks (required if |first − second| total difference exceeds 14 marks)'
         }),
         ('Lab Course Final Exam', {
-            'fields': ('lab_final_exam_mark', 'lab_viva_mark'),
-            'description': 'Old curriculum: single field (max 60). New curriculum: problem solving (max 20) and viva (max 5).'
+            'fields': (
+                'teacher1_lab_final_exam_mark', 'teacher1_lab_viva_mark',
+                'teacher2_lab_final_exam_mark', 'teacher2_lab_viva_mark',
+                'lab_final_exam_mark', 'lab_viva_mark',
+            ),
+            'description': 'Internal (teacher1) and External (teacher2) marks; legacy lab_* fields are denormalized averages.'
         }),
         ('Totals & Status', {
             'fields': ('final_exam_total', 'requires_third_teacher')

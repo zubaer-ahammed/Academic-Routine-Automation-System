@@ -143,7 +143,10 @@ def _sync_final_exam_evaluators_from_semester_course(semester, course, centre):
         )
         fm.teacher1_evaluator = sc.final_exam_evaluator1
         fm.teacher2_evaluator = sc.final_exam_evaluator2
-        fm.teacher3_evaluator = sc.final_exam_evaluator3
+        if course.is_lab:
+            fm.teacher3_evaluator = None
+        else:
+            fm.teacher3_evaluator = sc.final_exam_evaluator3
         if not fm.marked_by:
             fm.marked_by = marked_by
         fm.save()
@@ -8442,6 +8445,8 @@ def export_final_exam_pdf(request):
         
         semester = Semester.objects.get(id=semester_id)
         course = Course.objects.get(id=course_id)
+        if course.is_lab and teacher_role == 'teacher3':
+            teacher_role = 'teacher1'
         
         # Get centre if provided
         centre = None
@@ -8793,22 +8798,26 @@ def export_final_exam_pdf(request):
                     else:
                         row = [str(sl_no), student.id, student.name.upper(), 'AB', 'AB', 'AB', 'AB', 'AB', 'AB', 'AB', 'AB', 'AB']
                 elif course.is_lab:
+                    _n = 2 if teacher_role == 'teacher2' else 1
                     if semester.curriculum and semester.curriculum.code != 'OLD':
+                        _ps = float(getattr(mark, f'teacher{_n}_lab_final_exam_mark') or 0)
+                        _viv = float(getattr(mark, f'teacher{_n}_lab_viva_mark') or 0)
                         row = [
                             str(sl_no),
                             student.id,
                             student.name.upper(),
-                            f"{mark.lab_final_exam_mark:.2f}" if mark.lab_final_exam_mark else '0.00',
-                            f"{mark.lab_viva_mark:.2f}" if mark.lab_viva_mark else '0.00',
-                            str(int(math.ceil(float(mark.calculate_final_total() or 0))))
+                            f'{_ps:.2f}',
+                            f'{_viv:.2f}',
+                            str(int(math.ceil(_ps + _viv))),
                         ]
                     else:
+                        _v = float(getattr(mark, f'teacher{_n}_lab_final_exam_mark') or 0)
                         row = [
                             str(sl_no),
                             student.id,
                             student.name.upper(),
-                            f"{mark.lab_final_exam_mark:.2f}" if mark.lab_final_exam_mark else '0.00',
-                            str(int(math.ceil(float(mark.calculate_final_total() or 0))))
+                            f'{_v:.2f}',
+                            str(int(math.ceil(_v))),
                         ]
                 else:
                     # For theory courses, show marks based on teacher role
@@ -9452,6 +9461,8 @@ def export_final_exam_excel(request):
         
         semester = Semester.objects.get(id=semester_id)
         course = Course.objects.get(id=course_id)
+        if course.is_lab and teacher_role == 'teacher3':
+            teacher_role = 'teacher1'
         
         # Get students with custom sorting
         students = Student.objects.filter(semesters=semester).extra(
@@ -9512,7 +9523,11 @@ def export_final_exam_excel(request):
         worksheet.merge_range(0, 0, 0, len(headers) - 1, f"Final Exam Marks Report - {semester.name}", title_format)
         worksheet.write(1, 0, f"Course: {course.code} - {course.name}", cell_format)
         worksheet.write(1, 1, f"Course Type: {'Lab Course' if course.is_lab else 'Theory Course'}", cell_format)
-        worksheet.write(1, 2, f"Examiner: {teacher_role.replace('teacher', 'Teacher ').title()}", cell_format)
+        if course.is_lab:
+            _exam_lbl = 'Internal Examiner' if teacher_role == 'teacher1' else 'External Examiner'
+            worksheet.write(1, 2, f'Examiner: {_exam_lbl}', cell_format)
+        else:
+            worksheet.write(1, 2, f"Examiner: {teacher_role.replace('teacher', 'Teacher ').title()}", cell_format)
         
         # Header row
         row = 3
@@ -9555,15 +9570,20 @@ def export_final_exam_excel(request):
                         col += 1
                         worksheet.write(row, col, mark.notes or '', cell_format)
                 elif course.is_lab:
+                    _nx = 2 if teacher_role == 'teacher2' else 1
                     if semester.curriculum and semester.curriculum.code != 'OLD':
-                        worksheet.write(row, col, mark.lab_final_exam_mark or 0.00, cell_format)
+                        _ps = float(getattr(mark, f'teacher{_nx}_lab_final_exam_mark') or 0)
+                        _viv = float(getattr(mark, f'teacher{_nx}_lab_viva_mark') or 0)
+                        worksheet.write(row, col, _ps, cell_format)
                         col += 1
-                        worksheet.write(row, col, mark.lab_viva_mark or 0.00, cell_format)
+                        worksheet.write(row, col, _viv, cell_format)
                         col += 1
+                        worksheet.write(row, col, _ps + _viv, cell_format)
                     else:
-                        worksheet.write(row, col, mark.lab_final_exam_mark or 0.00, cell_format)
+                        _ov = float(getattr(mark, f'teacher{_nx}_lab_final_exam_mark') or 0)
+                        worksheet.write(row, col, _ov, cell_format)
                         col += 1
-                    worksheet.write(row, col, mark.calculate_final_total(), cell_format)
+                        worksheet.write(row, col, _ov, cell_format)
                     col += 1
                     worksheet.write(row, col, mark.notes or '', cell_format)
                 else:
@@ -10006,6 +10026,14 @@ def ca_management(request):
     elif selected_semester and getattr(selected_semester, 'curriculum', None) and selected_semester.curriculum.code == 'OLD':
         lab_final_exam_max = 60
 
+    if course_id:
+        try:
+            _c_sel = Course.objects.get(id=int(course_id))
+            if _c_sel.is_lab and teacher_role == 'teacher3':
+                teacher_role = 'teacher1'
+        except (Course.DoesNotExist, ValueError, TypeError):
+            pass
+
     context = {
         'teacher': teacher,
         'is_admin': is_admin,
@@ -10189,20 +10217,17 @@ def ca_management(request):
         for idx, student in enumerate(students, start=1):
             fm = final_exam_marks.get(student.id)
             if selected_course.is_lab:
-                lab_val = None
-                if fm and fm.lab_final_exam_mark is not None:
-                    lab_val = float(fm.lab_final_exam_mark)
-                viva_val = None
-                if fm and fm.lab_viva_mark is not None:
-                    viva_val = float(fm.lab_viva_mark)
+                t_int = float(fm.lab_examiner_split_total(1)) if fm else 0.0
+                t_ext = float(fm.lab_examiner_split_total(2)) if fm else 0.0
                 mo = float(fm.final_exam_total or 0) if fm else 0.0
                 examiner_summary_rows.append({
                     'sl': idx,
                     'student': student,
                     'final_mark': fm,
                     'is_lab': True,
-                    'lab_mark': lab_val,
-                    'viva_mark': viva_val,
+                    'lab_internal_total': t_int,
+                    'lab_external_total': t_ext,
+                    'lab_diff': abs(t_int - t_ext),
                     'marks_obtained': mo,
                 })
             else:
@@ -10715,6 +10740,8 @@ def _apply_final_exam_examiner_assignments_from_post(request, semester, course):
         sc.final_exam_evaluator2 = _teacher_from_post('assign_teacher2_id')
     if 'assign_teacher3_id' in request.POST:
         sc.final_exam_evaluator3 = _teacher_from_post('assign_teacher3_id')
+    if course.is_lab:
+        sc.final_exam_evaluator3 = None
     sc.save()
 
     _sync_final_exam_evaluators_from_semester_course(semester, course, centre)
@@ -10868,6 +10895,8 @@ def save_final_exam_marks(request):
         
         semester = Semester.objects.get(id=semester_id)
         course = Course.objects.get(id=course_id)
+        if course.is_lab and teacher_role == 'teacher3':
+            teacher_role = 'teacher1'
 
         centre_id_for_perm = request.POST.get('centre_id') or request.POST.get('centre')
         teacher_user = get_teacher_from_user(request.user)
@@ -10886,13 +10915,28 @@ def save_final_exam_marks(request):
             # Regular teacher users use their own profile
             teacher = request.user.teacher
         elif request.user.is_superuser or request.user.is_staff:
-            # For admin users, determine teacher based on teacher_role
-            # Teacher 1 should be from DRC, Teacher 2 should be from DUET
+            # Lab: prefer Internal/External from SemesterCourse for the selected study centre.
+            # Theory: DRC/DUET course teachers by role; teacher3 from marks or POST.
             drc_centre = Centre.objects.filter(code='DRC').first()
             duet_centre = Centre.objects.filter(code='DUET').first()
-            
-            if teacher_role == 'teacher1':
-                # Teacher 1 is from DRC
+            centre_id_post = request.POST.get('centre_id') or request.POST.get('centre')
+            if course.is_lab and centre_id_post:
+                try:
+                    centre_sel = Centre.objects.get(id=int(centre_id_post))
+                    sc_lab = SemesterCourse.objects.filter(
+                        semester=semester,
+                        course=course,
+                        centre=centre_sel,
+                    ).select_related('final_exam_evaluator1', 'final_exam_evaluator2').first()
+                    if sc_lab:
+                        if teacher_role == 'teacher1' and sc_lab.final_exam_evaluator1:
+                            teacher = sc_lab.final_exam_evaluator1
+                        elif teacher_role == 'teacher2' and sc_lab.final_exam_evaluator2:
+                            teacher = sc_lab.final_exam_evaluator2
+                except (Centre.DoesNotExist, ValueError, TypeError):
+                    pass
+
+            if not teacher and teacher_role == 'teacher1':
                 if drc_centre:
                     semester_course = SemesterCourse.objects.filter(
                         semester=semester,
@@ -10901,8 +10945,7 @@ def save_final_exam_marks(request):
                     ).select_related('teacher', 'teacher__centre').first()
                     if semester_course and semester_course.teacher and semester_course.teacher.centre == drc_centre:
                         teacher = semester_course.teacher
-            elif teacher_role == 'teacher2':
-                # Teacher 2 is from DUET
+            elif not teacher and teacher_role == 'teacher2':
                 if duet_centre:
                     semester_course = SemesterCourse.objects.filter(
                         semester=semester,
@@ -10911,8 +10954,7 @@ def save_final_exam_marks(request):
                     ).select_related('teacher', 'teacher__centre').first()
                     if semester_course and semester_course.teacher and semester_course.teacher.centre == duet_centre:
                         teacher = semester_course.teacher
-            elif teacher_role == 'teacher3':
-                # Teacher 3 can be manually selected, try to get from existing marks first
+            elif not teacher and teacher_role == 'teacher3' and not course.is_lab:
                 sample_mark = FinalExamMark.objects.filter(
                     course=course,
                     semester=semester
@@ -10920,7 +10962,6 @@ def save_final_exam_marks(request):
                 if sample_mark and sample_mark.teacher3_evaluator:
                     teacher = sample_mark.teacher3_evaluator
                 else:
-                    # Fallback: get from request if provided
                     teacher_id = request.POST.get('teacher3_id')
                     if teacher_id:
                         try:
@@ -11032,17 +11073,23 @@ def save_final_exam_marks(request):
                                 has_positive_final = True
                                 break
                     else:
-                        try:
-                            lrv = float(marks_data.get('lab_final_exam_mark', 0) or 0)
-                        except (TypeError, ValueError):
-                            lrv = 0.0
-                        lvv = 0.0
-                        try:
-                            lvv = float(marks_data.get('lab_viva_mark', 0) or 0)
-                        except (TypeError, ValueError):
-                            lvv = 0.0
-                        if lrv > 0 or lvv > 0:
-                            has_positive_final = True
+                        lab_prefix = 'teacher1' if teacher_role != 'teacher2' else 'teacher2'
+                        ps_key = f'{lab_prefix}_lab_final_exam_mark'
+                        viv_key = f'{lab_prefix}_lab_viva_mark'
+                        if ps_key not in marks_data and 'lab_final_exam_mark' in marks_data:
+                            marks_data = {**marks_data, ps_key: marks_data.get('lab_final_exam_mark')}
+                        if viv_key not in marks_data and 'lab_viva_mark' in marks_data:
+                            marks_data = {**marks_data, viv_key: marks_data.get('lab_viva_mark')}
+                        has_positive_final = False
+                        for k in (ps_key, viv_key, 'lab_final_exam_mark', 'lab_viva_mark'):
+                            if k not in marks_data:
+                                continue
+                            try:
+                                if float(marks_data.get(k) or 0) > 0:
+                                    has_positive_final = True
+                                    break
+                            except (TypeError, ValueError):
+                                pass
                     if has_positive_final:
                         final_mark.exam_absent = False
                     elif 'exam_absent' in marks_data:
@@ -11055,25 +11102,37 @@ def save_final_exam_marks(request):
                     else:
                         # Update marks based on course type
                         if course.is_lab:
+                            lab_prefix = 'teacher1' if teacher_role != 'teacher2' else 'teacher2'
+                            ps_key = f'{lab_prefix}_lab_final_exam_mark'
+                            viv_key = f'{lab_prefix}_lab_viva_mark'
+                            if ps_key not in marks_data and 'lab_final_exam_mark' in marks_data:
+                                marks_data = {**marks_data, ps_key: marks_data.get('lab_final_exam_mark')}
+                            if viv_key not in marks_data and 'lab_viva_mark' in marks_data:
+                                marks_data = {**marks_data, viv_key: marks_data.get('lab_viva_mark')}
                             if semester.curriculum_id and semester.curriculum.code == 'OLD':
                                 lab_final_max = 60.0
                                 try:
-                                    lab_raw = float(marks_data.get('lab_final_exam_mark', 0) or 0)
+                                    lab_raw = float(marks_data.get(ps_key, 0) or 0)
                                 except (TypeError, ValueError):
                                     lab_raw = 0.0
-                                final_mark.lab_final_exam_mark = max(0.0, min(lab_raw, lab_final_max))
-                                final_mark.lab_viva_mark = 0.0
+                                setattr(final_mark, ps_key, max(0.0, min(lab_raw, lab_final_max)))
+                                setattr(final_mark, viv_key, 0.0)
                             else:
                                 try:
-                                    pr = float(marks_data.get('lab_final_exam_mark', 0) or 0)
+                                    pr = float(marks_data.get(ps_key, 0) or 0)
                                 except (TypeError, ValueError):
                                     pr = 0.0
                                 try:
-                                    viv = float(marks_data.get('lab_viva_mark', 0) or 0)
+                                    viv = float(marks_data.get(viv_key, 0) or 0)
                                 except (TypeError, ValueError):
                                     viv = 0.0
-                                final_mark.lab_final_exam_mark = max(0.0, min(pr, 20.0))
-                                final_mark.lab_viva_mark = max(0.0, min(viv, 5.0))
+                                setattr(final_mark, ps_key, max(0.0, min(pr, 20.0)))
+                                setattr(final_mark, viv_key, max(0.0, min(viv, 5.0)))
+                            if not apply_assign_from_post:
+                                if lab_prefix == 'teacher1':
+                                    final_mark.teacher1_evaluator = teacher
+                                else:
+                                    final_mark.teacher2_evaluator = teacher
                             final_mark.marked_by = teacher
                         else:
                             # Theory: Group A = Q1–Q3 (≤2 with marks), Group B = Q4–Q6 (≤2 with marks), Group C = Q7
@@ -11170,6 +11229,12 @@ def assign_evaluator(request):
         course = Course.objects.get(id=course_id)
         teacher = Teacher.objects.get(id=teacher_id)
         evaluator_number = int(evaluator_number)
+
+        if course.is_lab and evaluator_number == 3:
+            return JsonResponse(
+                {'error': 'Lab courses use Internal and External examiners only.'},
+                status=400,
+            )
         
         if evaluator_number not in [1, 2, 3]:
             return JsonResponse({'error': 'Invalid examiner number'}, status=400)

@@ -7,6 +7,74 @@
                                     <p><strong>Lab Course Final Exam:</strong> Maximum {{ lab_final_exam_max|default:50 }} marks</p>
                                     {% endif %}
                                 </div>
+
+                                {% if can_select_evaluator %}
+                                <div class="teacher-role-selector">
+                                        <div class="mb-3">
+                                            <label for="teacher-role"><strong>Select Examiner Role to View/Edit:</strong></label>
+                                            <select id="teacher-role" class="form-control" style="width: 300px; display: inline-block; margin-left: 10px;" onchange="updateTeacherRole()">
+                                                <option value="teacher1" {% if teacher_role == 'teacher1' %}selected{% endif %}>
+                                                    {% if teacher1_evaluator %}{{ teacher1_evaluator.name }} (Internal Examiner){% else %}Internal Examiner{% endif %}
+                                                </option>
+                                                <option value="teacher2" {% if teacher_role == 'teacher2' %}selected{% endif %}>
+                                                    {% if teacher2_evaluator %}{{ teacher2_evaluator.name }} (External Examiner){% else %}External Examiner{% endif %}
+                                                </option>
+                                            </select>
+                                        </div>
+                                        <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                                            <button class="btn btn-link text-start text-decoration-none p-0 d-flex align-items-center gap-2 flex-grow-1 min-w-0 final-exam-examiner-toggle"
+                                                    type="button"
+                                                    data-bs-toggle="collapse"
+                                                    data-bs-target="#finalExamAssignExaminersCollapseLab"
+                                                    aria-expanded="false"
+                                                    aria-controls="finalExamAssignExaminersCollapseLab"
+                                                    id="finalExamAssignExaminersToggleLab">
+                                                <i class="fas fa-chevron-down final-exam-examiner-chevron text-secondary" style="font-size: 0.7rem; flex-shrink: 0;" aria-hidden="true"></i>
+                                                <span class="fw-bold text-body">Assign Examiners: <span class="text-muted fw-normal">(Internal / External)</span></span>
+                                            </button>
+                                        </div>
+                                        <div class="collapse" id="finalExamAssignExaminersCollapseLab">
+                                            <div class="pt-1">
+                                        <div class="mb-0">
+                                            <div class="row g-2 mx-0 w-100 mt-1">
+                                                <div class="col-md-6">
+                                                    <label for="assign-teacher1" class="form-label">Internal Examiner:</label>
+                                                    <select id="assign-teacher1" class="form-control" onchange="assignExaminer(1, this.value)">
+                                                        <option value="">-- Select Teacher --</option>
+                                                        {% for teacher in all_teachers %}
+                                                        <option value="{{ teacher.id }}" {% if teacher1_evaluator and teacher1_evaluator.id == teacher.id %}selected{% endif %}>
+                                                            {{ teacher.name }} ({{ teacher.centre.code }})
+                                                        </option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label for="assign-teacher2" class="form-label">External Examiner:</label>
+                                                    <select id="assign-teacher2" class="form-control" onchange="assignExaminer(2, this.value)">
+                                                        <option value="">-- Select Teacher --</option>
+                                                        {% for teacher in all_teachers %}
+                                                        <option value="{{ teacher.id }}" {% if teacher2_evaluator and teacher2_evaluator.id == teacher.id %}selected{% endif %}>
+                                                            {{ teacher.name }} ({{ teacher.centre.code }})
+                                                        </option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <p class="mt-2 mb-0"><small class="text-muted">Internal and External each enter marks in the table below; the stored final total is the average of both when both are entered.</small></p>
+                                            </div>
+                                        </div>
+                                </div>
+                                {% else %}
+                                <select id="teacher-role" class="d-none" disabled aria-hidden="true" tabindex="-1">
+                                            <option value="teacher1" {% if teacher_role == 'teacher1' %}selected{% endif %}>
+                                                {% if teacher1_evaluator %}{{ teacher1_evaluator.name }} (Internal Examiner){% else %}Internal Examiner{% endif %}
+                                            </option>
+                                            <option value="teacher2" {% if teacher_role == 'teacher2' %}selected{% endif %}>
+                                                {% if teacher2_evaluator %}{{ teacher2_evaluator.name }} (External Examiner){% else %}External Examiner{% endif %}
+                                            </option>
+                                </select>
+                                {% endif %}
                             {% else %}
                                 <!-- Theory Course Final Exam -->
                                 <div class="ca-distribution">

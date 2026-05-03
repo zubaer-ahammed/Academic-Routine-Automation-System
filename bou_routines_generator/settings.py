@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -75,11 +76,27 @@ WSGI_APPLICATION = 'bou_routines_generator.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
+#
+# SQLite lock mitigation without WAL (no db.sqlite3-wal / db.sqlite3-shm):
+# - Absolute NAME so every worker uses one file (optional BOU_SQLITE_PATH).
+# - connect timeout + per-connection PRAGMAs in bou_routines_app.apps (DELETE journal, busy_timeout).
+_sqlite_raw = (os.environ.get('BOU_SQLITE_PATH') or '').strip()
+if _sqlite_raw:
+    _sqlite_path = Path(_sqlite_raw).expanduser()
+    if not _sqlite_path.is_absolute():
+        _sqlite_path = (BASE_DIR / _sqlite_path).resolve()
+    else:
+        _sqlite_path = _sqlite_path.resolve()
+else:
+    _sqlite_path = (BASE_DIR / 'db.sqlite3').resolve()
 
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': str(_sqlite_path),
+        'OPTIONS': {
+            'timeout': 60,
+        },
     }
 }
 

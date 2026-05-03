@@ -2981,9 +2981,9 @@ function calculateFinalExamTotal(inputElement) {
             const inpP = row.querySelector('input[name$="_lab_final_exam_mark"]');
             const inpV = row.querySelector('input[name$="_lab_viva_mark"]');
             const totEl = row.querySelector('[id^="teacher-total-"]');
-            if (inpP && inpV && totEl && !row.classList.contains('final-exam-marks-row-disabled')) {
+            if (inpP && totEl && !row.classList.contains('final-exam-marks-row-disabled')) {
                 let p = parseFloat(inpP.value);
-                let v = parseFloat(inpV.value);
+                let v = inpV ? parseFloat(inpV.value) : 0;
                 if (isNaN(p)) p = 0;
                 if (isNaN(v)) v = 0;
                 totEl.textContent = String(Math.ceil(p + v));
@@ -3036,7 +3036,13 @@ function saveFinalExamMarksImmediately() {
 }
 
 function autoSaveFinalExamMarks() {
-    saveFinalExamMarksImmediately();
+    if (window.autoSaveFinalExamTimer) {
+        clearTimeout(window.autoSaveFinalExamTimer);
+    }
+    window.autoSaveFinalExamTimer = setTimeout(function () {
+        window.autoSaveFinalExamTimer = null;
+        saveFinalExamMarks(false);
+    }, 500);
 }
 
 function confirmAbsentClearsMarks(options) {
@@ -3172,10 +3178,16 @@ function saveSemesterFinalAttendance(selectEl, options) {
 
     const semesterId = form.querySelector('input[name="semester_id"]').value;
     const courseId = form.querySelector('input[name="course_id"]').value;
+    const roleSelectSfa = document.getElementById('teacher-role');
     const teacherRoleInput = form.querySelector('input[name="teacher_role"]');
-    const teacherRole = teacherRoleInput ? teacherRoleInput.value : 'teacher1';
+    if (roleSelectSfa && teacherRoleInput && !roleSelectSfa.disabled) {
+        teacherRoleInput.value = roleSelectSfa.value;
+    }
     const csrf = form.querySelector('input[name="csrfmiddlewaretoken"]').value;
     const urlParamsSfa = new URLSearchParams(window.location.search);
+    const teacherRole = (
+        (teacherRoleInput && teacherRoleInput.value) || urlParamsSfa.get('teacher_role') || 'teacher1'
+    ).trim();
     const centreSelectSfa = document.getElementById('centre');
     const pageCentreSfa = form.getAttribute('data-page-centre-id') || '';
     const centreIdSfa = urlParamsSfa.get('centre') || (centreSelectSfa ? centreSelectSfa.value : '') || (pageCentreSfa ? String(pageCentreSfa).trim() : '');
@@ -3295,15 +3307,28 @@ function saveAllSemesterFinalAttendance(buttonEl) {
 
 // Function to save final exam marks
 function saveFinalExamMarks(reloadPage = true) {
+    if (window.finalExamSaveInFlight) {
+        var prevQ = window.finalExamSaveQueued;
+        window.finalExamSaveQueued = {
+            reload: !!(reloadPage || (prevQ && prevQ.reload))
+        };
+        return;
+    }
     const form = document.getElementById('final-exam-marks-form');
     if (!form) {
         return;
     }
     updateSaveFinalExamMarksButtonStatus(true);
+    const roleSelectSave = document.getElementById('teacher-role');
+    const hiddenRoleSave = form.querySelector('input[name="teacher_role"]');
+    if (roleSelectSave && hiddenRoleSave && !roleSelectSave.disabled) {
+        hiddenRoleSave.value = roleSelectSave.value;
+    }
     const formData = new FormData(form);
     const studentsData = {};
     const isLabCourse = {% if selected_course.is_lab %}true{% else %}false{% endif %};
-    const teacherRoleRaw = formData.get('teacher_role');
+    const urlParamsFe = new URLSearchParams(window.location.search);
+    const teacherRoleRaw = formData.get('teacher_role') || urlParamsFe.get('teacher_role');
     const teacherRole = (teacherRoleRaw && String(teacherRoleRaw).trim()) ? String(teacherRoleRaw).trim() : 'teacher1';
     
     // Collect all student marks (scoped to the marks table, not other tbody in the tab)
@@ -3378,7 +3403,6 @@ function saveFinalExamMarks(reloadPage = true) {
         studentsData[studentId] = marks;
     });
     
-    const urlParamsFe = new URLSearchParams(window.location.search);
     const centreSelectFe = document.getElementById('centre');
     const pageCentre = form.getAttribute('data-page-centre-id') || '';
     const centreIdFe = urlParamsFe.get('centre') || (centreSelectFe ? centreSelectFe.value : '') || (pageCentre ? String(pageCentre).trim() : '');
@@ -3415,20 +3439,8 @@ function saveFinalExamMarks(reloadPage = true) {
         postData.centre_id = String(centreIdFe);
         postData.centre = String(centreIdFe);
     }
-    const assignT1 = document.getElementById('assign-teacher1');
-    const assignT2 = document.getElementById('assign-teacher2');
-    const assignT3 = document.getElementById('assign-teacher3');
-    if (assignT1) {
-        const a1 = (assignT1.value || '').trim();
-        const a2 = assignT2 ? (assignT2.value || '').trim() : '';
-        const a3 = assignT3 ? (assignT3.value || '').trim() : '';
-        if (a1 || a2 || a3) {
-            postData.assign_teacher1_id = a1;
-            if (assignT2) { postData.assign_teacher2_id = a2; }
-            if (assignT3) { postData.assign_teacher3_id = a3; }
-        }
-    }
 
+    window.finalExamSaveInFlight = true;
     fetch('{% url "save-final-exam-marks" %}', {
         method: 'POST',
         headers: {
@@ -3452,9 +3464,9 @@ function saveFinalExamMarks(reloadPage = true) {
         return response.json();
     })
     .then(function (data) {
-        updateSaveFinalExamMarksButtonStatus(false);
         if (data && data.success) {
             if (reloadPage) {
+                window.finalExamSaveQueued = null;
                 alert(data.message);
                 window.location.reload();
             } else {
@@ -3465,9 +3477,17 @@ function saveFinalExamMarks(reloadPage = true) {
         }
     })
     .catch(function (error) {
-        updateSaveFinalExamMarksButtonStatus(false);
         console.error('Error saving final exam marks:', error);
         alert('An error occurred while saving final exam marks: ' + (error.message || String(error)));
+    })
+    .finally(function () {
+        window.finalExamSaveInFlight = false;
+        updateSaveFinalExamMarksButtonStatus(false);
+        var pending = window.finalExamSaveQueued;
+        window.finalExamSaveQueued = null;
+        if (pending) {
+            saveFinalExamMarks(pending.reload);
+        }
     });
 }
 

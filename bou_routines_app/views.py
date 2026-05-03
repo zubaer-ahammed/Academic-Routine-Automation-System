@@ -8349,12 +8349,12 @@ def export_ca_marks_excel(request):
         if course.is_lab:
             if course.effective_lab_ca_practical2_weight:
                 headers = [
-                    'Student ID', 'Name', 'Attendance', 'Lab Assignment', 'Lab Practical 1', 'Lab Practical 2', 'Total CA Mark'
+                    'Student ID', 'Name', 'Attendance', 'Lab Assignment', 'Lab Practical 1', 'Lab Practical 2', 'Total CA'
                 ]
             else:
-                headers = ['Student ID', 'Name', 'Attendance', 'Lab Assignment', 'Lab Practical', 'Total CA Mark']
+                headers = ['Student ID', 'Name', 'Attendance', 'Lab Assignment', 'Lab Practical', 'Total CA']
         else:
-            headers = ['Student ID', 'Name', 'Attendance', 'Assignment/Presentation', 'Mid-Term Exam', 'Total CA Mark']
+            headers = ['Student ID', 'Name', 'Attendance', 'Assignment/Presentation', 'Mid-Term Exam', 'Total CA']
         
         worksheet.merge_range(0, 0, 0, len(headers) - 1, f"CA Marks Report - {semester.name}", title_format)
         worksheet.write(1, 0, f"Course: {course.code} - {course.name}", cell_format)
@@ -10277,11 +10277,21 @@ def _clamp_mark_float(raw, maximum=None):
 
 
 def _parse_final_exam_q_mark(raw):
-    """Theory final exam one question set: 0..14, stored as None when not positive (matches prior UI semantics)."""
+    """Theory final exam one question set: integer 1..14; blank/0 clears (None)."""
     if raw is None or raw == '':
         return None
-    v = _clamp_mark_float(raw, 14.0)
-    return v if v > 0 else None
+    try:
+        x = float(str(raw).strip())
+    except (TypeError, ValueError):
+        return None
+    if x < 0:
+        x = 0.0
+    if x > 14:
+        x = 14.0
+    xi = int(x)  # truncate toward zero; UI is integer-only
+    if xi > 14:
+        xi = 14
+    return xi if xi > 0 else None
 
 
 def _apply_theory_final_exam_q_fields(final_mark, teacher_role, marks_data):

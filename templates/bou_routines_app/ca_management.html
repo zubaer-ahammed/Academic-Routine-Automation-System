@@ -208,6 +208,12 @@
         outline: none;
     }
 
+    #ca-marks .ca-table .mark-input::placeholder {
+        color: #adb5bd;
+        opacity: 1;
+        text-align: center;
+    }
+
     .total-mark {
         font-weight: bold;
         background-color: #e9ecef;
@@ -1515,7 +1521,7 @@
                                                         <th colspan="6">Theory Course CA (Total: {{ selected_course.effective_ca_attendance_weight|add:selected_course.effective_ca_assignment_weight|add:selected_course.effective_ca_midterm_weight }})</th>
                                                 {% endif %}
                                                 {% endif %}
-                                                <th rowspan="{% if selected_course.course_type == 'PROJECT' %}2{% else %}3{% endif %}">Total CA Mark</th>
+                                                <th rowspan="{% if selected_course.course_type == 'PROJECT' %}2{% else %}3{% endif %}">Total CA</th>
                                                 <th rowspan="{% if selected_course.course_type == 'PROJECT' %}2{% else %}3{% endif %}">Notes</th>
                                             </tr>
                                             {% if selected_course.course_type == 'PROJECT' %}
@@ -1574,6 +1580,7 @@
                                         </thead>
                                         <tbody>
                                             {% for student in students %}
+                                                {% with ca_mark=ca_marks|dict_key:student.id %}
                                                 <tr>
                                                     <td class="student-id" data-student-id="{{ student.id }}">{{ student.id }}</td>
                                                     <td class="student-name">{{ student.name }}</td>
@@ -1583,7 +1590,7 @@
                                                         <td>
                                                             <input type="number" 
                                                                    name="students_data[{{ student.id }}][project_supervisor_mark]"
-                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.project_supervisor_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                   value="{% if ca_mark and ca_mark.project_supervisor_mark %}{{ ca_mark.project_supervisor_mark|floatformat:2 }}{% endif %}"
                                                                    min="0" 
                                                                    max="{{ selected_course.effective_project_supervisor_weight }}"
                                                                    step="0.01"
@@ -1594,7 +1601,7 @@
                                                         <td>
                                                             <input type="number" 
                                                                    name="students_data[{{ student.id }}][project_evaluation_mark]"
-                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.project_evaluation_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                   value="{% if ca_mark and ca_mark.project_evaluation_mark %}{{ ca_mark.project_evaluation_mark|floatformat:2 }}{% endif %}"
                                                                    min="0" 
                                                                    max="{{ selected_course.effective_project_evaluation_weight }}"
                                                                    step="0.01"
@@ -1605,7 +1612,7 @@
                                                         <td>
                                                             <input type="number" 
                                                                    name="students_data[{{ student.id }}][project_presentation_mark]"
-                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.project_presentation_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                   value="{% if ca_mark and ca_mark.project_presentation_mark %}{{ ca_mark.project_presentation_mark|floatformat:2 }}{% endif %}"
                                                                    min="0" 
                                                                    max="{{ selected_course.effective_project_presentation_weight }}"
                                                                    step="0.01"
@@ -1617,12 +1624,13 @@
                                                     <td>
                                                         <input type="number" 
                                                                name="students_data[{{ student.id }}][attendance_mark]"
-                                                               value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.attendance_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                               value="{% if ca_mark and ca_mark.attendance_mark is not None %}{{ ca_mark.attendance_mark|floatformat:2 }}{% endif %}"
                                                                min="0" 
                                                                max="{% if selected_course.is_lab %}{{ selected_course.effective_lab_ca_attendance_weight }}{% else %}{{ selected_course.effective_ca_attendance_weight }}{% endif %}"
                                                                step="0.01"
                                                                class="mark-input"
                                                                readonly
+                                                               placeholder="Attendance"
                                                                style="background-color: #f8f9fa; color: #6c757d;"
                                                                title="Auto-calculated based on attendance records">
                                                     </td>
@@ -1632,7 +1640,7 @@
                                                         <td>
                                                             <input type="number" 
                                                                    name="students_data[{{ student.id }}][first_lab_assignment_mark]"
-                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.first_lab_assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                   value="{% if ca_mark and ca_mark.first_lab_assignment_mark %}{{ ca_mark.first_lab_assignment_mark|floatformat:2 }}{% endif %}"
                                                                    min="0" 
                                                                    max="{{ selected_course.effective_lab_ca_assignment_weight }}"
                                                                    step="0.01"
@@ -1643,7 +1651,7 @@
                                                         <td>
                                                             <input type="number" 
                                                                    name="students_data[{{ student.id }}][second_lab_assignment_mark]"
-                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.second_lab_assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                   value="{% if ca_mark and ca_mark.second_lab_assignment_mark %}{{ ca_mark.second_lab_assignment_mark|floatformat:2 }}{% endif %}"
                                                                    min="0" 
                                                                    max="{{ selected_course.effective_lab_ca_assignment_weight }}"
                                                                    step="0.01"
@@ -1654,7 +1662,7 @@
                                                         <td>
                                                             <input type="number" 
                                                                    name="students_data[{{ student.id }}][third_lab_assignment_mark]"
-                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.third_lab_assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                   value="{% if ca_mark and ca_mark.third_lab_assignment_mark %}{{ ca_mark.third_lab_assignment_mark|floatformat:2 }}{% endif %}"
                                                                    min="0" 
                                                                    max="{{ selected_course.effective_lab_ca_assignment_weight }}"
                                                                    step="0.01"
@@ -1663,12 +1671,12 @@
                                                                    oninput="validateCAMark(this); calculateStudentTotal(this); autoSaveCAMarks();"
                                                         </td>
                                                         <td class="total-mark assignment-average">
-                                                            <span class="assignment-average-value">{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.lab_assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}</span>
+                                                            <span class="assignment-average-value">{% if ca_mark %}{{ ca_mark.lab_assignment_mark|default_if_none:0|floatformat:2 }}{% else %}0.00{% endif %}</span>
                                                         </td>
                                                         <td>
                                                             <input type="number" 
                                                                    name="students_data[{{ student.id }}][lab_practical_mark]"
-                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.lab_practical_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                   value="{% if ca_mark and ca_mark.lab_practical_mark %}{{ ca_mark.lab_practical_mark|floatformat:2 }}{% endif %}"
                                                                    min="0" 
                                                                    max="{{ selected_course.effective_lab_ca_practical_weight }}"
                                                                    step="0.01"
@@ -1680,7 +1688,7 @@
                                                         <td>
                                                             <input type="number" 
                                                                    name="students_data[{{ student.id }}][second_lab_practical_mark]"
-                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.second_lab_practical_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                   value="{% if ca_mark and ca_mark.second_lab_practical_mark %}{{ ca_mark.second_lab_practical_mark|floatformat:2 }}{% endif %}"
                                                                    min="0" 
                                                                    max="{{ selected_course.effective_lab_ca_practical2_weight }}"
                                                                    step="0.01"
@@ -1694,7 +1702,7 @@
                                                         <td>
                                                             <input type="number" 
                                                                    name="students_data[{{ student.id }}][first_assignment_mark]"
-                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.first_assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                   value="{% if ca_mark and ca_mark.first_assignment_mark %}{{ ca_mark.first_assignment_mark|floatformat:2 }}{% endif %}"
                                                                    min="0" 
                                                                    max="{{ selected_course.effective_ca_assignment_weight }}"
                                                                    step="0.01"
@@ -1705,7 +1713,7 @@
                                                         <td>
                                                             <input type="number" 
                                                                    name="students_data[{{ student.id }}][second_assignment_mark]"
-                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.second_assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                   value="{% if ca_mark and ca_mark.second_assignment_mark %}{{ ca_mark.second_assignment_mark|floatformat:2 }}{% endif %}"
                                                                    min="0" 
                                                                    max="{{ selected_course.effective_ca_assignment_weight }}"
                                                                    step="0.01"
@@ -1716,7 +1724,7 @@
                                                         <td>
                                                             <input type="number" 
                                                                    name="students_data[{{ student.id }}][third_assignment_mark]"
-                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.third_assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                   value="{% if ca_mark and ca_mark.third_assignment_mark %}{{ ca_mark.third_assignment_mark|floatformat:2 }}{% endif %}"
                                                                    min="0" 
                                                                    max="{{ selected_course.effective_ca_assignment_weight }}"
                                                                    step="0.01"
@@ -1725,14 +1733,14 @@
                                                                    oninput="validateCAMark(this); calculateStudentTotal(this); autoSaveCAMarks();"
                                                         </td>
                                                         <td class="total-mark assignment-average">
-                                                            <span class="assignment-average-value">{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.assignment_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}</span>
+                                                            <span class="assignment-average-value">{% if ca_mark %}{{ ca_mark.assignment_mark|default_if_none:0|floatformat:2 }}{% else %}0.00{% endif %}</span>
                                                         </td>
                                                         {% if selected_semester and selected_semester.curriculum and selected_semester.curriculum.code == 'OLD' %}
                                                             <!-- Class Tests for Old Curriculum -->
                                                             <td>
                                                                 <input type="number" 
                                                                        name="students_data[{{ student.id }}][first_class_test_mark]"
-                                                                       value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.first_class_test_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                       value="{% if ca_mark and ca_mark.first_class_test_mark %}{{ ca_mark.first_class_test_mark|floatformat:2 }}{% endif %}"
                                                                        min="0" 
                                                                        max="{{ selected_course.effective_ca_quiz_weight }}"
                                                                        step="0.01"
@@ -1744,7 +1752,7 @@
                                                             <td>
                                                                 <input type="number" 
                                                                        name="students_data[{{ student.id }}][second_class_test_mark]"
-                                                                       value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.second_class_test_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                       value="{% if ca_mark and ca_mark.second_class_test_mark %}{{ ca_mark.second_class_test_mark|floatformat:2 }}{% endif %}"
                                                                        min="0" 
                                                                        max="{{ selected_course.effective_ca_quiz_weight }}"
                                                                        step="0.01"
@@ -1755,13 +1763,7 @@
                                                             </td>
                                                             <td class="total-mark class-test-best">
                                                                 <span class="class-test-best-value">
-                                                                    {% for mark_id, ca_mark in ca_marks.items %}
-                                                                        {% if mark_id == student.id %}
-                                                                            {{ ca_mark.class_test_mark|floatformat:2 }}
-                                                                        {% endif %}
-                                                                    {% empty %}
-                                                                        0.00
-                                                                    {% endfor %}
+                                                                    {% if ca_mark %}{{ ca_mark.class_test_mark|default_if_none:0|floatformat:2 }}{% else %}0.00{% endif %}
                                                                 </span>
                                                             </td>
                                                         {% else %}
@@ -1769,12 +1771,12 @@
                                                         <td>
                                                             <input type="number" 
                                                                    name="students_data[{{ student.id }}][midterm_mark]"
-                                                                   value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.midterm_mark|floatformat:2 }}{% endif %}{% empty %}0.00{% endfor %}"
+                                                                   value="{% if ca_mark and ca_mark.midterm_mark %}{{ ca_mark.midterm_mark|floatformat:2 }}{% endif %}"
                                                                    min="0" 
                                                                        max="{{ selected_course.effective_ca_midterm_weight }}"
                                                                    step="0.01"
                                                                    class="mark-input"
-                                                                       placeholder="Mid-Term Exam"
+                                                                       placeholder="MT"
                                                                        oninput="validateCAMark(this); calculateStudentTotal(this); autoSaveCAMarks();"
                                                                        onblur="saveCAMarksImmediately();">
                                                         </td>
@@ -1784,23 +1786,18 @@
                                                     
                                                     <td class="total-mark total-ca-mark">
                                                         <span id="total-ca-{{ student.id }}" class="total-ca-value">
-                                                            {% for mark_id, ca_mark in ca_marks.items %}
-                                                                {% if mark_id == student.id %}
-                                                                    {{ ca_mark.total_ca_mark|ceil_int }}
-                                                                {% endif %}
-                                                            {% empty %}
-                                                                0.00
-                                                            {% endfor %}
+                                                            {% if ca_mark %}{{ ca_mark.total_ca_mark|default_if_none:0|ceil_int }}{% else %}0{% endif %}
                                                         </span>
                                                     </td>
                                                     <td>
                                                         <input type="text" 
                                                                name="students_data[{{ student.id }}][notes]"
-                                                               value="{% for mark_id, ca_mark in ca_marks.items %}{% if mark_id == student.id %}{{ ca_mark.notes }}{% endif %}{% endfor %}"
+                                                               value="{% if ca_mark %}{{ ca_mark.notes|default:'' }}{% endif %}"
                                                                placeholder="Enter notes..."
                                                                style="width: 100px; padding: 4px; border: 1px solid #ced4da; border-radius: 4px;">
                                                     </td>
                                                 </tr>
+                                                {% endwith %}
                                             {% endfor %}
                                         </tbody>
                                     </table>
@@ -2389,7 +2386,7 @@ function calculateStudentTotal(inputElement) {
         }
     }
     
-    // Update the Total CA Mark column (ceiling to next integer)
+    // Update the Total CA column (ceiling to next integer)
     const totalCAMarkCell = row.querySelector('.total-ca-value');
     if (totalCAMarkCell) {
         totalCAMarkCell.textContent = String(Math.ceil(total));
@@ -2868,7 +2865,7 @@ function validateQuestionSet(inputElement) {
             if (input.getAttribute('data-question-group') !== letter) {
                 return;
             }
-            let v = parseFloat(input.value);
+            let v = parseInt(input.value, 10);
             if (isNaN(v) || v < 0) {
                 v = 0;
             }
@@ -2880,15 +2877,27 @@ function validateQuestionSet(inputElement) {
     }
     
     questionInputs.forEach(function (input) {
-        let value = parseFloat(input.value);
-        if (isNaN(value)) value = 0;
+        const raw = (input.value || '').trim();
+        if (raw === '') {
+            return;
+        }
+        let value = parseFloat(raw);
+        if (isNaN(value)) {
+            input.value = '';
+            return;
+        }
         if (value < 0) {
-            input.value = 0;
+            input.value = '';
             return;
         }
         if (value > 14) {
-            input.value = 14;
+            input.value = '14';
             alert('Maximum mark per question set is 14.');
+            value = 14;
+        }
+        const iv = Math.trunc(value);
+        if (raw.indexOf('.') !== -1 || Math.abs(iv - value) > 1e-9) {
+            input.value = iv <= 0 ? '' : String(iv);
         }
     });
     
@@ -2909,7 +2918,7 @@ function validateQuestionSet(inputElement) {
     
     let total = 0;
     questionInputs.forEach(function (input) {
-        const v = parseFloat(input.value);
+        const v = parseInt(input.value, 10);
         if (!isNaN(v) && v > 0) {
             total += v;
         }
@@ -3092,7 +3101,7 @@ function updateSemesterFinalAttendanceHasMarksFromForm() {
             for (var qi = 1; qi <= 7; qi++) {
                 const inp = row.querySelector('input[name$="[q' + qi + ']"]');
                 if (inp) {
-                    const v = parseFloat(inp.value);
+                    const v = parseInt(String(inp.value || '').trim(), 10);
                     if (!isNaN(v) && v > 0) {
                         has = true;
                         break;
@@ -3354,9 +3363,13 @@ function saveFinalExamMarks(reloadPage = true) {
                 const input = row.querySelector(`input[name$="[q${i}]"]`);
                 let value = 0;
                 if (input) {
-                    value = parseFloat(input.value);
-                    if (isNaN(value)) value = 0;
-                    value = Math.max(0, Math.min(14, value));
+                    const raw = String(input.value || '').trim();
+                    if (raw !== '') {
+                        const v = parseInt(raw, 10);
+                        if (!isNaN(v)) {
+                            value = Math.max(0, Math.min(14, v));
+                        }
+                    }
                 }
                 marks['q' + i] = value;
             }

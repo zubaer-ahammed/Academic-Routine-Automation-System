@@ -85,7 +85,7 @@
                                         <tbody>
                                             {% for student in students %}
                                                 {% with final_mark=final_exam_marks|dict_key:student.id %}
-                                                <tr id="final-exam-row-{{ student.id }}" class="{% if final_mark and final_mark.exam_absent %}final-exam-marks-row-disabled {% endif %}{% if final_mark and final_mark.is_third_examiner_required and not final_mark.exam_absent %}discrepancy-row{% endif %}"{% if final_mark and final_mark.exam_absent %} inert{% endif %}>
+                                                <tr id="final-exam-row-{{ student.id }}" class="{% if final_mark and final_mark.exam_absent %}final-exam-marks-row-disabled {% endif %}"{% if final_mark and final_mark.exam_absent %} inert{% endif %}>
                                                     <td class="student-id" data-student-id="{{ student.id }}">{{ student.id }}</td>
                                                     <td class="student-name">{{ student.name }}</td>
                                                     

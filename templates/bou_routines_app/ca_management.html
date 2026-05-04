@@ -1208,6 +1208,39 @@
         }
     }
 
+    /* Mid-Term Marks (theory Q1–Q6): match final-exam question column sizing */
+    #midterm-marks .ca-table {
+        table-layout: fixed;
+        width: 100%;
+    }
+    #midterm-marks .ca-table thead tr:first-child > th.student-info:nth-child(1),
+    #midterm-marks .ca-table tbody td.student-id {
+        width: 7.5rem;
+        max-width: 8.25rem;
+    }
+    #midterm-marks .ca-table thead tr:first-child > th.student-info:nth-child(2),
+    #midterm-marks .ca-table tbody td.student-name {
+        width: 13.5rem;
+        max-width: 16rem;
+        min-width: 10rem;
+    }
+    #midterm-marks .ca-table .midterm-q-input {
+        width: 100%;
+        min-width: 2.75rem;
+        max-width: 4.5rem;
+        box-sizing: border-box;
+        text-align: center;
+        padding: 6px 4px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-size: 0.9rem;
+    }
+    #midterm-marks .ca-table .midterm-q-input:focus {
+        border-color: #80bdff;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        outline: none;
+    }
+
     /* Semester Final Attendance: same ca-table look; natural column widths; select like mark inputs */
     #final-exam .ca-table.semester-final-attendance-table {
         table-layout: auto;
@@ -1453,6 +1486,13 @@
                                     <i class="fas fa-table"></i> CA Marks
                                 </button>
                             </li>
+                            {% if show_midterm_marks_tab %}
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="midterm-marks-tab" data-bs-toggle="tab" data-bs-target="#midterm-marks" type="button" role="tab" aria-controls="midterm-marks" aria-selected="false">
+                                    <i class="fas fa-edit"></i> Mid-Term Marks
+                                </button>
+                            </li>
+                            {% endif %}
                             {% if show_final_exam_tab %}
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link" id="final-exam-tab" data-bs-toggle="tab" data-bs-target="#final-exam" type="button" role="tab" aria-controls="final-exam" aria-selected="false">
@@ -1776,8 +1816,11 @@
                                                                 </span>
                                                             </td>
                                                         {% else %}
-                                                            <!-- Midterm for New Curriculum -->
-                                                        <td>
+                                                            <!-- Midterm for New Curriculum: from Mid-Term Marks tab when enabled -->
+                                                        <td class="total-mark text-center">
+                                                            {% if show_midterm_marks_tab %}
+                                                            <span class="ca-midterm-contrib-display" id="ca-midterm-display-{{ student.id }}">{% if ca_mark and ca_mark.midterm_mark %}{{ ca_mark.midterm_mark|floatformat:2 }}{% else %}0.00{% endif %}</span>
+                                                            {% else %}
                                                             <input type="number" 
                                                                    name="students_data[{{ student.id }}][midterm_mark]"
                                                                    value="{% if ca_mark and ca_mark.midterm_mark %}{{ ca_mark.midterm_mark|floatformat:2 }}{% endif %}"
@@ -1788,6 +1831,7 @@
                                                                        placeholder="MT"
                                                                        oninput="validateCAMark(this); calculateStudentTotal(this); autoSaveCAMarks();"
                                                                        onblur="saveCAMarksImmediately();">
+                                                            {% endif %}
                                                         </td>
                                                         {% endif %}
                                                     {% endif %}
@@ -1820,6 +1864,14 @@
                             </div>
                                 </div>
                             </div>
+
+                            {% if show_midterm_marks_tab %}
+                            <div class="tab-pane fade" id="midterm-marks" role="tabpanel" aria-labelledby="midterm-marks-tab">
+                                <div class="final-exam-section">
+                                    {% include "bou_routines_app/partials/theory_midterm_marks_table.html" %}
+                                </div>
+                            </div>
+                            {% endif %}
 
                             <!-- Final Exam Tab -->
                             {% if show_final_exam_tab %}
@@ -2044,9 +2096,42 @@ document.addEventListener('DOMContentLoaded', function() {
     const activeTab = urlParams.get('tab');
     
     // If tab parameter exists, activate that tab
-    if (activeTab === 'final-exam') {
+    if (activeTab === 'midterm-marks') {
         const caMarksTab = document.getElementById('ca-marks-tab');
         const caMarksPane = document.getElementById('ca-marks');
+        const midtermTab = document.getElementById('midterm-marks-tab');
+        const midtermPane = document.getElementById('midterm-marks');
+        const finalExamTab = document.getElementById('final-exam-tab');
+        const finalExamPane = document.getElementById('final-exam');
+        const summaryTab = document.getElementById('examiner-summary-tab');
+        const summaryPane = document.getElementById('examiner-summary');
+        if (!midtermTab || !midtermPane) {
+            const u0 = new URL(window.location);
+            u0.searchParams.delete('tab');
+            window.history.replaceState({}, '', u0);
+        } else if (caMarksTab && caMarksPane && midtermTab && midtermPane) {
+            caMarksTab.classList.remove('active');
+            caMarksTab.setAttribute('aria-selected', 'false');
+            caMarksPane.classList.remove('show', 'active');
+            if (finalExamTab && finalExamPane) {
+                finalExamTab.classList.remove('active');
+                finalExamTab.setAttribute('aria-selected', 'false');
+                finalExamPane.classList.remove('show', 'active');
+            }
+            if (summaryTab && summaryPane) {
+                summaryTab.classList.remove('active');
+                summaryTab.setAttribute('aria-selected', 'false');
+                summaryPane.classList.remove('show', 'active');
+            }
+            midtermTab.classList.add('active');
+            midtermTab.setAttribute('aria-selected', 'true');
+            midtermPane.classList.add('show', 'active');
+        }
+    } else if (activeTab === 'final-exam') {
+        const caMarksTab = document.getElementById('ca-marks-tab');
+        const caMarksPane = document.getElementById('ca-marks');
+        const midtermTab = document.getElementById('midterm-marks-tab');
+        const midtermPane = document.getElementById('midterm-marks');
         const finalExamTab = document.getElementById('final-exam-tab');
         const finalExamPane = document.getElementById('final-exam');
         const summaryTab = document.getElementById('examiner-summary-tab');
@@ -2056,6 +2141,11 @@ document.addEventListener('DOMContentLoaded', function() {
             caMarksTab.classList.remove('active');
             caMarksTab.setAttribute('aria-selected', 'false');
             caMarksPane.classList.remove('show', 'active');
+            if (midtermTab && midtermPane) {
+                midtermTab.classList.remove('active');
+                midtermTab.setAttribute('aria-selected', 'false');
+                midtermPane.classList.remove('show', 'active');
+            }
             if (summaryTab && summaryPane) {
                 summaryTab.classList.remove('active');
                 summaryTab.setAttribute('aria-selected', 'false');
@@ -2068,6 +2158,8 @@ document.addEventListener('DOMContentLoaded', function() {
     } else if (activeTab === 'examiner-summary') {
         const caMarksTab = document.getElementById('ca-marks-tab');
         const caMarksPane = document.getElementById('ca-marks');
+        const midtermTab = document.getElementById('midterm-marks-tab');
+        const midtermPane = document.getElementById('midterm-marks');
         const finalExamTab = document.getElementById('final-exam-tab');
         const finalExamPane = document.getElementById('final-exam');
         const summaryTab = document.getElementById('examiner-summary-tab');
@@ -2080,6 +2172,11 @@ document.addEventListener('DOMContentLoaded', function() {
             caMarksTab.classList.remove('active');
             caMarksTab.setAttribute('aria-selected', 'false');
             caMarksPane.classList.remove('show', 'active');
+            if (midtermTab && midtermPane) {
+                midtermTab.classList.remove('active');
+                midtermTab.setAttribute('aria-selected', 'false');
+                midtermPane.classList.remove('show', 'active');
+            }
             if (finalExamTab && finalExamPane) {
                 finalExamTab.classList.remove('active');
                 finalExamTab.setAttribute('aria-selected', 'false');
@@ -2093,12 +2190,19 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Add event listeners to tabs to update URL when switched
     const caMarksTab = document.getElementById('ca-marks-tab');
+    const midtermMarksTab = document.getElementById('midterm-marks-tab');
     const finalExamTab = document.getElementById('final-exam-tab');
     const examinerSummaryTab = document.getElementById('examiner-summary-tab');
     
     if (caMarksTab) {
         caMarksTab.addEventListener('shown.bs.tab', function() {
             updateURLParameter('tab', 'ca-marks');
+        });
+    }
+
+    if (midtermMarksTab) {
+        midtermMarksTab.addEventListener('shown.bs.tab', function() {
+            updateURLParameter('tab', 'midterm-marks');
         });
     }
     
@@ -2381,9 +2485,14 @@ function calculateStudentTotal(inputElement) {
                 bestClassTestCell.textContent = examMark.toFixed(2);
             }
         } else {
-            // New curriculum: use midterm
-            const midtermInput = row.querySelector('input[name$="[midterm_mark]"]');
-            examMark = midtermInput ? nonNegativeMark(midtermInput.value) : 0;
+            const useMidtermSheet = {% if show_midterm_marks_tab %}true{% else %}false{% endif %};
+            if (useMidtermSheet) {
+                const msp = row.querySelector('.ca-midterm-contrib-display');
+                examMark = msp ? nonNegativeMark(msp.textContent) : 0;
+            } else {
+                const midtermInput = row.querySelector('input[name$="[midterm_mark]"]');
+                examMark = midtermInput ? nonNegativeMark(midtermInput.value) : 0;
+            }
         }
         total += assignmentMark + examMark;
         
@@ -2504,6 +2613,12 @@ document.addEventListener('DOMContentLoaded', function() {
             calculateFinalExamTotal(inp);
         });
     }
+    var mtForm = document.getElementById('midterm-marks-form');
+    if (mtForm) {
+        mtForm.querySelectorAll('.midterm-q-input').forEach(function (inp) {
+            validateMidtermQuestionSet(inp);
+        });
+    }
 });
 
 // Function to update Save CA Marks button status
@@ -2615,8 +2730,11 @@ function saveCAMarks(reloadPage = true) {
                     marks['first_class_test_mark'] = firstClassTestInput ? nonNegativeMark(firstClassTestInput.value) : 0;
                     marks['second_class_test_mark'] = secondClassTestInput ? nonNegativeMark(secondClassTestInput.value) : 0;
                 } else {
-                    const midtermInput = row.querySelector('input[name$="[midterm_mark]"]');
-                    marks['midterm_mark'] = midtermInput ? nonNegativeMark(midtermInput.value) : 0;
+                    const useMidtermSheet = {% if show_midterm_marks_tab %}true{% else %}false{% endif %};
+                    if (!useMidtermSheet) {
+                        const midtermInput = row.querySelector('input[name$="[midterm_mark]"]');
+                        marks['midterm_mark'] = midtermInput ? nonNegativeMark(midtermInput.value) : 0;
+                    }
                 }
             }
         }
@@ -2973,6 +3091,296 @@ function validateQuestionSet(inputElement) {
             }
         }
     }
+}
+
+// Theory mid-term (Q1–Q6): Group A = Q1–Q3 (≤2 with mark &gt; 0), Group B = Q4–Q5 (≤1), Group C = Q6. Max MIDTERM_SET_MAX per set; raw total max MIDTERM_RAW_TOTAL_MAX.
+function validateMidtermQuestionSet(inputElement) {
+    const studentId = inputElement.getAttribute('data-student-id');
+    const row = inputElement.closest('tr');
+    const questionInputs = row.querySelectorAll('.midterm-q-input');
+
+    function countPosInGroup(letter) {
+        let c = 0;
+        questionInputs.forEach(function (input) {
+            if (input.getAttribute('data-question-group') !== letter) {
+                return;
+            }
+            let v = parseInt(input.value, 10);
+            if (isNaN(v) || v < 0) {
+                v = 0;
+            }
+            if (v > 0) {
+                c++;
+            }
+        });
+        return c;
+    }
+
+    questionInputs.forEach(function (input) {
+        const raw = (input.value || '').trim();
+        if (raw === '') {
+            return;
+        }
+        let value = parseFloat(raw);
+        if (isNaN(value)) {
+            input.value = '';
+            return;
+        }
+        if (value < 0) {
+            input.value = '';
+            return;
+        }
+        if (value > MIDTERM_SET_MAX) {
+            input.value = String(MIDTERM_SET_MAX);
+            alert('Maximum mark per question set is ' + MIDTERM_SET_MAX + '.');
+            value = MIDTERM_SET_MAX;
+        }
+        const iv = Math.trunc(value);
+        if (raw.indexOf('.') !== -1 || Math.abs(iv - value) > 1e-9) {
+            input.value = iv <= 0 ? '' : String(iv);
+        }
+    });
+
+    const g = inputElement.getAttribute('data-question-group');
+    if (g === 'A' && countPosInGroup('A') > 2) {
+        inputElement.value = '';
+        inputElement.classList.remove('disabled');
+        alert('Group A (Q1–Q3): at most 2 question sets can have marks. Clear one set, then try again.');
+    } else if (g === 'B' && countPosInGroup('B') > 1) {
+        inputElement.value = '';
+        inputElement.classList.remove('disabled');
+        alert('Group B (Q4–Q5): enter marks in at most one question set (any one of Q4 or Q5). Clear the other, then try again.');
+    } else {
+        questionInputs.forEach(function (input) {
+            input.classList.remove('disabled');
+        });
+    }
+
+    let total = 0;
+    questionInputs.forEach(function (input) {
+        const v = parseInt(input.value, 10);
+        if (!isNaN(v) && v > 0) {
+            total += v;
+        }
+    });
+    const totEl = document.getElementById('midterm-raw-total-' + studentId);
+    if (totEl) {
+        totEl.textContent = String(total);
+    }
+
+    const rawTrim = (inputElement.value || '').trim();
+    const advanceRe = new RegExp('^[1-' + String(MIDTERM_SET_MAX) + ']$');
+    if (advanceRe.test(rawTrim) && rawTrim.indexOf('.') === -1) {
+        const q = parseInt(inputElement.getAttribute('data-question'), 10);
+        if (!isNaN(q) && q < 6 && row) {
+            let nextQ = q + 1;
+            while (nextQ <= 6) {
+                const next = row.querySelector('.midterm-q-input[data-question="' + nextQ + '"]');
+                if (next && !next.classList.contains('disabled')) {
+                    setTimeout(function () {
+                        next.focus();
+                        try { next.select(); } catch (e2) { /* ignore */ }
+                    }, 0);
+                    break;
+                }
+                nextQ += 1;
+            }
+        }
+    }
+}
+
+function updateSaveMidtermMarksButtonStatus(isSaving) {
+    const headerBtn = document.getElementById('save-midterm-marks-btn-header');
+    const bottomBtn = document.getElementById('save-midterm-marks-btn-bottom');
+    [headerBtn, bottomBtn].filter(function (b) { return b; }).forEach(function (btn) {
+        if (isSaving) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        } else {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save"></i> Save Mid-Term Marks';
+        }
+    });
+}
+
+function saveMidtermMarksImmediately() {
+    if (window.autoSaveMidtermTimer) {
+        clearTimeout(window.autoSaveMidtermTimer);
+        window.autoSaveMidtermTimer = null;
+    }
+    saveMidtermMarks(false);
+}
+
+function autoSaveMidtermMarks() {
+    if (window.autoSaveMidtermTimer) {
+        clearTimeout(window.autoSaveMidtermTimer);
+    }
+    window.autoSaveMidtermTimer = setTimeout(function () {
+        window.autoSaveMidtermTimer = null;
+        saveMidtermMarks(false);
+    }, 500);
+}
+
+function saveMidtermMarks(reloadPage) {
+    if (window.midtermSaveInFlight) {
+        window.midtermSaveQueued = { reload: !!(reloadPage || (window.midtermSaveQueued && window.midtermSaveQueued.reload)) };
+        return;
+    }
+    const form = document.getElementById('midterm-marks-form');
+    if (!form) {
+        return;
+    }
+    updateSaveMidtermMarksButtonStatus(true);
+    const formData = new FormData(form);
+    const studentsData = {};
+    form.querySelectorAll('tbody tr[id^="midterm-row-"]').forEach(function (row) {
+        const sidCell = row.querySelector('td.student-id[data-student-id]');
+        let studentId = sidCell ? sidCell.getAttribute('data-student-id') : null;
+        if (!studentId && row.id && row.id.indexOf('midterm-row-') === 0) {
+            studentId = row.id.replace('midterm-row-', '');
+        }
+        if (!studentId) {
+            return;
+        }
+        studentId = String(studentId).trim();
+        const marks = {};
+        for (let qi = 1; qi <= 6; qi++) {
+            const inp = row.querySelector('input[name$="[q' + qi + ']"]');
+            let value = 0;
+            if (inp) {
+                const raw = String(inp.value || '').trim();
+                if (raw !== '') {
+                    const v = parseInt(raw, 10);
+                    if (!isNaN(v)) {
+                        value = Math.max(0, Math.min(MIDTERM_SET_MAX, v));
+                    }
+                }
+            }
+            marks['q' + qi] = value;
+        }
+        studentsData[studentId] = marks;
+    });
+
+    const urlParamsMt = new URLSearchParams(window.location.search);
+    const centreSelectMt = document.getElementById('centre');
+    const pageCentreMt = form.getAttribute('data-page-centre-id') || '';
+    const centreIdMt = urlParamsMt.get('centre') || (centreSelectMt ? centreSelectMt.value : '') || (pageCentreMt ? String(pageCentreMt).trim() : '');
+
+    const semesterId = formData.get('semester_id');
+    const courseId = formData.get('course_id');
+    const csrfEl = form.querySelector('input[name="csrfmiddlewaretoken"]');
+    const csrf = formData.get('csrfmiddlewaretoken') || (csrfEl ? csrfEl.value : '');
+    if (!semesterId || !courseId) {
+        updateSaveMidtermMarksButtonStatus(false);
+        alert('Semester or course is missing. Please reload and try again.');
+        return;
+    }
+    if (!csrf) {
+        updateSaveMidtermMarksButtonStatus(false);
+        alert('Security token (CSRF) missing. Please reload the page.');
+        return;
+    }
+    if (Object.keys(studentsData).length === 0) {
+        updateSaveMidtermMarksButtonStatus(false);
+        alert('No student rows to save.');
+        return;
+    }
+
+    const postData = {
+        'csrfmiddlewaretoken': csrf,
+        'semester_id': String(semesterId),
+        'course_id': String(courseId),
+        'students_data': JSON.stringify(studentsData)
+    };
+    if (centreIdMt) {
+        postData.centre_id = String(centreIdMt);
+    }
+
+    window.midtermSaveInFlight = true;
+    fetch('{% url "save-midterm-marks" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': csrf
+        },
+        credentials: 'same-origin',
+        body: new URLSearchParams(postData).toString()
+    })
+    .then(async function (response) {
+        if (!response.ok) {
+            var errMsg = 'HTTP error! status: ' + response.status;
+            try {
+                var errData = await response.json();
+                errMsg = errData.error || errMsg;
+            } catch (e3) {
+                errMsg = response.statusText || errMsg;
+            }
+            throw new Error(errMsg);
+        }
+        return response.json();
+    })
+    .then(function (data) {
+        if (data && data.success) {
+            if (reloadPage) {
+                window.midtermSaveQueued = null;
+                alert(data.message);
+                window.location.reload();
+            } else {
+                Object.keys(studentsData).forEach(function (sid) {
+                    var mrow = document.getElementById('midterm-row-' + sid);
+                    var rawSum = 0;
+                    if (mrow) {
+                        mrow.querySelectorAll('.midterm-q-input').forEach(function (inp) {
+                            var v = parseInt(inp.value, 10);
+                            if (!isNaN(v) && v > 0) {
+                                rawSum += v;
+                            }
+                        });
+                    }
+                    var disp = document.getElementById('ca-midterm-display-' + sid);
+                    if (disp) {
+                        disp.textContent = scaledMidtermContribFromRawSum(rawSum);
+                    }
+                    var idCell = document.querySelector('#ca-marks-form td.student-id[data-student-id="' + sid + '"]');
+                    var caRow = idCell ? idCell.closest('tr') : null;
+                    if (caRow) {
+                        var anyInp = caRow.querySelector('input[name$="[first_assignment_mark]"]');
+                        if (anyInp) {
+                            calculateStudentTotal(anyInp);
+                        }
+                    }
+                });
+            }
+        } else {
+            alert('Error: ' + (data && data.error ? data.error : 'Unknown error'));
+        }
+    })
+    .catch(function (error) {
+        console.error('Error saving mid-term marks:', error);
+        alert('An error occurred while saving mid-term marks: ' + (error.message || String(error)));
+    })
+    .finally(function () {
+        window.midtermSaveInFlight = false;
+        updateSaveMidtermMarksButtonStatus(false);
+        var pend = window.midtermSaveQueued;
+        window.midtermSaveQueued = null;
+        if (pend) {
+            saveMidtermMarks(pend.reload);
+        }
+    });
+}
+
+const MIDTERM_CA_WEIGHT = parseFloat("{% if show_midterm_marks_tab and selected_course %}{{ selected_course.effective_ca_midterm_weight|default:0 }}{% else %}0{% endif %}", 10) || 0;
+const MIDTERM_SET_MAX = parseInt("{{ midterm_set_max|default:5 }}", 10) || 5;
+const MIDTERM_RAW_TOTAL_MAX = parseInt("{{ midterm_raw_total_max|default:20 }}", 10) || 20;
+
+function scaledMidtermContribFromRawSum(rawSum) {
+    var r = parseFloat(String(rawSum)) || 0;
+    if (r <= 0 || MIDTERM_CA_WEIGHT <= 0) {
+        return '0.00';
+    }
+    r = Math.min(r, MIDTERM_RAW_TOTAL_MAX);
+    return (Math.round((r / MIDTERM_RAW_TOTAL_MAX) * MIDTERM_CA_WEIGHT * 100) / 100).toFixed(2);
 }
 
 const LAB_FINAL_EXAM_MAX = parseInt("{{ lab_final_exam_max|default:50 }}", 10) || 50;

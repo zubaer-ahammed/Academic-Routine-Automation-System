@@ -751,6 +751,59 @@ class CAMark(models.Model):
         super().save(*args, **kwargs)
 
 
+class MidtermExamMark(models.Model):
+    """
+    Theory CA mid-term (new curriculum): six question sets, max 5 marks per set, raw total max 20.
+    Group A: Q1–Q3 (at most two sets with marks > 0). Group B: Q4–Q5 (at most one).
+    Group C: Q6 is always part of the paper (same max per set as other sets).
+    CAMark.midterm_mark stores the contribution scaled to the course mid-term CA weight (0–weight).
+    """
+
+    SET_MARKS_MAX = 5
+    RAW_TOTAL_MAX = 20
+
+    student = models.ForeignKey(Student, on_delete=models.CASCADE)
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    semester = models.ForeignKey(Semester, on_delete=models.CASCADE)
+    q1 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, default=0)
+    q2 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, default=0)
+    q3 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, default=0)
+    q4 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, default=0)
+    q5 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, default=0)
+    q6 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, default=0)
+    marked_by = models.ForeignKey('Teacher', on_delete=models.CASCADE, related_name='midterm_exam_marks_marked_by')
+    marked_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('student', 'course', 'semester')
+        ordering = ['student__id']
+
+    def __str__(self):
+        return f"{self.student_id} - {self.course.code} - Midterm raw"
+
+    def raw_total_float(self):
+        """Sum of Q1–Q6 (each treated as 0 if null)."""
+        total = 0.0
+        for i in range(1, 7):
+            total += float(getattr(self, f'q{i}') or 0)
+        return total
+
+    def scaled_midterm_contribution(self):
+        """Map raw total (max RAW_TOTAL_MAX) onto 0..course effective mid-term CA weight."""
+        from decimal import Decimal
+
+        course = self.course
+        if not course:
+            return Decimal('0')
+        weight = float(course.effective_ca_midterm_weight or 0)
+        cap = float(self.RAW_TOTAL_MAX)
+        raw = min(self.raw_total_float(), cap)
+        if raw <= 0:
+            return Decimal('0')
+        return Decimal(str(round((raw / cap) * weight, 2)))
+
+
 class FinalExamMark(models.Model):
     """
     Semester Final Examination marks for students

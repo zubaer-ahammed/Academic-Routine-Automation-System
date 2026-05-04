@@ -1,5 +1,21 @@
 from django.shortcuts import render, redirect
-from .models import CurrentRoutine, Teacher, Semester, Course, NewRoutine, SemesterCourse, Student, Attendance, Curriculum, CAMark, FinalExamMark, Centre, ProgramCoordinator, SemesterCentreCoordinator
+from .models import (
+    CurrentRoutine,
+    Teacher,
+    Semester,
+    Course,
+    NewRoutine,
+    SemesterCourse,
+    Student,
+    Attendance,
+    Curriculum,
+    CAMark,
+    MidtermExamMark,
+    FinalExamMark,
+    Centre,
+    ProgramCoordinator,
+    SemesterCentreCoordinator,
+)
 from .forms import RoutineForm, TeacherRegistrationForm
 from datetime import datetime, timedelta, date
 from collections import defaultdict
@@ -9851,6 +9867,7 @@ def ca_management(request):
     students = Student.objects.none()
     ca_marks = {}
     final_exam_marks = {}
+    midterm_marks = {}
     if semester_id and course_id:
         try:
             selected_semester = Semester.objects.get(id=semester_id)
@@ -9931,7 +9948,15 @@ def ca_management(request):
             # Create a dictionary for easy lookup
             for mark in existing_final_marks:
                 final_exam_marks[mark.student.id] = mark
-                
+
+            existing_midterm_marks = MidtermExamMark.objects.filter(
+                student__in=students,
+                course=selected_course,
+                semester=selected_semester,
+            )
+            for mark in existing_midterm_marks:
+                midterm_marks[mark.student.id] = mark
+
         except (Semester.DoesNotExist, Course.DoesNotExist):
             messages.error(request, "Invalid semester or course selected.")
     
@@ -10026,6 +10051,17 @@ def ca_management(request):
     elif selected_semester and getattr(selected_semester, 'curriculum', None) and selected_semester.curriculum.code == 'OLD':
         lab_final_exam_max = 60
 
+    show_midterm_marks_tab = bool(
+        semester_id
+        and course_id
+        and selected_semester
+        and selected_course
+        and not getattr(selected_course, 'is_lab', False)
+        and getattr(selected_course, 'course_type', None) != 'PROJECT'
+        and getattr(selected_semester, 'curriculum', None)
+        and selected_semester.curriculum.code != 'OLD'
+    )
+
     if course_id:
         try:
             _c_sel = Course.objects.get(id=int(course_id))
@@ -10052,12 +10088,16 @@ def ca_management(request):
         'students': students,
         'ca_marks': ca_marks,
         'final_exam_marks': final_exam_marks,
+        'midterm_marks': midterm_marks,
         'teacher_role': teacher_role,
         'can_select_evaluator': can_select_evaluator,
         'lab_final_exam_max': lab_final_exam_max,
         'lab_final_uses_viva': lab_final_uses_viva,
         'lab_final_problem_solving_max': lab_final_problem_solving_max,
         'lab_final_viva_max': lab_final_viva_max,
+        'show_midterm_marks_tab': show_midterm_marks_tab,
+        'midterm_set_max': MidtermExamMark.SET_MARKS_MAX,
+        'midterm_raw_total_max': MidtermExamMark.RAW_TOTAL_MAX,
     }
     
     # Get evaluator teachers for the selected course
@@ -10294,6 +10334,25 @@ def _parse_final_exam_q_mark(raw):
     return xi if xi > 0 else None
 
 
+def _parse_midterm_q_mark(raw):
+    """Theory mid-term one question set: integer 1..SET_MARKS_MAX; blank/0 clears (None)."""
+    mx = MidtermExamMark.SET_MARKS_MAX
+    if raw is None or raw == '':
+        return None
+    try:
+        x = float(str(raw).strip())
+    except (TypeError, ValueError):
+        return None
+    if x < 0:
+        x = 0.0
+    if x > mx:
+        x = float(mx)
+    xi = int(x)
+    if xi > mx:
+        xi = mx
+    return xi if xi > 0 else None
+
+
 def _apply_theory_final_exam_q_fields(final_mark, teacher_role, marks_data):
     """
     Apply Q1..Q7 from marks_data to the right teacher_* fields.
@@ -10333,6 +10392,52 @@ def _theory_q_group_rules_ok(state):
     a = sum(1 for i in (1, 2, 3) if is_pos(i))
     b = sum(1 for i in (4, 5, 6) if is_pos(i))
     return a <= 2 and b <= 2
+
+
+def _midterm_theory_q_group_rules_ok(state):
+    """Six-set mid-term: at most two positive in Q1–Q3, at most one in Q4–Q5; Q6 unrestricted."""
+    def is_pos(i):
+        v = state.get(i)
+        if v is None:
+            return False
+        try:
+            return float(v) > 0
+        except (TypeError, ValueError):
+            return False
+
+    a = sum(1 for i in (1, 2, 3) if is_pos(i))
+    b = sum(1 for i in (4, 5) if is_pos(i))
+    return a <= 2 and b <= 1
+
+
+def _merge_midterm_q_state(marks_data, mm):
+    """Q1..Q6 after applying marks_data (partial POST) on top of existing MidtermExamMark."""
+    mx = MidtermExamMark.SET_MARKS_MAX
+    state = {}
+    for i in range(1, 7):
+        k = f'q{i}'
+        if k in marks_data:
+            state[i] = _parse_midterm_q_mark(marks_data.get(k))
+        else:
+            prev = getattr(mm, f'q{i}', None) if mm else None
+            if prev is None or float(prev) == 0:
+                state[i] = None
+            else:
+                pv = int(float(prev))
+                state[i] = min(mx, pv) if pv > 0 else None
+    return state
+
+
+def _apply_midterm_q_fields(mm, marks_data):
+    """Apply only keys present in marks_data (sparse auto-save safe)."""
+    from decimal import Decimal
+
+    for i in range(1, 7):
+        k = f'q{i}'
+        if k not in marks_data:
+            continue
+        val = _parse_midterm_q_mark(marks_data.get(k))
+        setattr(mm, f'q{i}', Decimal(str(val)) if val is not None else Decimal('0'))
 
 
 def _is_final_exam_evaluator_for_scope(teacher, semester, course, centre_id):
@@ -10605,10 +10710,16 @@ def save_ca_marks(request):
                         # Set midterm to 0 for old curriculum
                         ca_mark.midterm_mark = 0
                     else:
-                        # New curriculum: use midterm
-                        ca_mark.midterm_mark = _clamp_mark_float(
-                            marks_data.get('midterm_mark', 0), course.effective_ca_midterm_weight
-                        )
+                        # New curriculum: mid-term from MidtermExamMark sheet when present
+                        if MidtermExamMark.objects.filter(student=student, course=course, semester=semester).exists():
+                            mm_sync = MidtermExamMark.objects.get(
+                                student=student, course=course, semester=semester
+                            )
+                            ca_mark.midterm_mark = mm_sync.scaled_midterm_contribution()
+                        else:
+                            ca_mark.midterm_mark = _clamp_mark_float(
+                                marks_data.get('midterm_mark', 0), course.effective_ca_midterm_weight
+                            )
                         # Set class tests to 0 for new curriculum
                         ca_mark.first_class_test_mark = 0
                         ca_mark.second_class_test_mark = 0
@@ -10691,6 +10802,136 @@ def save_ca_marks(request):
         
         return JsonResponse({'success': True, 'message': 'CA marks saved successfully'})
         
+    except (Semester.DoesNotExist, Course.DoesNotExist):
+        return JsonResponse({'error': 'Invalid semester or course'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@require_POST
+def save_midterm_marks(request):
+    """
+    Save theory mid-term Q1–Q6 (new curriculum), validate group rules, sync CAMark.midterm_mark.
+    """
+    if not (request.user.is_superuser or request.user.is_staff or check_teacher_permission(request.user, 'can_manage_ca')):
+        return JsonResponse({'error': 'Permission denied'}, status=403)
+
+    try:
+        semester_id = request.POST.get('semester_id')
+        course_id = request.POST.get('course_id')
+        if not semester_id or not course_id:
+            return JsonResponse({'error': 'Semester and course are required'}, status=400)
+
+        semester = Semester.objects.get(id=semester_id)
+        course = Course.objects.get(id=course_id)
+
+        if course.is_lab or course.course_type == 'PROJECT':
+            return JsonResponse({'error': 'Mid-term marks apply only to theory courses'}, status=400)
+        if not semester.curriculum or semester.curriculum.code == 'OLD':
+            return JsonResponse({'error': 'Mid-term marks apply only to new curriculum semesters'}, status=400)
+
+        teacher = None
+        if hasattr(request.user, 'teacher'):
+            teacher = request.user.teacher
+        elif request.user.is_superuser or request.user.is_staff:
+            centre_id = request.POST.get('centre_id')
+            semester_course = None
+            if centre_id:
+                try:
+                    centre = Centre.objects.get(id=int(centre_id))
+                    semester_course = SemesterCourse.objects.filter(
+                        semester=semester, course=course, centre=centre
+                    ).select_related('teacher').first()
+                except Centre.DoesNotExist:
+                    pass
+            if not semester_course:
+                semester_course = SemesterCourse.objects.filter(
+                    semester=semester, course=course
+                ).select_related('teacher').first()
+            if semester_course:
+                teacher = semester_course.teacher
+
+        if not teacher:
+            return JsonResponse({'error': 'Teacher not found'}, status=400)
+
+        students_data = request.POST.get('students_data')
+        if not students_data:
+            return JsonResponse({'error': 'No student data provided'}, status=400)
+
+        import json
+
+        try:
+            students_marks = json.loads(students_data)
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid students_data (JSON).'}, status=400)
+        if not isinstance(students_marks, dict):
+            return JsonResponse({'error': 'Invalid students_data format.'}, status=400)
+        if not students_marks:
+            return JsonResponse({'error': 'Empty student data'}, status=400)
+
+        rows_updated = 0
+        centre_id_post = request.POST.get('centre_id')
+
+        for student_id, marks_data in students_marks.items():
+            if not isinstance(marks_data, dict):
+                return JsonResponse(
+                    {'error': f'Invalid marks for student {student_id}: expected an object.'},
+                    status=400,
+                )
+            try:
+                student = Student.objects.get(id=str(student_id).strip())
+            except Student.DoesNotExist:
+                continue
+
+            if centre_id_post:
+                try:
+                    expected_centre = Centre.objects.get(id=int(centre_id_post))
+                    if student.centre_id is not None and student.centre_id != expected_centre.id:
+                        continue
+                except (Centre.DoesNotExist, ValueError, TypeError):
+                    pass
+
+            mm, _created = MidtermExamMark.objects.get_or_create(
+                student=student,
+                course=course,
+                semester=semester,
+                defaults={'marked_by': teacher},
+            )
+            merged = _merge_midterm_q_state(marks_data, mm)
+            if not _midterm_theory_q_group_rules_ok(merged):
+                return JsonResponse(
+                    {
+                        'error': (
+                            'Mid-term rules: at most 2 of Q1–Q3 and at most 1 of Q4–Q5 can have marks '
+                            'greater than 0. Adjust Group A, Group B, and Q6, then save again.'
+                        )
+                    },
+                    status=400,
+                )
+
+            _apply_midterm_q_fields(mm, marks_data)
+            mm.marked_by = teacher
+            mm.save()
+
+            ca_mark, _ = CAMark.objects.get_or_create(
+                student=student,
+                course=course,
+                semester=semester,
+                defaults={'marked_by': teacher},
+            )
+            ca_mark.midterm_mark = mm.scaled_midterm_contribution()
+            ca_mark.marked_by = teacher
+            ca_mark.save()
+            rows_updated += 1
+
+        if rows_updated == 0:
+            return JsonResponse(
+                {'error': 'No mid-term rows were saved. Check student IDs and study centre.'},
+                status=400,
+            )
+
+        return JsonResponse({'success': True, 'message': 'Mid-term marks saved successfully'})
     except (Semester.DoesNotExist, Course.DoesNotExist):
         return JsonResponse({'error': 'Invalid semester or course'}, status=400)
     except Exception as e:

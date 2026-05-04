@@ -9,7 +9,7 @@ from django.urls import path, reverse
 from django.http import HttpResponseRedirect, Http404
 from django.contrib.auth import update_session_auth_hash, logout
 from django.template.response import TemplateResponse
-from .models import Teacher, Semester, Course, CurrentRoutine, NewRoutine, SemesterCourse, LoginLog, Student, Attendance, Curriculum, CAMark, FinalExamMark, Centre, ProgramCoordinator
+from .models import Teacher, Semester, Course, CurrentRoutine, NewRoutine, SemesterCourse, LoginLog, Student, Attendance, Curriculum, CAMark, MidtermExamMark, FinalExamMark, Centre, ProgramCoordinator
 
 @admin.register(CurrentRoutine)
 class CurrentRoutineAdmin(admin.ModelAdmin):
@@ -896,6 +896,14 @@ class CAMarkAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+@admin.register(MidtermExamMark)
+class MidtermExamMarkAdmin(admin.ModelAdmin):
+    list_display = ('student', 'course', 'semester', 'marked_by', 'updated_at')
+    list_filter = ('semester', 'course', 'marked_by')
+    search_fields = ('student__id', 'student__name', 'course__code')
+    ordering = ('semester', 'course', 'student__id')
+
 
 @admin.register(FinalExamMark)
 class FinalExamMarkAdmin(admin.ModelAdmin):

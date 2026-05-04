@@ -1,0 +1,131 @@
+{% load attendance_extras %}{% load marks_extras %}
+                            <div class="table-header d-flex justify-content-between align-items-center mt-3 mb-3">
+                                <h4><i class="fas fa-file-alt"></i> Mid-Term Marks</h4>
+                                {% if selected_semester_id and selected_course_id %}
+                                <div class="d-flex align-items-center gap-2">
+                                    <button type="button" class="btn btn-success" id="save-midterm-marks-btn-header" onclick="saveMidtermMarks(true)">
+                                        <i class="fas fa-save"></i> Save Mid-Term Marks
+                                    </button>
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="ca-distribution mb-3">
+                                <p class="mb-1"><strong>Theory Mid-Term (total max {{ midterm_raw_total_max }}):</strong> Group A — any <strong>two</strong> of Q1–Q3 (max {{ midterm_set_max }} each); Group B — <strong>any one</strong> of Q4 or Q5 (max {{ midterm_set_max }}, not both); Group C — <strong>Q6</strong> (max {{ midterm_set_max }}, compulsory set).</p>
+                                <p class="mb-0 small text-muted">The <strong>Mid-Term Exam</strong> column on the CA Marks tab shows the mark scaled to your course mid-term weight ({{ selected_course.effective_ca_midterm_weight }}).</p>
+                            </div>
+
+                            <div class="table-responsive">
+                                <form id="midterm-marks-form" data-page-centre-id="{% if selected_centre_id %}{{ selected_centre_id }}{% endif %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="semester_id" value="{{ selected_semester.id }}">
+                                    <input type="hidden" name="course_id" value="{{ selected_course.id }}">
+
+                                    <table class="ca-table semester-midterm-exam-marks-table">
+                                        <thead>
+                                            <tr>
+                                                <th rowspan="3" class="student-info">Student ID</th>
+                                                <th rowspan="3" class="student-info">Name</th>
+                                                <th colspan="6">Theory Mid-Term Exam (total max {{ midterm_raw_total_max }})</th>
+                                                <th rowspan="3" class="text-center align-middle">Total</th>
+                                            </tr>
+                                            <tr>
+                                                <th colspan="3" class="text-center">Group A<br><small>Any 2 of Q1–Q3 (max {{ midterm_set_max }} each)</small></th>
+                                                <th colspan="2" class="text-center">Group B<br><small>Any 1 of Q4–Q5 (max {{ midterm_set_max }})</small></th>
+                                                <th colspan="1" class="text-center">Group C<br><small>Q6 (max {{ midterm_set_max }})</small></th>
+                                            </tr>
+                                            <tr>
+                                                <th>Q1</th>
+                                                <th>Q2</th>
+                                                <th>Q3</th>
+                                                <th>Q4</th>
+                                                <th>Q5</th>
+                                                <th>Q6</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for student in students %}
+                                                {% with mm=midterm_marks|dict_key:student.id %}
+                                                <tr id="midterm-row-{{ student.id }}">
+                                                    <td class="student-id" data-student-id="{{ student.id }}">{{ student.id }}</td>
+                                                    <td class="student-name">{{ student.name }}</td>
+                                                    <td>
+                                                        <input type="number" class="midterm-q-input"
+                                                               name="students_data[{{ student.id }}][q1]"
+                                                               value="{% if mm and mm.q1 %}{{ mm.q1|floatformat:0 }}{% endif %}"
+                                                               min="0" max="{{ midterm_set_max }}" step="1"
+                                                               data-student-id="{{ student.id }}" data-question="1" data-question-group="A"
+                                                               placeholder="Q1"
+                                                               title="Group A: any 2 of Q1–Q3 with marks &gt; 0 (max {{ midterm_set_max }} each)"
+                                                               oninput="validateMidtermQuestionSet(this); autoSaveMidtermMarks();"
+                                                               onblur="saveMidtermMarksImmediately();">
+                                                    </td>
+                                                    <td>
+                                                        <input type="number" class="midterm-q-input"
+                                                               name="students_data[{{ student.id }}][q2]"
+                                                               value="{% if mm and mm.q2 %}{{ mm.q2|floatformat:0 }}{% endif %}"
+                                                               min="0" max="{{ midterm_set_max }}" step="1"
+                                                               data-student-id="{{ student.id }}" data-question="2" data-question-group="A"
+                                                               placeholder="Q2"
+                                                               title="Group A: any 2 of Q1–Q3 with marks &gt; 0 (max {{ midterm_set_max }} each)"
+                                                               oninput="validateMidtermQuestionSet(this); autoSaveMidtermMarks();"
+                                                               onblur="saveMidtermMarksImmediately();">
+                                                    </td>
+                                                    <td>
+                                                        <input type="number" class="midterm-q-input"
+                                                               name="students_data[{{ student.id }}][q3]"
+                                                               value="{% if mm and mm.q3 %}{{ mm.q3|floatformat:0 }}{% endif %}"
+                                                               min="0" max="{{ midterm_set_max }}" step="1"
+                                                               data-student-id="{{ student.id }}" data-question="3" data-question-group="A"
+                                                               placeholder="Q3"
+                                                               title="Group A: any 2 of Q1–Q3 with marks &gt; 0 (max {{ midterm_set_max }} each)"
+                                                               oninput="validateMidtermQuestionSet(this); autoSaveMidtermMarks();"
+                                                               onblur="saveMidtermMarksImmediately();">
+                                                    </td>
+                                                    <td>
+                                                        <input type="number" class="midterm-q-input"
+                                                               name="students_data[{{ student.id }}][q4]"
+                                                               value="{% if mm and mm.q4 %}{{ mm.q4|floatformat:0 }}{% endif %}"
+                                                               min="0" max="{{ midterm_set_max }}" step="1"
+                                                               data-student-id="{{ student.id }}" data-question="4" data-question-group="B"
+                                                               placeholder="Q4"
+                                                               title="Group B: any one of Q4 or Q5 with marks &gt; 0 (max {{ midterm_set_max }})"
+                                                               oninput="validateMidtermQuestionSet(this); autoSaveMidtermMarks();"
+                                                               onblur="saveMidtermMarksImmediately();">
+                                                    </td>
+                                                    <td>
+                                                        <input type="number" class="midterm-q-input"
+                                                               name="students_data[{{ student.id }}][q5]"
+                                                               value="{% if mm and mm.q5 %}{{ mm.q5|floatformat:0 }}{% endif %}"
+                                                               min="0" max="{{ midterm_set_max }}" step="1"
+                                                               data-student-id="{{ student.id }}" data-question="5" data-question-group="B"
+                                                               placeholder="Q5"
+                                                               title="Group B: any one of Q4 or Q5 with marks &gt; 0 (max {{ midterm_set_max }})"
+                                                               oninput="validateMidtermQuestionSet(this); autoSaveMidtermMarks();"
+                                                               onblur="saveMidtermMarksImmediately();">
+                                                    </td>
+                                                    <td>
+                                                        <input type="number" class="midterm-q-input"
+                                                               name="students_data[{{ student.id }}][q6]"
+                                                               value="{% if mm and mm.q6 %}{{ mm.q6|floatformat:0 }}{% endif %}"
+                                                               min="0" max="{{ midterm_set_max }}" step="1"
+                                                               data-student-id="{{ student.id }}" data-question="6" data-question-group="C"
+                                                               placeholder="Q6"
+                                                               title="Group C: Q6 (max {{ midterm_set_max }})"
+                                                               oninput="validateMidtermQuestionSet(this); autoSaveMidtermMarks();"
+                                                               onblur="saveMidtermMarksImmediately();">
+                                                    </td>
+                                                    <td class="total-mark text-center">
+                                                        <span id="midterm-raw-total-{{ student.id }}" class="midterm-raw-total-value">{% if mm %}{{ mm.raw_total_float|floatformat:0 }}{% else %}0{% endif %}</span>
+                                                    </td>
+                                                </tr>
+                                                {% endwith %}
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </form>
+                            </div>
+                            <div class="text-right mt-3">
+                                <button type="button" class="btn-save-ca" id="save-midterm-marks-btn-bottom" onclick="saveMidtermMarks(true)">
+                                    <i class="fas fa-save"></i> Save Mid-Term Marks
+                                </button>
+                            </div>

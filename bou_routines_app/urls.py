@@ -36,6 +36,7 @@ urlpatterns = [
     # Marks Management URLs
     path('marks/', views.ca_management, name='ca-management'),
     path('marks/save/', views.save_ca_marks, name='save-ca-marks'),
+    path('marks/save-midterm/', views.save_midterm_marks, name='save-midterm-marks'),
     path('marks/save-final-exam/', views.save_final_exam_marks, name='save-final-exam-marks'),
     path('marks/save-semester-final-attendance/', views.save_semester_final_attendance, name='save-semester-final-attendance'),
     path('marks/export-ca-pdf/', views.export_ca_marks_pdf, name='export-ca-marks-pdf'),

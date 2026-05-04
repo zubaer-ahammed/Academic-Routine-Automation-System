@@ -9700,6 +9700,537 @@ def export_final_exam_excel(request):
     except Exception as e:
         return HttpResponse(f"Error generating Excel: {str(e)}", status=500)
 
+
+def _is_ca_management_admin(request):
+    """Same rule as ca_management `is_admin` (staff without a teacher profile, or superuser)."""
+    teacher = getattr(request.user, 'teacher', None) if hasattr(request.user, 'teacher') else None
+    return bool(request.user.is_superuser or (request.user.is_staff and not teacher))
+
+
+def _lab_final_exam_cap_for_summary(course, semester):
+    """Max lab final total label for summary exports (matches ca_management)."""
+    if (
+        course
+        and course.is_lab
+        and semester
+        and getattr(semester, 'curriculum', None)
+    ):
+        if semester.curriculum.code == 'OLD':
+            return 60
+        return 25
+    if semester and getattr(semester, 'curriculum', None) and semester.curriculum.code == 'OLD':
+        return 60
+    return 50
+
+
+def _examiner_summary_headers_and_rows(students, course, semester, final_exam_marks, include_status=True):
+    """
+    Build (headers, rows) for the Final Exam Summary tab — same figures as ca_management examiner_summary_rows.
+    Each row is a list of values for Excel/PDF.
+    When include_status is False (e.g. PDF export), the Status column is omitted.
+    """
+    lab_cap = _lab_final_exam_cap_for_summary(course, semester)
+    headers = []
+    rows = []
+
+    if course.is_lab:
+        headers = [
+            'SL. No',
+            'Student ID',
+            'Name',
+            f'Internal (max {lab_cap})',
+            f'External (max {lab_cap})',
+            'Variation',
+            'Final total',
+        ]
+        if include_status:
+            headers.append('Status')
+        for idx, student in enumerate(students, start=1):
+            fm = final_exam_marks.get(student.id)
+            if fm and fm.exam_absent:
+                row = [idx, student.id, student.name, 'AB', 'AB', 'AB', 'AB']
+                if include_status:
+                    row.append('AB')
+                rows.append(row)
+                continue
+            t_int = float(fm.lab_examiner_split_total(1)) if fm else 0.0
+            t_ext = float(fm.lab_examiner_split_total(2)) if fm else 0.0
+            mo = float(fm.final_exam_total or 0) if fm else 0.0
+            diff = abs(t_int - t_ext)
+            row = [
+                idx,
+                student.id,
+                student.name,
+                round(t_int, 2),
+                round(t_ext, 2),
+                round(diff, 2),
+                round(mo, 2),
+            ]
+            if include_status:
+                row.append('OK')
+            rows.append(row)
+    else:
+        headers = [
+            'SL. No',
+            'Student ID',
+            'Name',
+            'First examiner (70)',
+            'Second examiner (70)',
+            'Variation',
+            'Third examiner (70)',
+            'Marks obtained',
+        ]
+        if include_status:
+            headers.append('Status')
+        for idx, student in enumerate(students, start=1):
+            fm = final_exam_marks.get(student.id)
+            if not fm:
+                row = [idx, student.id, student.name, '—', '—', '—', '—', '—']
+                if include_status:
+                    row.append('')
+                rows.append(row)
+                continue
+            if fm.exam_absent:
+                row = [idx, student.id, student.name, 'AB', 'AB', 'AB', 'AB', 'AB']
+                if include_status:
+                    row.append('AB')
+                rows.append(row)
+                continue
+            t1 = float(fm.teacher1_total or 0)
+            t2 = float(fm.teacher2_total or 0)
+            t3 = float(fm.teacher3_total or 0)
+            diff_abs = abs(t1 - t2)
+            mo = float(fm.final_exam_total or 0)
+            req_third = bool(fm.is_third_examiner_required)
+            if req_third or t3 > 0:
+                third_cell = round(t3, 2)
+            else:
+                third_cell = '—'
+            if fm.is_third_examiner_required:
+                status = 'Third Examiner Needed'
+            else:
+                status = 'OK'
+            row = [
+                idx,
+                student.id,
+                student.name,
+                round(t1, 2),
+                round(t2, 2),
+                round(diff_abs, 2),
+                third_cell,
+                round(mo, 2),
+            ]
+            if include_status:
+                row.append(status)
+            rows.append(row)
+    return headers, rows
+
+
+def _examiner_summary_pdf_table_header_row(course, semester, hdr_style):
+    """ReportLab Paragraph cells: label + max mark on separate lines (matches Semester Final PDF style)."""
+    lab_cap = _lab_final_exam_cap_for_summary(course, semester)
+    if course.is_lab:
+        return [
+            Paragraph('SL. No', hdr_style),
+            Paragraph('Student ID', hdr_style),
+            Paragraph('Name', hdr_style),
+            Paragraph(f'Internal<br/>(max {lab_cap})', hdr_style),
+            Paragraph(f'External<br/>(max {lab_cap})', hdr_style),
+            Paragraph('Variation', hdr_style),
+            Paragraph('Final total', hdr_style),
+        ]
+    return [
+        Paragraph('SL. No', hdr_style),
+        Paragraph('Student ID', hdr_style),
+        Paragraph('Name', hdr_style),
+        Paragraph('First examiner<br/>(70)', hdr_style),
+        Paragraph('Second examiner<br/>(70)', hdr_style),
+        Paragraph('Variation', hdr_style),
+        Paragraph('Third examiner<br/>(70)', hdr_style),
+        Paragraph('Marks obtained', hdr_style),
+    ]
+
+
+@login_required
+def export_final_exam_summary_excel(request):
+    """Export Final Exam Summary (admin consolidated view) to Excel."""
+    try:
+        if not _is_ca_management_admin(request):
+            messages.error(request, "You don't have permission to export the Final Exam Summary.")
+            return redirect('ca-management')
+
+        semester_id = request.GET.get('semester')
+        course_id = request.GET.get('course')
+        centre_id = request.GET.get('centre')
+
+        if not semester_id or not course_id:
+            messages.error(request, 'Please select a semester and course.')
+            return redirect('ca-management')
+
+        semester = Semester.objects.get(id=semester_id)
+        course = Course.objects.get(id=course_id)
+
+        students = Student.objects.filter(semesters=semester).extra(
+            select={
+                'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
+                'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)",
+            }
+        ).order_by('-first_two_digits', 'last_three_digits')
+        students = filter_students_queryset_by_centre(students, centre_id)
+
+        existing_marks = FinalExamMark.objects.filter(
+            student__in=students,
+            course=course,
+            semester=semester,
+        )
+        final_exam_marks = {m.student_id: m for m in existing_marks}
+
+        headers, data_rows = _examiner_summary_headers_and_rows(
+            list(students), course, semester, final_exam_marks
+        )
+
+        output = io.BytesIO()
+        workbook = xlsxwriter.Workbook(output)
+        worksheet = workbook.add_worksheet('Final Exam Summary')
+
+        title_format = workbook.add_format(
+            {'bold': True, 'font_size': 14, 'align': 'center', 'valign': 'vcenter'}
+        )
+        header_format = workbook.add_format(
+            {
+                'bold': True,
+                'font_size': 11,
+                'align': 'center',
+                'valign': 'vcenter',
+                'bg_color': '#2c3e50',
+                'font_color': 'white',
+                'border': 1,
+            }
+        )
+        cell_format = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1})
+
+        worksheet.merge_range(0, 0, 0, len(headers) - 1, f'Final Exam Summary — {semester.name}', title_format)
+        worksheet.write(1, 0, f'Course: {course.code} — {course.name}', cell_format)
+
+        row = 3
+        for col, h in enumerate(headers):
+            worksheet.write(row, col, h, header_format)
+        row = 4
+        for data_row in data_rows:
+            for col, val in enumerate(data_row):
+                worksheet.write(row, col, val, cell_format)
+            row += 1
+
+        worksheet.set_column(0, 0, 6)
+        worksheet.set_column(1, 1, 14)
+        worksheet.set_column(2, 2, 28)
+        worksheet.set_column(3, len(headers) - 1, 14)
+
+        workbook.close()
+        output.seek(0)
+
+        response = HttpResponse(
+            output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        fname = f'Final_Exam_Summary_{course.code}_{semester.name}.xlsx'
+        response['Content-Disposition'] = f'attachment; filename="{fname}"'
+        return response
+
+    except Exception as e:
+        return HttpResponse(f'Error generating Excel: {str(e)}', status=500)
+
+
+@login_required
+def export_final_exam_summary_pdf(request):
+    """
+    Export Final Exam Summary (admin consolidated view) to PDF.
+    Matches Semester Final Marks PDF layout (banner, study center, table borders,
+    zebra rows, footer signatures + page numbers) but omits the Examiner line.
+    """
+    try:
+        if not _is_ca_management_admin(request):
+            messages.error(request, "You don't have permission to export the Final Exam Summary.")
+            return redirect('ca-management')
+
+        semester_id = request.GET.get('semester')
+        course_id = request.GET.get('course')
+        centre_id = request.GET.get('centre')
+
+        if not semester_id or not course_id:
+            messages.error(request, 'Please select a semester and course.')
+            return redirect('ca-management')
+
+        semester = Semester.objects.get(id=semester_id)
+        course = Course.objects.get(id=course_id)
+
+        centre_name = ''
+        if centre_id:
+            try:
+                centre_name = Centre.objects.get(id=int(centre_id)).name
+            except (Centre.DoesNotExist, ValueError, TypeError):
+                pass
+
+        students = Student.objects.filter(semesters=semester).extra(
+            select={
+                'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
+                'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)",
+            }
+        ).order_by('-first_two_digits', 'last_three_digits')
+        students = filter_students_queryset_by_centre(students, centre_id)
+
+        existing_marks = FinalExamMark.objects.filter(
+            student__in=students,
+            course=course,
+            semester=semester,
+        )
+        final_exam_marks = {m.student_id: m for m in existing_marks}
+
+        headers, data_rows = _examiner_summary_headers_and_rows(
+            list(students), course, semester, final_exam_marks, include_status=False
+        )
+
+        doc = SimpleDocTemplate(
+            io.BytesIO(),
+            pagesize=landscape(A4),
+            rightMargin=54,
+            leftMargin=54,
+            topMargin=34,
+            bottomMargin=90,
+        )
+        page_width, _page_height = landscape(A4)
+        available_width = page_width - doc.leftMargin - doc.rightMargin
+
+        elements = []
+
+        header_img_path = 'bou_routines_app/static/pdf_routine_top.png'
+        try:
+            padding_for_image = 2
+            img_obj = Image(
+                header_img_path,
+                width=available_width - (2 * padding_for_image),
+                height=45,
+            )
+            header_img_table = Table([[img_obj]], colWidths=[available_width])
+            header_img_table.setStyle(
+                TableStyle(
+                    [
+                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                        ('LEFTPADDING', (0, 0), (-1, -1), padding_for_image),
+                        ('RIGHTPADDING', (0, 0), (-1, -1), padding_for_image),
+                        ('TOPPADDING', (0, 0), (-1, -1), 0),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                    ]
+                )
+            )
+            elements.append(header_img_table)
+        except Exception:
+            pass
+        elements.append(Spacer(1, -4))
+
+        if not centre_name:
+            first_sc = SemesterCourse.objects.filter(semester=semester).select_related('centre').first()
+            if first_sc and first_sc.centre:
+                centre_name = first_sc.centre.name
+
+        header_style = ParagraphStyle(
+            'FESumHeaderStyle',
+            fontName='Helvetica-Bold',
+            fontSize=15,
+            alignment=1,
+            leading=18,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+        header_style_small = ParagraphStyle(
+            'FESumHeaderStyleSmall',
+            fontName='Helvetica-Bold',
+            fontSize=11,
+            alignment=1,
+            leading=14,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+        header_style_normal = ParagraphStyle(
+            'FESumHeaderStyleNormal',
+            fontName='Helvetica',
+            fontSize=10,
+            alignment=1,
+            leading=11,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+        header_style_bold = ParagraphStyle(
+            'FESumHeaderStyleBold',
+            fontName='Helvetica-Bold',
+            fontSize=12,
+            alignment=1,
+            leading=15,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+
+        left_content = []
+        program_name = 'B. Sc in Computer Science and Engineering Program'
+        left_content.append(Paragraph(program_name, header_style))
+        session = semester.session or ''
+        if session:
+            left_content.append(Paragraph(f'{session} Session', header_style_small))
+        term = semester.term or ''
+        semester_full_name = semester.semester_full_name or ''
+        if term or semester_full_name:
+            combined = f'{term} Term {semester_full_name}'.strip()
+            left_content.append(Paragraph(combined, header_style_small))
+        left_content.append(Spacer(1, 2))
+        course_name_display = f'{course.code} - {course.name}' if course else 'Course'
+        left_content.append(
+            Paragraph(f'Final Exam Summary - {course_name_display}', header_style_bold)
+        )
+        if centre_name:
+            left_content.append(
+                Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal)
+            )
+
+        left_box_table = Table(
+            [[left_content]],
+            colWidths=[available_width],
+            hAlign='CENTER',
+            style=TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE')]),
+        )
+        elements.append(Spacer(1, 4))
+        elements.append(left_box_table)
+        elements.append(Spacer(1, 4))
+
+        hdr_tbl_style = ParagraphStyle(
+            'FESumTblHdr',
+            fontName='Helvetica-Bold',
+            fontSize=9,
+            alignment=TA_CENTER,
+            leading=11,
+            spaceBefore=0,
+            spaceAfter=0,
+        )
+        pdf_header_row = _examiner_summary_pdf_table_header_row(course, semester, hdr_tbl_style)
+
+        table_data = [pdf_header_row]
+        for r in data_rows:
+            row = [str(c) for c in r]
+            if len(row) > 2:
+                row[2] = str(row[2]).upper()
+            table_data.append(row)
+
+        num_cols = len(headers)
+        if course.is_lab:
+            sl_w, id_w, name_w = 40, 80, 150
+            rest = max(40.0, available_width - sl_w - id_w - name_w)
+            u = rest / 4.0
+            col_widths = [sl_w, id_w, name_w, u, u, u, u]
+        else:
+            sl_w, id_w, name_w = 40, 80, 150
+            rest = max(40.0, available_width - sl_w - id_w - name_w)
+            u = rest / 5.0
+            col_widths = [sl_w, id_w, name_w, u, u, u, u, u]
+
+        tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
+        tbl.setStyle(
+            TableStyle(
+                [
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 9),
+                    ('TOPPADDING', (0, 0), (-1, 0), 8),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                    ('FONTSIZE', (0, 1), (-1, -1), 8),
+                    ('FONTSIZE', (1, 1), (1, -1), 9),
+                    ('FONTNAME', (1, 1), (1, -1), 'Helvetica-Bold'),
+                    ('ALIGN', (2, 1), (2, -1), 'LEFT'),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
+                ]
+            )
+        )
+        elements.append(tbl)
+
+        temp_buffer = io.BytesIO()
+        temp_doc = SimpleDocTemplate(
+            temp_buffer,
+            pagesize=landscape(A4),
+            rightMargin=doc.rightMargin,
+            leftMargin=doc.leftMargin,
+            topMargin=doc.topMargin,
+            bottomMargin=doc.bottomMargin,
+        )
+        temp_doc.build(elements)
+        temp_buffer.seek(0)
+
+        total_pages = 1
+        try:
+            try:
+                from PyPDF2 import PdfWriter, PdfReader
+            except ImportError:
+                from pypdf import PdfWriter, PdfReader
+
+            base_reader = PdfReader(temp_buffer)
+            total_pages = len(base_reader.pages)
+
+            from reportlab.pdfgen import canvas as reportlab_canvas
+
+            overlay_buffer = io.BytesIO()
+            overlay_canvas = reportlab_canvas.Canvas(overlay_buffer, pagesize=landscape(A4))
+
+            page_width_ov, _page_height_ov = landscape(A4)
+            left_x = doc.leftMargin
+            right_x_end = page_width_ov - doc.rightMargin
+            right_x = right_x_end - 250
+            footer_y_line = 48
+            footer_y_text = 34
+
+            for page_num in range(1, total_pages + 1):
+                overlay_canvas.setLineWidth(1)
+                overlay_canvas.setStrokeColor(colors.black)
+                overlay_canvas.line(left_x, footer_y_line, left_x + 250, footer_y_line)
+                overlay_canvas.line(right_x, footer_y_line, right_x_end, footer_y_line)
+
+                overlay_canvas.setFont('Helvetica', 10)
+                overlay_canvas.drawString(left_x, footer_y_text, 'Internal Examiner')
+                overlay_canvas.drawRightString(right_x_end, footer_y_text, 'External Examiner')
+
+                overlay_canvas.setFont('Helvetica', 9)
+                overlay_canvas.drawCentredString(
+                    page_width_ov / 2.0, footer_y_text, f'Page {page_num}-{total_pages}'
+                )
+
+                overlay_canvas.showPage()
+
+            overlay_canvas.save()
+            overlay_buffer.seek(0)
+            overlay_reader = PdfReader(overlay_buffer)
+
+            writer = PdfWriter()
+            for i in range(total_pages):
+                page = base_reader.pages[i]
+                page.merge_page(overlay_reader.pages[i])
+                writer.add_page(page)
+
+            out_buffer = io.BytesIO()
+            writer.write(out_buffer)
+            out_buffer.seek(0)
+            pdf_bytes = out_buffer.getvalue()
+        except Exception:
+            temp_buffer.seek(0)
+            pdf_bytes = temp_buffer.getvalue()
+
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        fname = f'Final_Exam_Summary_{course.code}_{semester.name}.pdf'
+        response['Content-Disposition'] = f'attachment; filename="{fname}"'
+        return response
+
+    except Exception as e:
+        return HttpResponse(f'Error generating PDF: {str(e)}', status=500)
+
+
 # Teacher Registration Views
 
 @login_required

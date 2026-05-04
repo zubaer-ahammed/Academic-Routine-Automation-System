@@ -45,5 +45,7 @@ urlpatterns = [
     path('marks/export-final-exam-pdf/', views.export_final_exam_pdf, name='export-final-exam-pdf'),
     path('marks/export-blank-final-exam-pdf/', views.export_blank_final_exam_pdf, name='export-blank-final-exam-pdf'),
     path('marks/export-final-exam-excel/', views.export_final_exam_excel, name='export-final-exam-excel'),
+    path('marks/export-final-exam-summary-pdf/', views.export_final_exam_summary_pdf, name='export-final-exam-summary-pdf'),
+    path('marks/export-final-exam-summary-excel/', views.export_final_exam_summary_excel, name='export-final-exam-summary-excel'),
     path('marks/assign-evaluator/', views.assign_evaluator, name='assign-evaluator'),
 ]

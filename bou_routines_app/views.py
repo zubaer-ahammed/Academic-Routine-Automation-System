@@ -101,6 +101,54 @@ def _pdf_add_page_number(canvas, doc):
     canvas.restoreState()
 
 
+def _make_deferred_footer_canvas_class(footer_draw):
+    """
+    ReportLab Canvas that draws a per-page footer after the total page count is known.
+    Avoids merging with PyPDF2/pypdf (production WSGI often uses a different Python than
+    the one `pip` targeted, so merge silently failed and exports had no signature/footer).
+
+    footer_draw: callable (canvas, page_num, total_pages) -> None
+
+    Important: pass the returned class as canvasmaker=... to SimpleDocTemplate.build(),
+    not to SimpleDocTemplate(...) — ReportLab ignores unknown constructor kwargs.
+    """
+    from reportlab.pdfgen import canvas as pdfgen_canvas
+
+    class _DeferredFooterCanvas(pdfgen_canvas.Canvas):
+        def __init__(self, *args, **kwargs):
+            self._footer_draw = footer_draw
+            self._saved_page_states = []
+            pdfgen_canvas.Canvas.__init__(self, *args, **kwargs)
+
+        def showPage(self):
+            state = dict(self.__dict__)
+            state.pop('_saved_page_states', None)
+            self._saved_page_states.append(state)
+            self._startPage()
+
+        def save(self):
+            # Platypus calls showPage only between pages, not after the last page.
+            # Parent Canvas.save() would flush that final stream with showPage(); we must
+            # capture it here or single-page PDFs never enter _saved_page_states and
+            # multi-page PDFs lose the last page footer (and can render incorrectly).
+            if len(self._code):
+                state = dict(self.__dict__)
+                state.pop('_saved_page_states', None)
+                self._saved_page_states.append(state)
+            if not self._saved_page_states:
+                pdfgen_canvas.Canvas.save(self)
+                return
+            total_pages = len(self._saved_page_states)
+            for page_num, state in enumerate(self._saved_page_states, start=1):
+                self.__dict__.update(state)
+                if self._footer_draw:
+                    self._footer_draw(self, page_num, total_pages)
+                pdfgen_canvas.Canvas.showPage(self)
+            pdfgen_canvas.Canvas.save(self)
+
+    return _DeferredFooterCanvas
+
+
 def final_exam_mark_sample_for_scope(course, semester, centre_id):
     """
     One FinalExamMark row to read teacher1/2/3_evaluator for the UI.
@@ -5825,22 +5873,16 @@ def export_attendance_pdf(request):
             attendance_matrix[student_id]['absent_count'] = total_classes - present_count
             attendance_matrix[student_id]['percentage'] = (present_count / total_classes * 100) if total_classes > 0 else 0
         
-        # Create PDF in landscape mode for more horizontal space
-        buffer = io.BytesIO()
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=landscape(A4),
-            rightMargin=54,  # 0.75 inch - same as routine
-            leftMargin=54,   # 0.75 inch - same as routine
-            topMargin=34,    # 0.75 inch - same as routine
-            # Leave room for per-page footer signature + page number
-            bottomMargin=70
-        )
-        
+        # Margins (used for layout before SimpleDocTemplate exists; footer matches these)
+        _att_pdf_lm = 54
+        _att_pdf_rm = 54
+        _att_pdf_tm = 34
+        _att_pdf_bm = 70
+
         # Get page width and calculate available width
         page_width, page_height = landscape(A4)
-        available_width = page_width - doc.leftMargin - doc.rightMargin
-        
+        available_width = page_width - _att_pdf_lm - _att_pdf_rm
+
         elements = []
         
         # --- HEADER IMAGE SECTION ---
@@ -6250,103 +6292,38 @@ def export_attendance_pdf(request):
         
         elements.append(table)
 
-        # Footer signature is drawn on every page via the overlay canvas (see page-number overlay below).
-        hide_faculty = (request.GET.get('hide_faculty') == '1') and can_apply_hide_faculty
-        teacher_name_for_signature = teacher_name if teacher_name else "Teacher Name"
-        
-        # Build PDF with page numbers - two pass approach
-        # First pass: build to temp buffer to count pages
-        temp_buffer = io.BytesIO()
-        temp_doc = SimpleDocTemplate(
-            temp_buffer,
-            pagesize=landscape(A4),
-            rightMargin=54,
-            leftMargin=54,
-            topMargin=34,
-            bottomMargin=70
-        )
-        # Build without page numbers to count pages
-        temp_doc.build(elements)
-        temp_buffer.seek(0)
-        
-        # Count pages using PyPDF2/pypdf
-        total_pages = 1
-        try:
-            try:
-                from PyPDF2 import PdfWriter, PdfReader
-            except ImportError:
-                from pypdf import PdfWriter, PdfReader
-            
-            reader = PdfReader(temp_buffer)
-            total_pages = len(reader.pages)
-            
-            # Create overlay with page numbers
-            from reportlab.pdfgen import canvas as reportlab_canvas
-            overlay_buffer = io.BytesIO()
-            overlay_canvas = reportlab_canvas.Canvas(overlay_buffer, pagesize=landscape(A4))
-            
-            page_width, page_height = landscape(A4)
-            footer_left_x = doc.leftMargin
-            footer_right_x = page_width - doc.rightMargin
+        hide_faculty_pdf = (request.GET.get('hide_faculty') == '1') and can_apply_hide_faculty
+        teacher_name_for_signature = teacher_name if teacher_name else 'Teacher Name'
+
+        def _draw_attendance_pdf_footer(cnv, page_num, total_pages):
+            pw, _ph = landscape(A4)
+            footer_left_x = _att_pdf_lm
+            footer_right_x = pw - _att_pdf_rm
             footer_line_y = 48
             footer_text_y = 34
-            for page_num in range(1, total_pages + 1):
-                # Signature footer (left) on each page
-                overlay_canvas.setLineWidth(1)
-                overlay_canvas.setStrokeColor(colors.black)
-                overlay_canvas.line(footer_left_x, footer_line_y, footer_left_x + 200, footer_line_y)
-                overlay_canvas.setFont('Helvetica', 10)
-                faculty_text = "Faculty:" if hide_faculty else f"Faculty: {teacher_name_for_signature}"
-                overlay_canvas.drawString(footer_left_x, footer_text_y, faculty_text)
+            cnv.saveState()
+            cnv.setLineWidth(1)
+            cnv.setStrokeColor(colors.black)
+            cnv.line(footer_left_x, footer_line_y, footer_left_x + 200, footer_line_y)
+            cnv.setFont('Helvetica', 10)
+            faculty_text = 'Faculty:' if hide_faculty_pdf else f'Faculty: {teacher_name_for_signature}'
+            cnv.drawString(footer_left_x, footer_text_y, faculty_text)
+            cnv.setFont('Helvetica', 9)
+            cnv.drawRightString(footer_right_x, footer_text_y, f'Page {page_num}-{total_pages}')
+            cnv.restoreState()
 
-                # Page number (right) on same line as signature
-                overlay_canvas.setFont('Helvetica', 9)
-                overlay_canvas.drawRightString(footer_right_x, footer_text_y, f"Page {page_num}-{total_pages}")
+        _AttFooterCanvas = _make_deferred_footer_canvas_class(_draw_attendance_pdf_footer)
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=landscape(A4),
+            rightMargin=_att_pdf_rm,
+            leftMargin=_att_pdf_lm,
+            topMargin=_att_pdf_tm,
+            bottomMargin=_att_pdf_bm,
+        )
+        doc.build(elements, canvasmaker=_AttFooterCanvas)
 
-                overlay_canvas.showPage()
-            
-            overlay_canvas.save()
-            overlay_buffer.seek(0)
-            overlay_reader = PdfReader(overlay_buffer)
-            temp_buffer.seek(0)
-            reader = PdfReader(temp_buffer)
-            
-            # Merge original PDF with page number overlay
-            writer = PdfWriter()
-            for i in range(total_pages):
-                page = reader.pages[i]
-                overlay_page = overlay_reader.pages[i]
-                page.merge_page(overlay_page)
-                writer.add_page(page)
-            
-            # Write to final buffer
-            writer.write(buffer)
-            buffer.seek(0)
-            
-        except (ImportError, Exception) as e:
-            # If PyPDF2/pypdf not available or error, build with canvas callbacks using estimation
-            total_pages = max(1, len(students) // 12 + 1)
-            
-            def add_page_number(canvas, doc):
-                """Add page numbers in format 'Page 1-5', 'Page 2-5', etc."""
-                page_num = canvas.getPageNumber()
-                canvas.saveState()
-                canvas.setFont('Helvetica', 9)
-                page_width, page_height = landscape(A4)
-                canvas.drawRightString(page_width - doc.rightMargin, 34, f"Page {page_num}-{total_pages}")
-                canvas.restoreState()
-            
-            def on_first_page(canvas, doc):
-                add_page_number(canvas, doc)
-            
-            def on_later_pages(canvas, doc):
-                add_page_number(canvas, doc)
-            
-            # Use temp buffer as source, but we can't rebuild elements
-            # So just use temp buffer without page numbers if PyPDF2 fails
-            buffer = temp_buffer
-            buffer.seek(0)
-        
         response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
         filename = f"Attendance_{course.code}_{semester.name}.pdf"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
@@ -6469,22 +6446,15 @@ def export_blank_attendance_pdf(request):
             if first_student.centre:
                 centre_name = first_student.centre.name
         
-        # Create PDF in landscape mode for more horizontal space
-        buffer = io.BytesIO()
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=landscape(A4),
-            rightMargin=54,
-            leftMargin=54,
-            topMargin=34,
-            # Leave room for per-page footer signatures + page number
-            bottomMargin=70
-        )
-        
+        _blank_att_lm = 54
+        _blank_att_rm = 54
+        _blank_att_tm = 34
+        _blank_att_bm = 70
+
         # Get page width and calculate available width
         page_width, page_height = landscape(A4)
-        available_width = page_width - doc.leftMargin - doc.rightMargin
-        
+        available_width = page_width - _blank_att_lm - _blank_att_rm
+
         elements = []
         
         # --- HEADER IMAGE SECTION ---
@@ -6875,103 +6845,38 @@ def export_blank_attendance_pdf(request):
         
         elements.append(table)
 
-        # Footer signature is drawn on every page via the overlay canvas (see page-number overlay below).
-        hide_faculty = (request.GET.get('hide_faculty') == '1') and can_apply_hide_faculty
-        teacher_name_for_signature = teacher_name if teacher_name else "Teacher Name"
-        
-        # Build PDF with page numbers - two pass approach
-        # First pass: build to temp buffer to count pages
-        temp_buffer = io.BytesIO()
-        temp_doc = SimpleDocTemplate(
-            temp_buffer,
-            pagesize=landscape(A4),
-            rightMargin=54,
-            leftMargin=54,
-            topMargin=34,
-            bottomMargin=70
-        )
-        # Build without page numbers to count pages
-        temp_doc.build(elements)
-        temp_buffer.seek(0)
-        
-        # Count pages using PyPDF2/pypdf
-        total_pages = 1
-        try:
-            try:
-                from PyPDF2 import PdfWriter, PdfReader
-            except ImportError:
-                from pypdf import PdfWriter, PdfReader
-            
-            reader = PdfReader(temp_buffer)
-            total_pages = len(reader.pages)
-            
-            # Create overlay with page numbers
-            from reportlab.pdfgen import canvas as reportlab_canvas
-            overlay_buffer = io.BytesIO()
-            overlay_canvas = reportlab_canvas.Canvas(overlay_buffer, pagesize=landscape(A4))
-            
-            page_width, page_height = landscape(A4)
-            footer_left_x = doc.leftMargin
-            footer_right_x = page_width - doc.rightMargin
+        hide_faculty_pdf = (request.GET.get('hide_faculty') == '1') and can_apply_hide_faculty
+        teacher_name_for_signature = teacher_name if teacher_name else 'Teacher Name'
+
+        def _draw_blank_attendance_pdf_footer(cnv, page_num, total_pages):
+            pw, _ph = landscape(A4)
+            footer_left_x = _blank_att_lm
+            footer_right_x = pw - _blank_att_rm
             footer_line_y = 48
             footer_text_y = 34
-            for page_num in range(1, total_pages + 1):
-                # Signature footer (left) on each page
-                overlay_canvas.setLineWidth(1)
-                overlay_canvas.setStrokeColor(colors.black)
-                overlay_canvas.line(footer_left_x, footer_line_y, footer_left_x + 200, footer_line_y)
-                overlay_canvas.setFont('Helvetica', 10)
-                faculty_text = "Faculty:" if hide_faculty else f"Faculty: {teacher_name_for_signature}"
-                overlay_canvas.drawString(footer_left_x, footer_text_y, faculty_text)
+            cnv.saveState()
+            cnv.setLineWidth(1)
+            cnv.setStrokeColor(colors.black)
+            cnv.line(footer_left_x, footer_line_y, footer_left_x + 200, footer_line_y)
+            cnv.setFont('Helvetica', 10)
+            faculty_text = 'Faculty:' if hide_faculty_pdf else f'Faculty: {teacher_name_for_signature}'
+            cnv.drawString(footer_left_x, footer_text_y, faculty_text)
+            cnv.setFont('Helvetica', 9)
+            cnv.drawRightString(footer_right_x, footer_text_y, f'Page {page_num}-{total_pages}')
+            cnv.restoreState()
 
-                # Page number (right) on same line as signature
-                overlay_canvas.setFont('Helvetica', 9)
-                overlay_canvas.drawRightString(footer_right_x, footer_text_y, f"Page {page_num}-{total_pages}")
+        _BlankAttFooterCanvas = _make_deferred_footer_canvas_class(_draw_blank_attendance_pdf_footer)
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=landscape(A4),
+            rightMargin=_blank_att_rm,
+            leftMargin=_blank_att_lm,
+            topMargin=_blank_att_tm,
+            bottomMargin=_blank_att_bm,
+        )
+        doc.build(elements, canvasmaker=_BlankAttFooterCanvas)
 
-                overlay_canvas.showPage()
-            
-            overlay_canvas.save()
-            overlay_buffer.seek(0)
-            overlay_reader = PdfReader(overlay_buffer)
-            temp_buffer.seek(0)
-            reader = PdfReader(temp_buffer)
-            
-            # Merge original PDF with page number overlay
-            writer = PdfWriter()
-            for i in range(total_pages):
-                page = reader.pages[i]
-                overlay_page = overlay_reader.pages[i]
-                page.merge_page(overlay_page)
-                writer.add_page(page)
-            
-            # Write to final buffer
-            writer.write(buffer)
-            buffer.seek(0)
-            
-        except (ImportError, Exception) as e:
-            # If PyPDF2/pypdf not available or error, build with canvas callbacks using estimation
-            total_pages = max(1, len(students) // 12 + 1)
-            
-            def add_page_number(canvas, doc):
-                """Add page numbers in format 'Page 1-5', 'Page 2-5', etc."""
-                page_num = canvas.getPageNumber()
-                canvas.saveState()
-                canvas.setFont('Helvetica', 9)
-                page_width, page_height = landscape(A4)
-                canvas.drawRightString(page_width - doc.rightMargin, 34, f"Page {page_num}-{total_pages}")
-                canvas.restoreState()
-            
-            def on_first_page(canvas, doc):
-                add_page_number(canvas, doc)
-            
-            def on_later_pages(canvas, doc):
-                add_page_number(canvas, doc)
-            
-            # Use temp buffer as source, but we can't rebuild elements
-            # So just use temp buffer without page numbers if PyPDF2 fails
-            buffer = temp_buffer
-            buffer.seek(0)
-        
         response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
         filename = f"Blank_Attendance_{course.code}_{semester.name}.pdf"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
@@ -7183,23 +7088,15 @@ def export_ca_marks_pdf(request):
                 temp_mark.attendance_mark = temp_mark.calculate_attendance_mark()
                 ca_marks[student.id] = temp_mark
         
-        # Create PDF
-        buffer = io.BytesIO()
-        # Use landscape orientation with same margins as routine and academic calendar
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=landscape(A4),
-            rightMargin=54,  # 0.75 inch - same as routine
-            leftMargin=54,   # 0.75 inch - same as routine
-            topMargin=34,    # 0.75 inch - same as routine
-            # Leave room for per-page footer signature + page number
-            bottomMargin=70
-        )
-        
+        _ca_lm = 54
+        _ca_rm = 54
+        _ca_tm = 34
+        _ca_bm = 70
+
         # Get page width and calculate available width
         page_width, page_height = landscape(A4)
-        available_width = page_width - doc.leftMargin - doc.rightMargin
-        
+        available_width = page_width - _ca_lm - _ca_rm
+
         elements = []
         
         # --- HEADER IMAGE SECTION ---
@@ -7634,75 +7531,35 @@ def export_ca_marks_pdf(request):
         
         elements.append(table)
 
-        # Build PDF with total-pages page numbering + per-page signature (two-pass overlay)
-        temp_buffer = io.BytesIO()
-        temp_doc = SimpleDocTemplate(
-            temp_buffer,
-            pagesize=landscape(A4),
-            rightMargin=doc.rightMargin,
-            leftMargin=doc.leftMargin,
-            topMargin=doc.topMargin,
-            bottomMargin=doc.bottomMargin,
-        )
-        temp_doc.build(elements)
-        temp_buffer.seek(0)
-
-        total_pages = 1
-        try:
-            try:
-                from PyPDF2 import PdfWriter, PdfReader
-            except ImportError:
-                from pypdf import PdfWriter, PdfReader
-
-            reader = PdfReader(temp_buffer)
-            total_pages = len(reader.pages)
-
-            from reportlab.pdfgen import canvas as reportlab_canvas
-            overlay_buffer = io.BytesIO()
-            overlay_canvas = reportlab_canvas.Canvas(overlay_buffer, pagesize=landscape(A4))
-
-            page_width, _page_height = landscape(A4)
-            left_x = doc.leftMargin
-            right_x = page_width - doc.rightMargin
+        def _draw_ca_marks_pdf_footer(cnv, page_num, total_pages):
+            pw, _ph = landscape(A4)
+            left_x = _ca_lm
+            right_x = pw - _ca_rm
             footer_y_line = 48
             footer_y_text = 34
             line_w = 280
+            cnv.saveState()
+            cnv.setLineWidth(1)
+            cnv.setStrokeColor(colors.black)
+            cnv.line(left_x, footer_y_line, left_x + line_w, footer_y_line)
+            cnv.setFont('Helvetica', 10)
+            cnv.drawString(left_x, footer_y_text, 'Signature of the course teacher')
+            cnv.setFont('Helvetica', 9)
+            cnv.drawRightString(right_x, footer_y_text, f'Page {page_num}-{total_pages}')
+            cnv.restoreState()
 
-            for page_num in range(1, total_pages + 1):
-                # Signature line + label (left)
-                overlay_canvas.setLineWidth(1)
-                overlay_canvas.setStrokeColor(colors.black)
-                overlay_canvas.line(left_x, footer_y_line, left_x + line_w, footer_y_line)
-                overlay_canvas.setFont('Helvetica', 10)
-                overlay_canvas.drawString(left_x, footer_y_text, "Signature of the course teacher")
-
-                # Page number (right) on the same baseline as signature label
-                overlay_canvas.setFont('Helvetica', 9)
-                overlay_canvas.drawRightString(right_x, footer_y_text, f"Page {page_num}-{total_pages}")
-
-                overlay_canvas.showPage()
-
-            overlay_canvas.save()
-            overlay_buffer.seek(0)
-
-            overlay_reader = PdfReader(overlay_buffer)
-            temp_buffer.seek(0)
-            base_reader = PdfReader(temp_buffer)
-
-            writer = PdfWriter()
-            for i in range(total_pages):
-                page = base_reader.pages[i]
-                page.merge_page(overlay_reader.pages[i])
-                writer.add_page(page)
-
-            out_buffer = io.BytesIO()
-            writer.write(out_buffer)
-            out_buffer.seek(0)
-            pdf_bytes = out_buffer.getvalue()
-        except Exception:
-            # Fallback: return the base PDF without X-Y numbering if merge fails
-            temp_buffer.seek(0)
-            pdf_bytes = temp_buffer.getvalue()
+        _CaFooterCanvas = _make_deferred_footer_canvas_class(_draw_ca_marks_pdf_footer)
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=landscape(A4),
+            rightMargin=_ca_rm,
+            leftMargin=_ca_lm,
+            topMargin=_ca_tm,
+            bottomMargin=_ca_bm,
+        )
+        doc.build(elements, canvasmaker=_CaFooterCanvas)
+        pdf_bytes = buffer.getvalue()
 
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
         filename = f"CA_Marks_{course.code}_{semester.name}.pdf"
@@ -8494,23 +8351,15 @@ def export_final_exam_pdf(request):
         for mark in existing_marks:
             final_exam_marks[mark.student.id] = mark
         
-        # Create PDF
-        buffer = io.BytesIO()
-        # Use landscape orientation with same margins as routine and academic calendar
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=landscape(A4),
-            rightMargin=54,  # 0.75 inch - same as routine
-            leftMargin=54,   # 0.75 inch - same as routine
-            topMargin=34,    # 0.75 inch - same as routine
-            # Leave room for per-page footer signatures + page number
-            bottomMargin=90
-        )
-        
+        _fe_lm = 54
+        _fe_rm = 54
+        _fe_tm = 34
+        _fe_bm = 90
+
         # Get page width and calculate available width
         page_width, page_height = landscape(A4)
-        available_width = page_width - doc.leftMargin - doc.rightMargin
-        
+        available_width = page_width - _fe_lm - _fe_rm
+
         elements = []
         
         # --- HEADER IMAGE SECTION ---
@@ -8928,75 +8777,38 @@ def export_final_exam_pdf(request):
         ]))
         
         elements.append(table)
-        
-        # Build PDF with total-pages numbering + per-page signatures (two-pass overlay)
-        temp_buffer = io.BytesIO()
-        temp_doc = SimpleDocTemplate(
-            temp_buffer,
-            pagesize=landscape(A4),
-            rightMargin=doc.rightMargin,
-            leftMargin=doc.leftMargin,
-            topMargin=doc.topMargin,
-            bottomMargin=doc.bottomMargin,
-        )
-        temp_doc.build(elements)
-        temp_buffer.seek(0)
 
-        total_pages = 1
-        try:
-            try:
-                from PyPDF2 import PdfWriter, PdfReader
-            except ImportError:
-                from pypdf import PdfWriter, PdfReader
-
-            base_reader = PdfReader(temp_buffer)
-            total_pages = len(base_reader.pages)
-
-            from reportlab.pdfgen import canvas as reportlab_canvas
-            overlay_buffer = io.BytesIO()
-            overlay_canvas = reportlab_canvas.Canvas(overlay_buffer, pagesize=landscape(A4))
-
-            page_width, _page_height = landscape(A4)
-            left_x = doc.leftMargin
-            right_x_end = page_width - doc.rightMargin
+        def _draw_final_exam_marks_pdf_footer(cnv, page_num, total_pages):
+            pw, _ph = landscape(A4)
+            left_x = _fe_lm
+            right_x_end = pw - _fe_rm
             right_x = right_x_end - 250
             footer_y_line = 48
             footer_y_text = 34
+            cnv.saveState()
+            cnv.setLineWidth(1)
+            cnv.setStrokeColor(colors.black)
+            cnv.line(left_x, footer_y_line, left_x + 250, footer_y_line)
+            cnv.line(right_x, footer_y_line, right_x_end, footer_y_line)
+            cnv.setFont('Helvetica', 10)
+            cnv.drawString(left_x, footer_y_text, 'Internal Examiner')
+            cnv.drawRightString(right_x_end, footer_y_text, 'External Examiner')
+            cnv.setFont('Helvetica', 9)
+            cnv.drawCentredString(pw / 2.0, footer_y_text, f'Page {page_num}-{total_pages}')
+            cnv.restoreState()
 
-            for page_num in range(1, total_pages + 1):
-                # Signature lines + labels
-                overlay_canvas.setLineWidth(1)
-                overlay_canvas.setStrokeColor(colors.black)
-                overlay_canvas.line(left_x, footer_y_line, left_x + 250, footer_y_line)
-                overlay_canvas.line(right_x, footer_y_line, right_x_end, footer_y_line)
-
-                overlay_canvas.setFont('Helvetica', 10)
-                overlay_canvas.drawString(left_x, footer_y_text, "Internal Examiner")
-                overlay_canvas.drawRightString(right_x_end, footer_y_text, "External Examiner")
-
-                # Page number centered between signatures
-                overlay_canvas.setFont('Helvetica', 9)
-                overlay_canvas.drawCentredString(page_width / 2.0, footer_y_text, f"Page {page_num}-{total_pages}")
-
-                overlay_canvas.showPage()
-
-            overlay_canvas.save()
-            overlay_buffer.seek(0)
-            overlay_reader = PdfReader(overlay_buffer)
-
-            writer = PdfWriter()
-            for i in range(total_pages):
-                page = base_reader.pages[i]
-                page.merge_page(overlay_reader.pages[i])
-                writer.add_page(page)
-
-            out_buffer = io.BytesIO()
-            writer.write(out_buffer)
-            out_buffer.seek(0)
-            pdf_bytes = out_buffer.getvalue()
-        except Exception:
-            temp_buffer.seek(0)
-            pdf_bytes = temp_buffer.getvalue()
+        _FeMarksFooterCanvas = _make_deferred_footer_canvas_class(_draw_final_exam_marks_pdf_footer)
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=landscape(A4),
+            rightMargin=_fe_rm,
+            leftMargin=_fe_lm,
+            topMargin=_fe_tm,
+            bottomMargin=_fe_bm,
+        )
+        doc.build(elements, canvasmaker=_FeMarksFooterCanvas)
+        pdf_bytes = buffer.getvalue()
 
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
         filename = f"Final_Exam_Marks_{course.code}_{semester.name}.pdf"
@@ -9035,23 +8847,14 @@ def export_blank_final_exam_pdf(request):
             }
         ).order_by('-first_two_digits', 'last_three_digits')
         students = filter_students_queryset_by_centre(students, centre_id)
-        
-        # Create PDF
-        buffer = io.BytesIO()
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=landscape(A4),
-            rightMargin=54,
-            leftMargin=54,
-            topMargin=34,
-            # Leave room for per-page footer signatures + page number
-            bottomMargin=90
-        )
-        
-        # Get page width and calculate available width
+
+        _bfe_lm = 54
+        _bfe_rm = 54
+        _bfe_tm = 34
+        _bfe_bm = 90
         page_width, page_height = landscape(A4)
-        available_width = page_width - doc.leftMargin - doc.rightMargin
-        
+        available_width = page_width - _bfe_lm - _bfe_rm
+
         elements = []
         
         # --- HEADER IMAGE SECTION ---
@@ -9381,73 +9184,38 @@ def export_blank_final_exam_pdf(request):
         ]))
         
         elements.append(table)
-        
-        # Build PDF with total-pages numbering + per-page signatures (two-pass overlay)
-        temp_buffer = io.BytesIO()
-        temp_doc = SimpleDocTemplate(
-            temp_buffer,
-            pagesize=landscape(A4),
-            rightMargin=doc.rightMargin,
-            leftMargin=doc.leftMargin,
-            topMargin=doc.topMargin,
-            bottomMargin=doc.bottomMargin,
-        )
-        temp_doc.build(elements)
-        temp_buffer.seek(0)
 
-        total_pages = 1
-        try:
-            try:
-                from PyPDF2 import PdfWriter, PdfReader
-            except ImportError:
-                from pypdf import PdfWriter, PdfReader
-
-            base_reader = PdfReader(temp_buffer)
-            total_pages = len(base_reader.pages)
-
-            from reportlab.pdfgen import canvas as reportlab_canvas
-            overlay_buffer = io.BytesIO()
-            overlay_canvas = reportlab_canvas.Canvas(overlay_buffer, pagesize=landscape(A4))
-
-            page_width, _page_height = landscape(A4)
-            left_x = doc.leftMargin
-            right_x_end = page_width - doc.rightMargin
+        def _draw_blank_final_exam_pdf_footer(cnv, page_num, total_pages):
+            pw, _ph = landscape(A4)
+            left_x = _bfe_lm
+            right_x_end = pw - _bfe_rm
             right_x = right_x_end - 250
             footer_y_line = 48
             footer_y_text = 34
+            cnv.saveState()
+            cnv.setLineWidth(1)
+            cnv.setStrokeColor(colors.black)
+            cnv.line(left_x, footer_y_line, left_x + 250, footer_y_line)
+            cnv.line(right_x, footer_y_line, right_x_end, footer_y_line)
+            cnv.setFont('Helvetica', 10)
+            cnv.drawString(left_x, footer_y_text, 'Internal Examiner')
+            cnv.drawRightString(right_x_end, footer_y_text, 'External Examiner')
+            cnv.setFont('Helvetica', 9)
+            cnv.drawCentredString(pw / 2.0, footer_y_text, f'Page {page_num}-{total_pages}')
+            cnv.restoreState()
 
-            for page_num in range(1, total_pages + 1):
-                overlay_canvas.setLineWidth(1)
-                overlay_canvas.setStrokeColor(colors.black)
-                overlay_canvas.line(left_x, footer_y_line, left_x + 250, footer_y_line)
-                overlay_canvas.line(right_x, footer_y_line, right_x_end, footer_y_line)
-
-                overlay_canvas.setFont('Helvetica', 10)
-                overlay_canvas.drawString(left_x, footer_y_text, "Internal Examiner")
-                overlay_canvas.drawRightString(right_x_end, footer_y_text, "External Examiner")
-
-                overlay_canvas.setFont('Helvetica', 9)
-                overlay_canvas.drawCentredString(page_width / 2.0, footer_y_text, f"Page {page_num}-{total_pages}")
-
-                overlay_canvas.showPage()
-
-            overlay_canvas.save()
-            overlay_buffer.seek(0)
-            overlay_reader = PdfReader(overlay_buffer)
-
-            writer = PdfWriter()
-            for i in range(total_pages):
-                page = base_reader.pages[i]
-                page.merge_page(overlay_reader.pages[i])
-                writer.add_page(page)
-
-            out_buffer = io.BytesIO()
-            writer.write(out_buffer)
-            out_buffer.seek(0)
-            pdf_bytes = out_buffer.getvalue()
-        except Exception:
-            temp_buffer.seek(0)
-            pdf_bytes = temp_buffer.getvalue()
+        _BlankFeFooterCanvas = _make_deferred_footer_canvas_class(_draw_blank_final_exam_pdf_footer)
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=landscape(A4),
+            rightMargin=_bfe_rm,
+            leftMargin=_bfe_lm,
+            topMargin=_bfe_tm,
+            bottomMargin=_bfe_bm,
+        )
+        doc.build(elements, canvasmaker=_BlankFeFooterCanvas)
+        pdf_bytes = buffer.getvalue()
 
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
         filename = f"Blank_Final_Exam_Marks_{course.code}_{semester.name}.pdf"
@@ -9990,16 +9758,12 @@ def export_final_exam_summary_pdf(request):
             list(students), course, semester, final_exam_marks, include_status=False
         )
 
-        doc = SimpleDocTemplate(
-            io.BytesIO(),
-            pagesize=landscape(A4),
-            rightMargin=54,
-            leftMargin=54,
-            topMargin=34,
-            bottomMargin=90,
-        )
+        _fes_lm = 54
+        _fes_rm = 54
+        _fes_tm = 34
+        _fes_bm = 90
         page_width, _page_height = landscape(A4)
-        available_width = page_width - doc.leftMargin - doc.rightMargin
+        available_width = page_width - _fes_lm - _fes_rm
 
         elements = []
 
@@ -10153,74 +9917,37 @@ def export_final_exam_summary_pdf(request):
         )
         elements.append(tbl)
 
-        temp_buffer = io.BytesIO()
-        temp_doc = SimpleDocTemplate(
-            temp_buffer,
-            pagesize=landscape(A4),
-            rightMargin=doc.rightMargin,
-            leftMargin=doc.leftMargin,
-            topMargin=doc.topMargin,
-            bottomMargin=doc.bottomMargin,
-        )
-        temp_doc.build(elements)
-        temp_buffer.seek(0)
-
-        total_pages = 1
-        try:
-            try:
-                from PyPDF2 import PdfWriter, PdfReader
-            except ImportError:
-                from pypdf import PdfWriter, PdfReader
-
-            base_reader = PdfReader(temp_buffer)
-            total_pages = len(base_reader.pages)
-
-            from reportlab.pdfgen import canvas as reportlab_canvas
-
-            overlay_buffer = io.BytesIO()
-            overlay_canvas = reportlab_canvas.Canvas(overlay_buffer, pagesize=landscape(A4))
-
-            page_width_ov, _page_height_ov = landscape(A4)
-            left_x = doc.leftMargin
-            right_x_end = page_width_ov - doc.rightMargin
+        def _draw_final_exam_summary_pdf_footer(cnv, page_num, total_pages):
+            pw, _ph = landscape(A4)
+            left_x = _fes_lm
+            right_x_end = pw - _fes_rm
             right_x = right_x_end - 250
             footer_y_line = 48
             footer_y_text = 34
+            cnv.saveState()
+            cnv.setLineWidth(1)
+            cnv.setStrokeColor(colors.black)
+            cnv.line(left_x, footer_y_line, left_x + 250, footer_y_line)
+            cnv.line(right_x, footer_y_line, right_x_end, footer_y_line)
+            cnv.setFont('Helvetica', 10)
+            cnv.drawString(left_x, footer_y_text, 'Internal Examiner')
+            cnv.drawRightString(right_x_end, footer_y_text, 'External Examiner')
+            cnv.setFont('Helvetica', 9)
+            cnv.drawCentredString(pw / 2.0, footer_y_text, f'Page {page_num}-{total_pages}')
+            cnv.restoreState()
 
-            for page_num in range(1, total_pages + 1):
-                overlay_canvas.setLineWidth(1)
-                overlay_canvas.setStrokeColor(colors.black)
-                overlay_canvas.line(left_x, footer_y_line, left_x + 250, footer_y_line)
-                overlay_canvas.line(right_x, footer_y_line, right_x_end, footer_y_line)
-
-                overlay_canvas.setFont('Helvetica', 10)
-                overlay_canvas.drawString(left_x, footer_y_text, 'Internal Examiner')
-                overlay_canvas.drawRightString(right_x_end, footer_y_text, 'External Examiner')
-
-                overlay_canvas.setFont('Helvetica', 9)
-                overlay_canvas.drawCentredString(
-                    page_width_ov / 2.0, footer_y_text, f'Page {page_num}-{total_pages}'
-                )
-
-                overlay_canvas.showPage()
-
-            overlay_canvas.save()
-            overlay_buffer.seek(0)
-            overlay_reader = PdfReader(overlay_buffer)
-
-            writer = PdfWriter()
-            for i in range(total_pages):
-                page = base_reader.pages[i]
-                page.merge_page(overlay_reader.pages[i])
-                writer.add_page(page)
-
-            out_buffer = io.BytesIO()
-            writer.write(out_buffer)
-            out_buffer.seek(0)
-            pdf_bytes = out_buffer.getvalue()
-        except Exception:
-            temp_buffer.seek(0)
-            pdf_bytes = temp_buffer.getvalue()
+        _FesFooterCanvas = _make_deferred_footer_canvas_class(_draw_final_exam_summary_pdf_footer)
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=landscape(A4),
+            rightMargin=_fes_rm,
+            leftMargin=_fes_lm,
+            topMargin=_fes_tm,
+            bottomMargin=_fes_bm,
+        )
+        doc.build(elements, canvasmaker=_FesFooterCanvas)
+        pdf_bytes = buffer.getvalue()
 
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
         fname = f'Final_Exam_Summary_{course.code}_{semester.name}.pdf'

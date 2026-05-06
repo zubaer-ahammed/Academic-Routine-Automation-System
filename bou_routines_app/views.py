@@ -149,6 +149,92 @@ def _make_deferred_footer_canvas_class(footer_draw):
     return _DeferredFooterCanvas
 
 
+def _attendance_calendar_class_dates(semester, course, selected_centre):
+    """
+    Class-date columns for attendance exports: same rules as attendance_calendar —
+    routine + filtered makeup + semester mid-term dates (as possible class days),
+    minus effective mid-term exclusions (SemesterCourse.attendance_midterm_override_dates
+    when set for semester+centre, else Semester.mid_term_exam_dates).
+    """
+    def _parse_date_list_csv(value):
+        dates = []
+        if not value:
+            return dates
+        for part in str(value).split(','):
+            part = part.strip()
+            if not part:
+                continue
+            try:
+                dates.append(datetime.strptime(part, "%Y-%m-%d").date())
+            except ValueError:
+                continue
+        return dates
+
+    routine_dates = set(
+        NewRoutine.objects.filter(course=course, semester=semester).values_list(
+            'class_date', flat=True
+        ).distinct()
+    )
+    course_routines = NewRoutine.objects.filter(
+        course=course, semester=semester
+    ).values_list('day', flat=True).distinct()
+
+    makeup_dates = []
+    if semester.makeup_dates:
+        for date_str in semester.makeup_dates.split(','):
+            if date_str.strip():
+                try:
+                    makeup_dates.append(
+                        datetime.strptime(date_str.strip(), "%Y-%m-%d").date()
+                    )
+                except ValueError:
+                    pass
+
+    if 'Friday' in course_routines and 'Saturday' in course_routines:
+        days_to_show = ['Friday', 'Saturday']
+    elif 'Friday' in course_routines:
+        days_to_show = ['Friday']
+    elif 'Saturday' in course_routines:
+        days_to_show = ['Saturday']
+    else:
+        days_to_show = ['Friday', 'Saturday']
+
+    filtered_makeup_dates = []
+    for makeup_date in makeup_dates:
+        if makeup_date.strftime('%A') in days_to_show:
+            filtered_makeup_dates.append(makeup_date)
+
+    attendance_override_scope = None
+    if selected_centre:
+        attendance_override_scope = SemesterCourse.objects.filter(
+            semester=semester,
+            centre=selected_centre,
+            attendance_midterm_override_dates__isnull=False,
+        ).first()
+
+    if attendance_override_scope and attendance_override_scope.attendance_midterm_override_dates is not None:
+        mid_term_source = attendance_override_scope.attendance_midterm_override_dates
+    else:
+        mid_term_source = semester.mid_term_exam_dates
+
+    mid_term_exam_dates = set()
+    if mid_term_source and semester.curriculum and semester.curriculum.code != 'OLD':
+        mid_term_exam_dates = set(_parse_date_list_csv(mid_term_source))
+
+    semester_mid_term_dates = set()
+    if semester.mid_term_exam_dates and semester.curriculum and semester.curriculum.code != 'OLD':
+        semester_mid_term_dates = set(_parse_date_list_csv(semester.mid_term_exam_dates))
+    semester_mid_term_dates = {
+        d for d in semester_mid_term_dates if d.strftime('%A') in days_to_show
+    }
+
+    all_dates = (
+        set(routine_dates) | set(filtered_makeup_dates) | set(semester_mid_term_dates)
+    )
+    all_dates = all_dates - mid_term_exam_dates
+    return sorted(all_dates)
+
+
 def final_exam_mark_sample_for_scope(course, semester, centre_id):
     """
     One FinalExamMark row to read teacher1/2/3_evaluator for the UI.
@@ -5785,68 +5871,16 @@ def export_attendance_pdf(request):
                 'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
             }
         ).order_by('-first_two_digits', 'last_three_digits')
-        
-        # Get dates from actual routine entries (same logic as routine PDF export)
-        from datetime import timedelta, datetime
-        from bou_routines_app.models import NewRoutine
-        
-        # Get actual routine dates for this course (same as routine PDF export)
-        # Get unique dates from routine entries
-        routine_dates = set(NewRoutine.objects.filter(
-            course=course,
-            semester=semester
-        ).values_list('class_date', flat=True).distinct())
-        
-        # Get the course's scheduled days from NewRoutine table (for filtering makeup dates)
-        course_routines = NewRoutine.objects.filter(
-            course=course,
-            semester=semester
-        ).values_list('day', flat=True).distinct()
-        
-        # Get makeup dates from semester
-        makeup_dates = []
-        if semester.makeup_dates:
-            for date_str in semester.makeup_dates.split(','):
-                if date_str.strip():
-                    try:
-                        makeup_date = datetime.strptime(date_str.strip(), "%Y-%m-%d").date()
-                        makeup_dates.append(makeup_date)
-                    except ValueError:
-                        pass
-        
-        # Determine which days to show based on course routine (for filtering makeup dates)
-        days_to_show = []
-        if 'Friday' in course_routines and 'Saturday' in course_routines:
-            days_to_show = ['Friday', 'Saturday']
-        elif 'Friday' in course_routines:
-            days_to_show = ['Friday']
-        elif 'Saturday' in course_routines:
-            days_to_show = ['Saturday']
-        else:
-            # Fallback: show Friday and Saturday if no specific schedule found
-            days_to_show = ['Friday', 'Saturday']
-        
-        # Filter makeup dates based on course's scheduled day
-        # If course is on Friday only, keep only Friday makeup dates
-        # If course is on Saturday only, keep only Saturday makeup dates
-        filtered_makeup_dates = []
-        for makeup_date in makeup_dates:
-            makeup_day = makeup_date.strftime('%A')
-            # Only include makeup dates that match the course's scheduled day
-            if makeup_day in days_to_show:
-                filtered_makeup_dates.append(makeup_date)
-        
-        # Combine routine dates and filtered makeup dates (same as routine PDF export)
-        all_dates = set(routine_dates) | set(filtered_makeup_dates)
-        attendance_dates = sorted(all_dates)
-        
-        # Fallback: if no routine dates found, use attendance records
+
+        attendance_dates = _attendance_calendar_class_dates(semester, course, selected_centre)
         if not attendance_dates:
-            attendance_dates = list(Attendance.objects.filter(
-                course=course,
-                semester=semester
-            ).values_list('attendance_date', flat=True).distinct().order_by('attendance_date'))
-        
+            attendance_dates = list(
+                Attendance.objects.filter(course=course, semester=semester)
+                .values_list('attendance_date', flat=True)
+                .distinct()
+                .order_by('attendance_date')
+            )
+
         # Create attendance matrix
         attendance_matrix = {}
         for student in students:
@@ -6383,62 +6417,16 @@ def export_blank_attendance_pdf(request):
                 'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
             }
         ).order_by('-first_two_digits', 'last_three_digits')
-        
-        # Generate semester dates based on course schedule (same logic as attendance_calendar)
-        from datetime import timedelta, datetime
-        from bou_routines_app.models import NewRoutine
-        
-        # Get dates from actual routine entries (same logic as routine PDF export)
-        # Get actual routine dates for this course (same as routine PDF export)
-        # Get unique dates from routine entries
-        routine_dates = set(NewRoutine.objects.filter(
-            course=course,
-            semester=semester
-        ).values_list('class_date', flat=True).distinct())
-        
-        # Get the course's scheduled days from NewRoutine table (for filtering makeup dates)
-        course_routines = NewRoutine.objects.filter(
-            course=course,
-            semester=semester
-        ).values_list('day', flat=True).distinct()
-        
-        # Get makeup dates from semester
-        makeup_dates = []
-        if semester.makeup_dates:
-            for date_str in semester.makeup_dates.split(','):
-                if date_str.strip():
-                    try:
-                        makeup_date = datetime.strptime(date_str.strip(), "%Y-%m-%d").date()
-                        makeup_dates.append(makeup_date)
-                    except ValueError:
-                        pass
-        
-        # Determine which days to show based on course routine (for filtering makeup dates)
-        days_to_show = []
-        if 'Friday' in course_routines and 'Saturday' in course_routines:
-            days_to_show = ['Friday', 'Saturday']
-        elif 'Friday' in course_routines:
-            days_to_show = ['Friday']
-        elif 'Saturday' in course_routines:
-            days_to_show = ['Saturday']
-        else:
-            # Fallback: show Friday and Saturday if no specific schedule found
-            days_to_show = ['Friday', 'Saturday']
-        
-        # Filter makeup dates based on course's scheduled day
-        # If course is on Friday only, keep only Friday makeup dates
-        # If course is on Saturday only, keep only Saturday makeup dates
-        filtered_makeup_dates = []
-        for makeup_date in makeup_dates:
-            makeup_day = makeup_date.strftime('%A')
-            # Only include makeup dates that match the course's scheduled day
-            if makeup_day in days_to_show:
-                filtered_makeup_dates.append(makeup_date)
-        
-        # Combine routine dates and filtered makeup dates (same as routine PDF export)
-        all_dates = set(routine_dates) | set(filtered_makeup_dates)
-        attendance_dates = sorted(all_dates)
-        
+
+        attendance_dates = _attendance_calendar_class_dates(semester, course, selected_centre)
+        if not attendance_dates:
+            attendance_dates = list(
+                Attendance.objects.filter(course=course, semester=semester)
+                .values_list('attendance_date', flat=True)
+                .distinct()
+                .order_by('attendance_date')
+            )
+
         # Get centre name for header
         centre_name = None
         if students.exists():

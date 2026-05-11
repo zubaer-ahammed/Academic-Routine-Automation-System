@@ -1861,6 +1861,17 @@
             box-sizing: border-box;
         }
     }
+
+    /* Attendance filter: tighter Term column (Student Session uses normal col width) */
+    .bou-filter-form .bou-filter-col-narrow {
+        min-width: 0;
+    }
+    @media (min-width: 768px) {
+        .bou-filter-form .bou-filter-col-narrow .form-group select {
+            padding-left: 8px;
+            padding-right: 10px;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -1886,15 +1897,13 @@
                 <form class="bou-filter-form" method="get" action="{% url 'attendance-calendar' %}" style="overflow: visible;">
                     <input type="hidden" id="curriculum" value="{{ selected_curriculum_id|default:'' }}">
                     <div class="row" style="overflow: visible;">
-                <div class="col-md-2">
+                <div class="col-md-1 bou-filter-col-narrow">
                     <div class="form-group">
-                        <label for="centre">Study Centre:</label>
-                        <select name="centre" id="centre" onchange="loadSemestersForCentre(this.value)">
-                            <option value="">-- Centre --</option>
-                            {% for centre in centres %}
-                                <option value="{{ centre.id }}" {% if selected_centre_id and selected_centre_id|stringformat:"s" == centre.id|stringformat:"s" %}selected{% endif %}>
-                                    {{ centre.name }}
-                                </option>
+                        <label for="filter-term">Term</label>
+                        <select name="term" id="filter-term" title="Filter semesters by term">
+                            <option value="">— Any —</option>
+                            {% for t in term_choices %}
+                                <option value="{{ t }}" {% if selected_term == t %}selected{% endif %}>{{ t }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -1914,22 +1923,24 @@
                 </div>
                 <div class="col-md-2">
                     <div class="form-group">
-                        <label for="filter-term">Term</label>
-                        <select name="term" id="filter-term" title="Filter semesters by term">
-                            <option value="">— Any —</option>
-                            {% for t in term_choices %}
-                                <option value="{{ t }}" {% if selected_term == t %}selected{% endif %}>{{ t }}</option>
+                        <label for="filter-session">Student Session</label>
+                        <select name="session" id="filter-session" title="Filter students by their session (enrolled in selected semester)">
+                            <option value="">All</option>
+                            {% for s in session_choices %}
+                                <option value="{{ s }}" {% if selected_session == s %}selected{% endif %}>{{ s }}</option>
                             {% endfor %}
                         </select>
                     </div>
                 </div>
                 <div class="col-md-2">
                     <div class="form-group">
-                        <label for="filter-session">Session</label>
-                        <select name="session" id="filter-session" title="Filter semesters by session">
-                            <option value="">— Any —</option>
-                            {% for s in session_choices %}
-                                <option value="{{ s }}" {% if selected_session == s %}selected{% endif %}>{{ s }}</option>
+                        <label for="centre">Study Centre:</label>
+                        <select name="centre" id="centre" onchange="loadSemestersForCentre(this.value)">
+                            <option value="">-- Centre --</option>
+                            {% for centre in centres %}
+                                <option value="{{ centre.id }}" {% if selected_centre_id and selected_centre_id|stringformat:"s" == centre.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ centre.name }}
+                                </option>
                             {% endfor %}
                         </select>
                     </div>
@@ -1947,7 +1958,7 @@
                         </select>
                     </div>
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-3">
                     <div class="form-group">
                         <label>&nbsp;</label>
                         <div class="bou-filter-actions-row">
@@ -2377,17 +2388,43 @@ function initAttendanceViewportStickyHeader() {
     setTimeout(() => { syncWidths(); syncPosition(); }, 600);
 }
 
-function attendanceFilterTermSessionQuery() {
+function attendanceFilterTermQuery() {
     const t = document.getElementById('filter-term');
-    const s = document.getElementById('filter-session');
     let q = '';
     if (t && t.value) {
         q += `&term=${encodeURIComponent(t.value)}`;
     }
-    if (s && s.value) {
-        q += `&session=${encodeURIComponent(s.value)}`;
-    }
     return q;
+}
+
+function loadStudentSessionsSelect(semesterId, preserveSession) {
+    const sel = document.getElementById('filter-session');
+    const centreSelect = document.getElementById('centre');
+    if (!sel) return;
+    const preserve = preserveSession != null && preserveSession !== undefined ? String(preserveSession) : '';
+    sel.innerHTML = '<option value="">All</option>';
+    if (!semesterId) return;
+    const centreId = centreSelect ? centreSelect.value : '';
+    let url = `{% url 'get-student-sessions-attendance' %}?semester_id=${encodeURIComponent(semesterId)}`;
+    if (centreId) {
+        url += `&centre_id=${encodeURIComponent(centreId)}`;
+    }
+    fetch(url + `&t=${Date.now()}`)
+        .then((r) => r.json())
+        .then((data) => {
+            const list = data && data.sessions ? data.sessions : [];
+            list.forEach((s) => {
+                if (!s) return;
+                const opt = document.createElement('option');
+                opt.value = s;
+                opt.textContent = s;
+                sel.appendChild(opt);
+            });
+            if (preserve && [...sel.options].some((o) => o.value === preserve)) {
+                sel.value = preserve;
+            }
+        })
+        .catch(() => {});
 }
 
 // Function to load semesters for a selected curriculum
@@ -2416,7 +2453,7 @@ function attendanceFilterTermSessionQuery() {
         if (centreId) {
             url += `&centre_id=${centreId}`;
         }
-        url += attendanceFilterTermSessionQuery();
+        url += attendanceFilterTermQuery();
         url += `&t=${Date.now()}`;
         
         fetch(url)
@@ -2445,7 +2482,14 @@ function attendanceFilterTermSessionQuery() {
                    if (preserveSemesterId) {
                        setTimeout(function() {
                            semesterSelect.value = String(preserveSemesterId);
+                           const pv = window.__bouPreserveStudentSession;
+                           window.__bouPreserveStudentSession = undefined;
+                           loadStudentSessionsSelect(String(preserveSemesterId), pv);
                        }, 50);
+                   } else {
+                       const pv = window.__bouPreserveStudentSession;
+                       window.__bouPreserveStudentSession = undefined;
+                       loadStudentSessionsSelect(semesterSelect.value || '', pv);
                    }
         })
         .catch(error => {
@@ -2481,6 +2525,7 @@ function loadCoursesForSemester(semesterId) {
     courseSelect.innerHTML = '<option value="">-- Course --</option>';
     
     if (!semesterId) {
+        loadStudentSessionsSelect('', '');
         return;
     }
     
@@ -2509,6 +2554,7 @@ function loadCoursesForSemester(semesterId) {
                 option.textContent = course.display_name;
                 courseSelect.appendChild(option);
             });
+            loadStudentSessionsSelect(String(semesterId), '');
         })
         .catch(error => {
             console.error('Error loading courses:', error);
@@ -2562,6 +2608,9 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
 
+    const urlParamsInit = new URLSearchParams(window.location.search);
+    window.__bouPreserveStudentSession = urlParamsInit.get('session') || '';
+
     let isInitializing = true;
 
     function reloadSemestersFromFilters() {
@@ -2587,8 +2636,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     if (sessionSelect) {
         sessionSelect.addEventListener('change', function() {
-            if (!isInitializing) {
-                reloadSemestersFromFilters();
+            if (isInitializing) return;
+            const sem = semesterSelect ? semesterSelect.value : '';
+            const crs = courseSelect ? courseSelect.value : '';
+            if (sem && crs) {
+                loadStudentsForCourse();
             }
         });
     }

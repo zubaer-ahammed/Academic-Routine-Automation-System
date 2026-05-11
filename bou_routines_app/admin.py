@@ -849,7 +849,7 @@ class SemesterCurriculumListFilter(BaseCurriculumNewDefaultListFilter):
 
 @admin.register(Semester)
 class SemesterAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'semester_full_name', 'term', 'session', 'curriculum')
+    list_display = ('id', 'name', 'semester_full_name', 'term', 'display_current_session', 'curriculum')
     list_filter = (SemesterCurriculumListFilter,)
     search_fields = ('name', 'curriculum__name')
     ordering = ('name',)
@@ -881,6 +881,18 @@ class SemesterAdmin(admin.ModelAdmin):
             return redir
         return super().changelist_view(request, extra_context)
 
+    def display_current_session(self, obj):
+        return obj.session or ''
+
+    display_current_session.short_description = 'Current Session'
+    display_current_session.admin_order_field = 'session'
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        if 'session' in form.base_fields:
+            form.base_fields['session'].label = 'Current Session'
+        return form
+
 @admin.register(NewRoutine)
 class NewRoutineAdmin(admin.ModelAdmin):
     list_display = ('id', 'semester', 'course', 'class_date', 'day', 'start_time', 'end_time', 'get_teacher')
@@ -902,7 +914,7 @@ class LoginLogAdmin(admin.ModelAdmin):
 
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'get_centre', 'get_semesters', 'session', 'email')
+    list_display = ('id', 'name', 'get_centre', 'get_semesters', 'display_student_session', 'email')
     list_filter = ('semesters', 'session', 'centre', 'gender')
     search_fields = ('id', 'name', 'roll_number', 'email', 'user__username', 'user__email', 'father_name', 'mother_name')
     ordering = ('id',)
@@ -923,6 +935,18 @@ class StudentAdmin(admin.ModelAdmin):
     def get_semesters(self, obj):
         return ", ".join([semester.name for semester in obj.semesters.all()])
     get_semesters.short_description = 'Semesters'
+
+    def display_student_session(self, obj):
+        return obj.session or ''
+
+    display_student_session.short_description = 'Student Session'
+    display_student_session.admin_order_field = 'session'
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        if 'session' in form.base_fields:
+            form.base_fields['session'].label = 'Student Session'
+        return form
     
     def get_centre(self, obj):
         return obj.centre.name if obj.centre else "-"

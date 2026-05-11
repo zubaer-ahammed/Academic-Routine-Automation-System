@@ -165,6 +165,63 @@ def _default_new_curriculum(curricula_qs):
     return c, (c.id if c else None)
 
 
+# Marks / attendance filters: prefer this term when present (GET default, no explicit `term=`).
+_MARKS_ATTENDANCE_DEFAULT_TERM_CANDIDATES = ("251 Term", "251")
+
+
+def _pick_default_term_for_curriculum(curriculum):
+    """If the curriculum has a semester using one of the preferred terms, return that value."""
+    if not curriculum:
+        return ""
+    terms = {
+        (t or "").strip()
+        for t in Semester.objects.filter(curriculum=curriculum)
+        .exclude(term__isnull=True)
+        .exclude(term="")
+        .values_list("term", flat=True)
+    }
+    for cand in _MARKS_ATTENDANCE_DEFAULT_TERM_CANDIDATES:
+        if cand in terms:
+            return cand
+    # Case-insensitive match; return the DB spelling so queryset filter(term=…) matches.
+    lower_map = {(t or "").strip().lower(): (t or "").strip() for t in terms}
+    for cand in _MARKS_ATTENDANCE_DEFAULT_TERM_CANDIDATES:
+        key = (cand or "").strip().lower()
+        if key and key in lower_map:
+            return lower_map[key]
+    return ""
+
+
+def _first_semester_id_matching_term(semester_list, term_value):
+    """Pick one semester id from a list of Semester instances matching term_value (stable order)."""
+    if not semester_list or not (term_value or "").strip():
+        return None
+    tv = (term_value or "").strip()
+    matching = [s for s in semester_list if (s.term or "").strip() == tv]
+    if not matching:
+        return None
+    best = min(matching, key=lambda s: (s.order, s.name or "", s.id))
+    return best.id
+
+
+def _student_session_choices_for_semester(semester_id, centre_id=None):
+    """Distinct Student.session values for students enrolled in this semester (optional centre)."""
+    if not semester_id:
+        return []
+    qs = Student.objects.filter(semesters__id=int(semester_id)).exclude(
+        session__isnull=True
+    ).exclude(session="")
+    if centre_id:
+        try:
+            qs = qs.filter(centre_id=int(centre_id))
+        except (ValueError, TypeError):
+            pass
+    return sorted(
+        {(s or "").strip() for s in qs.values_list("session", flat=True)},
+        key=lambda x: (x.lower(), x),
+    )
+
+
 def _attendance_calendar_class_dates(semester, course, selected_centre):
     """
     Class-date columns for attendance exports: same rules as attendance_calendar —
@@ -4908,6 +4965,14 @@ def attendance_calendar(request):
         )
         if _y1_att:
             marks_default_semester_id = _y1_att.id
+        if marks_default_semester_id is None:
+            _first_any = (
+                Semester.objects.filter(curriculum=selected_curriculum)
+                .order_by('order', 'id')
+                .first()
+            )
+            if _first_any:
+                marks_default_semester_id = _first_any.id
 
     raw_semester_for_filter = request.GET.get('semester') or request.POST.get('semester')
     early_semester_id = None
@@ -4932,15 +4997,29 @@ def attendance_calendar(request):
     if _term_session_source_id and selected_curriculum:
         try:
             _es = Semester.objects.get(id=_term_session_source_id, curriculum=selected_curriculum)
-            if 'term' not in request.GET:
-                selected_term = (_es.term or '').strip()
-            if 'session' not in request.GET:
-                selected_session = (_es.session or '').strip()
+            if 'term' not in request.GET and 'term' not in request.POST:
+                if 'semester' in request.GET or 'semester' in request.POST:
+                    selected_term = (_es.term or '').strip()
+                else:
+                    selected_term = _pick_default_term_for_curriculum(
+                        selected_curriculum
+                    ) or (_es.term or '').strip()
         except Semester.DoesNotExist:
             pass
 
+    if (
+        selected_curriculum
+        and not (selected_term or '').strip()
+        and 'term' not in request.GET
+        and 'term' not in request.POST
+        and 'semester' not in request.GET
+        and 'semester' not in request.POST
+    ):
+        picked = _pick_default_term_for_curriculum(selected_curriculum)
+        if picked:
+            selected_term = picked
+
     term_choices = []
-    session_choices = []
     if selected_curriculum:
         _semester_base = Semester.objects.filter(curriculum=selected_curriculum)
         term_choices = sorted(
@@ -4950,18 +5029,9 @@ def attendance_calendar(request):
             },
             key=lambda x: (x.lower(), x),
         )
-        session_choices = sorted(
-            {
-                (s or '').strip()
-                for s in _semester_base.exclude(session__isnull=True).exclude(session='').values_list('session', flat=True)
-            },
-            key=lambda x: (x.lower(), x),
-        )
         semesters_qs = _semester_base.order_by('order', 'name')
         if selected_term:
             semesters_qs = semesters_qs.filter(term=selected_term)
-        if selected_session:
-            semesters_qs = semesters_qs.filter(session=selected_session)
         semester_list = list(semesters_qs)
         if (
             marks_default_semester_id
@@ -4986,8 +5056,18 @@ def attendance_calendar(request):
         semesters = semester_list
     else:
         term_choices = []
-        session_choices = []
         semesters = []
+
+    default_semester_id_for_filter = marks_default_semester_id
+    if selected_curriculum and semesters:
+        if (
+            request.method == 'GET'
+            and 'semester' not in request.GET
+            and selected_term
+        ):
+            sid = _first_semester_id_matching_term(semesters, selected_term)
+            if sid is not None:
+                default_semester_id_for_filter = sid
 
     # Get semester and course from request
     semester_id = request.GET.get('semester') or request.POST.get('semester')
@@ -5023,11 +5103,16 @@ def attendance_calendar(request):
 
     if (
         semester_id is None
-        and marks_default_semester_id is not None
+        and default_semester_id_for_filter is not None
         and request.method == 'GET'
         and 'semester' not in request.GET
     ):
-        semester_id = marks_default_semester_id
+        semester_id = default_semester_id_for_filter
+
+    session_choices = _student_session_choices_for_semester(
+        semester_id,
+        selected_centre_id if selected_centre_id else None,
+    )
     
     # Filter courses by semester and teacher
     courses_queryset = Course.objects.none()  # Default to empty queryset
@@ -5106,6 +5191,8 @@ def attendance_calendar(request):
             # Filter by selected centre if one is selected
             if selected_centre:
                 students = students.filter(centre=selected_centre)
+            if (selected_session or '').strip():
+                students = students.filter(session=(selected_session or '').strip())
             
             students = students.extra(
                 select={
@@ -5500,6 +5587,36 @@ def set_attendance_midterm_override_dates(request):
     return JsonResponse({'success': True, 'attendance_midterm_override_dates': normalized_csv})
 
 @login_required
+def get_student_sessions_for_semester(request):
+    """Distinct Student.session values for students enrolled in the semester (optional centre)."""
+    if not (
+        request.user.is_superuser
+        or request.user.is_staff
+        or check_teacher_permission(request.user, 'can_mark_attendance')
+        or check_teacher_permission(request.user, 'can_manage_ca')
+    ):
+        return JsonResponse({'error': 'Permission denied'}, status=403)
+    raw_sid = (request.GET.get('semester_id') or '').strip()
+    if not raw_sid:
+        return JsonResponse({'sessions': []})
+    try:
+        semester_pk = int(raw_sid)
+    except (ValueError, TypeError):
+        return JsonResponse({'sessions': []})
+    if not Semester.objects.filter(pk=semester_pk).exists():
+        return JsonResponse({'sessions': []})
+    centre_raw = (request.GET.get('centre_id') or '').strip()
+    centre_id = None
+    if centre_raw:
+        try:
+            centre_id = int(centre_raw)
+        except (ValueError, TypeError):
+            centre_id = None
+    sessions = _student_session_choices_for_semester(semester_pk, centre_id)
+    return JsonResponse({'sessions': sessions})
+
+
+@login_required
 def get_semesters_for_curriculum(request):
     """AJAX endpoint to get semesters for a specific curriculum"""
     if not (
@@ -5513,7 +5630,6 @@ def get_semesters_for_curriculum(request):
     curriculum_id = request.GET.get('curriculum_id')
     centre_id = request.GET.get('centre_id')
     term = (request.GET.get('term') or '').strip()
-    session = (request.GET.get('session') or '').strip()
     for_marks = (
         request.GET.get('for_marks') == '1'
         and (
@@ -5538,8 +5654,6 @@ def get_semesters_for_curriculum(request):
         # Note: Semesters are now shared across centres. Centre-specific filtering happens at SemesterCourse level.
         if term:
             semesters = semesters.filter(term=term)
-        if session:
-            semesters = semesters.filter(session=session)
         
         semesters = semesters.order_by('order', 'name')
         
@@ -10234,6 +10348,14 @@ def ca_management(request):
         )
         if _y1_default:
             marks_default_semester_id = _y1_default.id
+        if marks_default_semester_id is None:
+            _first_any = (
+                Semester.objects.filter(curriculum=selected_curriculum)
+                .order_by('order', 'id')
+                .first()
+            )
+            if _first_any:
+                marks_default_semester_id = _first_any.id
 
     raw_semester_for_filter = request.GET.get('semester') or request.POST.get('semester')
     early_semester_id = None
@@ -10258,15 +10380,29 @@ def ca_management(request):
     if _term_session_source_id and selected_curriculum:
         try:
             _es = Semester.objects.get(id=_term_session_source_id, curriculum=selected_curriculum)
-            if 'term' not in request.GET:
-                selected_term = (_es.term or '').strip()
-            if 'session' not in request.GET:
-                selected_session = (_es.session or '').strip()
+            if 'term' not in request.GET and 'term' not in request.POST:
+                if 'semester' in request.GET or 'semester' in request.POST:
+                    selected_term = (_es.term or '').strip()
+                else:
+                    selected_term = _pick_default_term_for_curriculum(
+                        selected_curriculum
+                    ) or (_es.term or '').strip()
         except Semester.DoesNotExist:
             pass
 
+    if (
+        selected_curriculum
+        and not (selected_term or '').strip()
+        and 'term' not in request.GET
+        and 'term' not in request.POST
+        and 'semester' not in request.GET
+        and 'semester' not in request.POST
+    ):
+        picked = _pick_default_term_for_curriculum(selected_curriculum)
+        if picked:
+            selected_term = picked
+
     term_choices = []
-    session_choices = []
     if selected_curriculum:
         _semester_base = Semester.objects.filter(curriculum=selected_curriculum)
         term_choices = sorted(
@@ -10276,18 +10412,9 @@ def ca_management(request):
             },
             key=lambda x: (x.lower(), x),
         )
-        session_choices = sorted(
-            {
-                (s or '').strip()
-                for s in _semester_base.exclude(session__isnull=True).exclude(session='').values_list('session', flat=True)
-            },
-            key=lambda x: (x.lower(), x),
-        )
         semesters_qs = _semester_base.order_by('order', 'name')
         if selected_term:
             semesters_qs = semesters_qs.filter(term=selected_term)
-        if selected_session:
-            semesters_qs = semesters_qs.filter(session=selected_session)
         semester_list = list(semesters_qs)
         if (
             marks_default_semester_id
@@ -10312,8 +10439,18 @@ def ca_management(request):
         semesters = semester_list
     else:
         term_choices = []
-        session_choices = []
         semesters = []
+
+    default_semester_id_for_filter = marks_default_semester_id
+    if selected_curriculum and semesters:
+        if (
+            request.method == 'GET'
+            and 'semester' not in request.GET
+            and selected_term
+        ):
+            sid = _first_semester_id_matching_term(semesters, selected_term)
+            if sid is not None:
+                default_semester_id_for_filter = sid
     
     # Get semester and course from request
     semester_id = request.GET.get('semester') or request.POST.get('semester')
@@ -10347,11 +10484,16 @@ def ca_management(request):
 
     if (
         semester_id is None
-        and marks_default_semester_id is not None
+        and default_semester_id_for_filter is not None
         and request.method == 'GET'
         and 'semester' not in request.GET
     ):
-        semester_id = marks_default_semester_id
+        semester_id = default_semester_id_for_filter
+
+    session_choices = _student_session_choices_for_semester(
+        semester_id,
+        selected_centre_id if selected_centre_id else None,
+    )
     
     # Initialize selected semester and course objects
     selected_semester = None
@@ -10422,6 +10564,8 @@ def ca_management(request):
             ).order_by('-first_two_digits', 'last_three_digits')
             if selected_centre:
                 students = students.filter(centre=selected_centre)
+            if (selected_session or '').strip():
+                students = students.filter(session=(selected_session or '').strip())
 
             # Get existing CA marks for these students
             existing_marks = CAMark.objects.filter(

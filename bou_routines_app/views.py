@@ -6316,149 +6316,17 @@ def export_attendance_pdf(request):
         if centre_name:
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
         
-        # Build right column (contact person box)
-        # Get coordinator for this specific semester/centre combination
-        coordinator = None
-        if centre_id:
-            try:
-                centre_obj = Centre.objects.get(id=centre_id)
-                semester_centre_coordinator = SemesterCentreCoordinator.objects.filter(
-                    semester=semester,
-                    centre=centre_obj
-                ).select_related('program_coordinator', 'program_coordinator__teacher').first()
-                if semester_centre_coordinator:
-                    coordinator = semester_centre_coordinator.program_coordinator
-            except Centre.DoesNotExist:
-                pass
-        # Fallback: try to get centre from centre_name if centre_id not available
-        if not coordinator and centre_name:
-            try:
-                centre_obj = Centre.objects.get(name=centre_name)
-                semester_centre_coordinator = SemesterCentreCoordinator.objects.filter(
-                    semester=semester,
-                    centre=centre_obj
-                ).select_related('program_coordinator', 'program_coordinator__teacher').first()
-                if semester_centre_coordinator:
-                    coordinator = semester_centre_coordinator.program_coordinator
-            except Centre.DoesNotExist:
-                pass
-        contact_info_lines = []
-        
-        if coordinator:
-            contact_label = Paragraph(
-                'Contact Person',
-                ParagraphStyle(
-                    'ContactLabel',
-                    fontName='Helvetica-Bold',
-                    fontSize=11,
-                    alignment=0,
-                    textColor=colors.white,
-                    spaceAfter=0,
-                    spaceBefore=0,
-                    leading=14,
-                )
-            )
-            contact_label_table = Table(
-                [[contact_label]],
-                colWidths=[190],
-                hAlign='RIGHT',
-                style=TableStyle([
-                    ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-                    ('TOPPADDING', (0,0), (-1,-1), -3),
-                    ('LEFTPADDING', (0,0), (-1,-1), 0),
-                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
-                ])
-            )
-            if coordinator.teacher:
-                contact_info_lines.append(coordinator.teacher.name)
-            if coordinator.designation:
-                contact_info_lines.append(coordinator.designation)
-            if coordinator.secondary_designation:
-                contact_info_lines.append(coordinator.secondary_designation)
-            contact_info_lines.append('Bangladesh Open University')
-            if coordinator.phone:
-                contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
-            if coordinator.email:
-                contact_info_lines.append(f'email:{coordinator.email}')
-        else:
-            contact_info_lines.append('Bangladesh Open University')
-            contact_label = Paragraph(
-                'Contact Person',
-                ParagraphStyle(
-                    'ContactLabel',
-                    fontName='Helvetica-Bold',
-                    fontSize=11,
-                    alignment=0,
-                    textColor=colors.white,
-                    spaceAfter=0,
-                    spaceBefore=0,
-                    leading=14,
-                )
-            )
-            contact_label_table = Table(
-                [[contact_label]],
-                colWidths=[190],
-                hAlign='RIGHT',
-                style=TableStyle([
-                    ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-                    ('TOPPADDING', (0,0), (-1,-1), -3),
-                    ('LEFTPADDING', (0,0), (-1,-1), 0),
-                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
-                ])
-            )
-        
-        contact_info_para = Paragraph(
-            '<br/>'.join(contact_info_lines),
-            ParagraphStyle(
-                'ContactBox',
-                fontName='Helvetica',
-                fontSize=10,
-                alignment=0,
-                textColor=colors.black,
-                leftIndent=2,
-                leading=10,
-                spaceBefore=0,
-                spaceAfter=0,
-            )
-        )
-        contact_table = Table(
-            [[contact_label_table], [contact_info_para]],
-            colWidths=[190],
-            hAlign='RIGHT',
-        )
-        contact_table.setStyle(TableStyle([
-            ('BOX', (0, 0), (-1, -1), 1, colors.black),
-            ('ROUNDED', (0, 0), (-1, -1), 6),
-            ('BACKGROUND', (0, 0), (0, 0), colors.HexColor('#2c3e50')),
-            ('LEFTPADDING', (0, 0), (-1, -1), 8),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-            ('TOPPADDING', (0, 0), (0, 0), 6),
-            ('BOTTOMPADDING', (0, 0), (0, 0), 4),
-            ('TOPPADDING', (0, 1), (0, 1), 4),
-            ('BOTTOMPADDING', (0, 1), (0, 1), 6),
-        ]))
-        
+        # Header block (no Contact Person box)
         left_box_table = Table(
             [[left_content]],
-            colWidths=[available_width-190],
-            hAlign='LEFT',
+            colWidths=[available_width],
+            hAlign='CENTER',
             style=TableStyle([
-                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ])
         )
-        two_col_table = Table(
-            [[left_box_table, contact_table]],
-            colWidths=[available_width-190, 190],
-            hAlign='LEFT'
-        )
-        two_col_table.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (0, 0), 'MIDDLE'),
-            ('VALIGN', (1, 0), (1, 0), 'MIDDLE'),
-            ('ALIGN', (0, 0), (0, 0), 'CENTER'),
-            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-        ]))
         elements.append(Spacer(1, 4))
-        elements.append(two_col_table)
+        elements.append(left_box_table)
         elements.append(Spacer(1, 4))
         
         # Build table data
@@ -6834,149 +6702,17 @@ def export_blank_attendance_pdf(request):
         if centre_name:
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
         
-        # Build right column (contact person box)
-        # Get coordinator for this specific semester/centre combination
-        coordinator = None
-        if centre_id:
-            try:
-                centre_obj = Centre.objects.get(id=centre_id)
-                semester_centre_coordinator = SemesterCentreCoordinator.objects.filter(
-                    semester=semester,
-                    centre=centre_obj
-                ).select_related('program_coordinator', 'program_coordinator__teacher').first()
-                if semester_centre_coordinator:
-                    coordinator = semester_centre_coordinator.program_coordinator
-            except Centre.DoesNotExist:
-                pass
-        # Fallback: try to get centre from centre_name if centre_id not available
-        if not coordinator and centre_name:
-            try:
-                centre_obj = Centre.objects.get(name=centre_name)
-                semester_centre_coordinator = SemesterCentreCoordinator.objects.filter(
-                    semester=semester,
-                    centre=centre_obj
-                ).select_related('program_coordinator', 'program_coordinator__teacher').first()
-                if semester_centre_coordinator:
-                    coordinator = semester_centre_coordinator.program_coordinator
-            except Centre.DoesNotExist:
-                pass
-        contact_info_lines = []
-        
-        if coordinator:
-            contact_label = Paragraph(
-                'Contact Person',
-                ParagraphStyle(
-                    'ContactLabel',
-                    fontName='Helvetica-Bold',
-                    fontSize=11,
-                    alignment=0,
-                    textColor=colors.white,
-                    spaceAfter=0,
-                    spaceBefore=0,
-                    leading=14,
-                )
-            )
-            contact_label_table = Table(
-                [[contact_label]],
-                colWidths=[190],
-                hAlign='RIGHT',
-                style=TableStyle([
-                    ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-                    ('TOPPADDING', (0,0), (-1,-1), -3),
-                    ('LEFTPADDING', (0,0), (-1,-1), 0),
-                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
-                ])
-            )
-            if coordinator.teacher:
-                contact_info_lines.append(coordinator.teacher.name)
-            if coordinator.designation:
-                contact_info_lines.append(coordinator.designation)
-            if coordinator.secondary_designation:
-                contact_info_lines.append(coordinator.secondary_designation)
-            contact_info_lines.append('Bangladesh Open University')
-            if coordinator.phone:
-                contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
-            if coordinator.email:
-                contact_info_lines.append(f'email:{coordinator.email}')
-        else:
-            contact_info_lines.append('Bangladesh Open University')
-            contact_label = Paragraph(
-                'Contact Person',
-                ParagraphStyle(
-                    'ContactLabel',
-                    fontName='Helvetica-Bold',
-                    fontSize=11,
-                    alignment=0,
-                    textColor=colors.white,
-                    spaceAfter=0,
-                    spaceBefore=0,
-                    leading=14,
-                )
-            )
-            contact_label_table = Table(
-                [[contact_label]],
-                colWidths=[190],
-                hAlign='RIGHT',
-                style=TableStyle([
-                    ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-                    ('TOPPADDING', (0,0), (-1,-1), -3),
-                    ('LEFTPADDING', (0,0), (-1,-1), 0),
-                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
-                ])
-            )
-        
-        contact_info_para = Paragraph(
-            '<br/>'.join(contact_info_lines),
-            ParagraphStyle(
-                'ContactBox',
-                fontName='Helvetica',
-                fontSize=10,
-                alignment=0,
-                textColor=colors.black,
-                leftIndent=2,
-                leading=10,
-                spaceBefore=0,
-                spaceAfter=0,
-            )
-        )
-        contact_table = Table(
-            [[contact_label_table], [contact_info_para]],
-            colWidths=[190],
-            hAlign='RIGHT',
-        )
-        contact_table.setStyle(TableStyle([
-            ('BOX', (0, 0), (-1, -1), 1, colors.black),
-            ('ROUNDED', (0, 0), (-1, -1), 6),
-            ('BACKGROUND', (0, 0), (0, 0), colors.HexColor('#2c3e50')),
-            ('LEFTPADDING', (0, 0), (-1, -1), 8),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-            ('TOPPADDING', (0, 0), (0, 0), 6),
-            ('BOTTOMPADDING', (0, 0), (0, 0), 4),
-            ('TOPPADDING', (0, 1), (0, 1), 4),
-            ('BOTTOMPADDING', (0, 1), (0, 1), 6),
-        ]))
-        
+        # Header block (no Contact Person box)
         left_box_table = Table(
             [[left_content]],
-            colWidths=[available_width-190],
-            hAlign='LEFT',
+            colWidths=[available_width],
+            hAlign='CENTER',
             style=TableStyle([
-                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ])
         )
-        two_col_table = Table(
-            [[left_box_table, contact_table]],
-            colWidths=[available_width-190, 190],
-            hAlign='LEFT'
-        )
-        two_col_table.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (0, 0), 'MIDDLE'),
-            ('VALIGN', (1, 0), (1, 0), 'MIDDLE'),
-            ('ALIGN', (0, 0), (0, 0), 'CENTER'),
-            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-        ]))
         elements.append(Spacer(1, 4))
-        elements.append(two_col_table)
+        elements.append(left_box_table)
         elements.append(Spacer(1, 4))
         
         # Build table data
@@ -7439,7 +7175,7 @@ def export_ca_marks_pdf(request):
             combined = f'{term} Term {semester_full_name}'.strip()
             left_content.append(Paragraph(combined, header_style_small))
         left_content.append(Spacer(1, 2))
-        left_content.append(Paragraph('Continuous Assessment Marks', header_style_bold))
+        left_content.append(Paragraph('Continuous Assessment (CA) Marks', header_style_bold))
         # Get teacher name from SemesterCourse
         teacher_name = None
         if centre_id:
@@ -7722,6 +7458,7 @@ def export_ca_marks_pdf(request):
         style_commands = [
             # Header styling (borders only; no background fill)
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('ALIGN', (2, 0), (2, -1), 'LEFT'),  # Name column (SL., Student ID, Name)
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('FONTNAME', (0, 0), (-1, header_rows - 1), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, header_rows - 1), 9),
@@ -8279,6 +8016,7 @@ def export_blank_ca_marks_pdf(request):
             ('BACKGROUND', (0, 0), (-1, header_rows - 1), colors.HexColor('#2c3e50')),
             ('TEXTCOLOR', (0, 0), (-1, header_rows - 1), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('ALIGN', (1, 0), (1, -1), 'LEFT'),  # Name column (Student ID, Name, …)
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('FONTNAME', (0, 0), (-1, header_rows - 1), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, header_rows - 1), 9),
@@ -8478,6 +8216,20 @@ def export_ca_marks_excel(request):
             'valign': 'vcenter',
             'border': 1
         })
+        name_header_format = workbook.add_format({
+            'bold': True,
+            'font_size': 11,
+            'align': 'left',
+            'valign': 'vcenter',
+            'bg_color': '#2c3e50',
+            'font_color': 'white',
+            'border': 1,
+        })
+        name_cell_format = workbook.add_format({
+            'align': 'left',
+            'valign': 'vcenter',
+            'border': 1,
+        })
         
         # Title
         if course.is_lab:
@@ -8498,7 +8250,8 @@ def export_ca_marks_excel(request):
         row = 3
         col = 0
         for header in headers:
-            worksheet.write(row, col, header, header_format)
+            fmt = name_header_format if col == 1 else header_format
+            worksheet.write(row, col, header, fmt)
             col += 1
         
         # Data rows
@@ -8508,7 +8261,7 @@ def export_ca_marks_excel(request):
             mark = ca_marks.get(student.id)
             worksheet.write(row, col, student.id, cell_format)
             col += 1
-            worksheet.write(row, col, student.name, cell_format)
+            worksheet.write(row, col, student.name, name_cell_format)
             col += 1
             
             if mark:
@@ -9026,6 +8779,7 @@ def export_final_exam_pdf(request):
         table.setStyle(TableStyle([
             # Header styling (borders only; no background fill)
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('ALIGN', (2, 0), (2, -1), 'LEFT'),  # Name column (SL., Student ID, Name)
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 9),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
@@ -9431,6 +9185,7 @@ def export_blank_final_exam_pdf(request):
             ('BACKGROUND', (0, 0), (-1, 0), colors.white),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('ALIGN', (1, 0), (1, -1), 'LEFT'),  # Name column (Student ID, Name, …)
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 9),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
@@ -9555,6 +9310,20 @@ def export_final_exam_excel(request):
             'valign': 'vcenter',
             'border': 1
         })
+        name_header_format = workbook.add_format({
+            'bold': True,
+            'font_size': 11,
+            'align': 'left',
+            'valign': 'vcenter',
+            'bg_color': '#2c3e50',
+            'font_color': 'white',
+            'border': 1,
+        })
+        name_cell_format = workbook.add_format({
+            'align': 'left',
+            'valign': 'vcenter',
+            'border': 1,
+        })
         
         # Title
         if course.is_lab:
@@ -9578,7 +9347,8 @@ def export_final_exam_excel(request):
         row = 3
         col = 0
         for header in headers:
-            worksheet.write(row, col, header, header_format)
+            fmt = name_header_format if col == 1 else header_format
+            worksheet.write(row, col, header, fmt)
             col += 1
         
         # Data rows
@@ -9588,7 +9358,7 @@ def export_final_exam_excel(request):
             mark = final_exam_marks.get(student.id)
             worksheet.write(row, col, student.id, cell_format)
             col += 1
-            worksheet.write(row, col, student.name, cell_format)
+            worksheet.write(row, col, student.name, name_cell_format)
             col += 1
             
             if mark:
@@ -9752,12 +9522,55 @@ def _lab_final_exam_cap_for_summary(course, semester):
     return 50
 
 
-def _examiner_summary_headers_and_rows(students, course, semester, final_exam_marks, include_status=True):
+def _ca_marks_dict_for_students_course_semester(students, course, semester):
+    """Same CA lookup as ca_management: DB rows plus temp CAMark with auto attendance."""
+    ca_marks = {}
+    existing_marks = CAMark.objects.filter(
+        student__in=students,
+        course=course,
+        semester=semester,
+    )
+    for mark in existing_marks:
+        ca_marks[mark.student_id] = mark
+    for student in students:
+        if student.id not in ca_marks:
+            temp_mark = CAMark(
+                student=student,
+                course=course,
+                semester=semester,
+            )
+            temp_mark.attendance_mark = temp_mark.calculate_attendance_mark()
+            ca_marks[student.id] = temp_mark
+    return ca_marks
+
+
+def _ca_total_float(cam):
+    if not cam:
+        return 0.0
+    try:
+        return float(cam.calculate_total_ca_mark() or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _ca_total_ceil_int(cam):
+    """Same rule as CA Marks tab Total CA column (ceil_int template filter)."""
+    try:
+        return int(math.ceil(max(0.0, _ca_total_float(cam))))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+def _examiner_summary_headers_and_rows(
+    students, course, semester, final_exam_marks, include_status=True, ca_marks=None
+):
     """
     Build (headers, rows) for the Final Exam Summary tab — same figures as ca_management examiner_summary_rows.
     Each row is a list of values for Excel/PDF.
     When include_status is False (e.g. PDF export), the Status column is omitted.
     """
+    if ca_marks is None:
+        ca_marks = _ca_marks_dict_for_students_course_semester(students, course, semester)
     lab_cap = _lab_final_exam_cap_for_summary(course, semester)
     headers = []
     rows = []
@@ -9771,13 +9584,17 @@ def _examiner_summary_headers_and_rows(students, course, semester, final_exam_ma
             f'External (max {lab_cap})',
             'Variation',
             'Final total',
+            'Total CA',
+            'Total',
         ]
         if include_status:
             headers.append('Status')
         for idx, student in enumerate(students, start=1):
             fm = final_exam_marks.get(student.id)
+            cam = ca_marks.get(student.id)
+            ca_ceil = _ca_total_ceil_int(cam)
             if fm and fm.exam_absent:
-                row = [idx, student.id, student.name, 'AB', 'AB', 'AB', 'AB']
+                row = [idx, student.id, student.name, 'AB', 'AB', 'AB', 'AB', ca_ceil, 'AB']
                 if include_status:
                     row.append('AB')
                 rows.append(row)
@@ -9786,6 +9603,7 @@ def _examiner_summary_headers_and_rows(students, course, semester, final_exam_ma
             t_ext = float(fm.lab_examiner_split_total(2)) if fm else 0.0
             mo = float(fm.final_exam_total or 0) if fm else 0.0
             diff = abs(t_int - t_ext)
+            tot = round(mo + ca_ceil, 2)
             row = [
                 idx,
                 student.id,
@@ -9794,6 +9612,8 @@ def _examiner_summary_headers_and_rows(students, course, semester, final_exam_ma
                 round(t_ext, 2),
                 round(diff, 2),
                 round(mo, 2),
+                ca_ceil,
+                tot,
             ]
             if include_status:
                 row.append('OK')
@@ -9807,20 +9627,35 @@ def _examiner_summary_headers_and_rows(students, course, semester, final_exam_ma
             'Second examiner (70)',
             'Variation',
             'Third examiner (70)',
-            'Marks obtained',
+            'Final exam (70)',
+            'Total CA',
+            'Total',
         ]
         if include_status:
             headers.append('Status')
         for idx, student in enumerate(students, start=1):
             fm = final_exam_marks.get(student.id)
+            cam = ca_marks.get(student.id)
+            ca_ceil = _ca_total_ceil_int(cam)
             if not fm:
-                row = [idx, student.id, student.name, '—', '—', '—', '—', '—']
+                row = [idx, student.id, student.name, '—', '—', '—', '—', '—', ca_ceil, '—']
                 if include_status:
                     row.append('')
                 rows.append(row)
                 continue
             if fm.exam_absent:
-                row = [idx, student.id, student.name, 'AB', 'AB', 'AB', 'AB', 'AB']
+                row = [
+                    idx,
+                    student.id,
+                    student.name,
+                    'AB',
+                    'AB',
+                    'AB',
+                    'AB',
+                    'AB',
+                    ca_ceil,
+                    'AB',
+                ]
                 if include_status:
                     row.append('AB')
                 rows.append(row)
@@ -9839,6 +9674,7 @@ def _examiner_summary_headers_and_rows(students, course, semester, final_exam_ma
                 status = 'Third Examiner Needed'
             else:
                 status = 'OK'
+            tot = round(mo + ca_ceil, 2)
             row = [
                 idx,
                 student.id,
@@ -9848,6 +9684,8 @@ def _examiner_summary_headers_and_rows(students, course, semester, final_exam_ma
                 round(diff_abs, 2),
                 third_cell,
                 round(mo, 2),
+                ca_ceil,
+                tot,
             ]
             if include_status:
                 row.append(status)
@@ -9867,6 +9705,8 @@ def _examiner_summary_pdf_table_header_row(course, semester, hdr_style):
             Paragraph(f'External<br/>(max {lab_cap})', hdr_style),
             Paragraph('Variation', hdr_style),
             Paragraph('Final total', hdr_style),
+            Paragraph('Total CA', hdr_style),
+            Paragraph('Total', hdr_style),
         ]
     return [
         Paragraph('SL. No', hdr_style),
@@ -9876,7 +9716,9 @@ def _examiner_summary_pdf_table_header_row(course, semester, hdr_style):
         Paragraph('Second examiner<br/>(70)', hdr_style),
         Paragraph('Variation', hdr_style),
         Paragraph('Third examiner<br/>(70)', hdr_style),
-        Paragraph('Marks obtained', hdr_style),
+        Paragraph('Final exam<br/>(70)', hdr_style),
+        Paragraph('Total CA', hdr_style),
+        Paragraph('Total', hdr_style),
     ]
 
 
@@ -10149,13 +9991,13 @@ def export_final_exam_summary_pdf(request):
         if course.is_lab:
             sl_w, id_w, name_w = 40, 80, 150
             rest = max(40.0, available_width - sl_w - id_w - name_w)
-            u = rest / 4.0
-            col_widths = [sl_w, id_w, name_w, u, u, u, u]
+            u = rest / 6.0
+            col_widths = [sl_w, id_w, name_w, u, u, u, u, u, u]
         else:
             sl_w, id_w, name_w = 40, 80, 150
             rest = max(40.0, available_width - sl_w - id_w - name_w)
-            u = rest / 5.0
-            col_widths = [sl_w, id_w, name_w, u, u, u, u, u]
+            u = rest / 7.0
+            col_widths = [sl_w, id_w, name_w, u, u, u, u, u, u, u]
 
         tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
         tbl.setStyle(
@@ -10171,7 +10013,7 @@ def export_final_exam_summary_pdf(request):
                     ('FONTSIZE', (0, 1), (-1, -1), 8),
                     ('FONTSIZE', (1, 1), (1, -1), 9),
                     ('FONTNAME', (1, 1), (1, -1), 'Helvetica-Bold'),
-                    ('ALIGN', (2, 1), (2, -1), 'LEFT'),
+                    ('ALIGN', (2, 0), (2, -1), 'LEFT'),
                     ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
                 ]
             )
@@ -10567,30 +10409,10 @@ def ca_management(request):
             if (selected_session or '').strip():
                 students = students.filter(session=(selected_session or '').strip())
 
-            # Get existing CA marks for these students
-            existing_marks = CAMark.objects.filter(
-                student__in=students,
-                course=selected_course,
-                semester=selected_semester
+            ca_marks = _ca_marks_dict_for_students_course_semester(
+                students, selected_course, selected_semester
             )
-            
-            # Create a dictionary for easy lookup
-            for mark in existing_marks:
-                ca_marks[mark.student.id] = mark
-            
-            # For students without existing CA marks, create temporary objects with calculated attendance
-            for student in students:
-                if student.id not in ca_marks:
-                    # Create a temporary CA mark object with calculated attendance
-                    temp_mark = CAMark(
-                        student=student,
-                        course=selected_course,
-                        semester=selected_semester
-                    )
-                    # Calculate attendance mark
-                    temp_mark.attendance_mark = temp_mark.calculate_attendance_mark()
-                    ca_marks[student.id] = temp_mark
-            
+
             # Get existing Final Exam marks for these students
             existing_final_marks = FinalExamMark.objects.filter(
                 student__in=students,
@@ -10913,10 +10735,16 @@ def ca_management(request):
     ):
         for idx, student in enumerate(students, start=1):
             fm = final_exam_marks.get(student.id)
+            cm = ca_marks.get(student.id)
+            ca_ceil = _ca_total_ceil_int(cm)
             if selected_course.is_lab:
                 t_int = float(fm.lab_examiner_split_total(1)) if fm else 0.0
                 t_ext = float(fm.lab_examiner_split_total(2)) if fm else 0.0
                 mo = float(fm.final_exam_total or 0) if fm else 0.0
+                if fm and fm.exam_absent:
+                    course_total = 'AB'
+                else:
+                    course_total = round(mo + ca_ceil, 2)
                 examiner_summary_rows.append({
                     'sl': idx,
                     'student': student,
@@ -10926,6 +10754,8 @@ def ca_management(request):
                     'lab_external_total': t_ext,
                     'lab_diff': abs(t_int - t_ext),
                     'marks_obtained': mo,
+                    'total_ca': ca_ceil,
+                    'course_total': course_total,
                 })
             else:
                 t1 = float(fm.teacher1_total or 0) if fm else 0.0
@@ -10933,6 +10763,12 @@ def ca_management(request):
                 t3 = float(fm.teacher3_total or 0) if fm else 0.0
                 diff_abs = abs(t1 - t2)
                 mo = float(fm.final_exam_total or 0) if fm else 0.0
+                if fm and fm.exam_absent:
+                    course_total = 'AB'
+                elif fm:
+                    course_total = round(mo + ca_ceil, 2)
+                else:
+                    course_total = '—'
                 examiner_summary_rows.append({
                     'sl': idx,
                     'student': student,
@@ -10944,6 +10780,8 @@ def ca_management(request):
                     'diff_abs': diff_abs,
                     'marks_obtained': mo,
                     'requires_third': (fm.is_third_examiner_required if fm else False),
+                    'total_ca': ca_ceil,
+                    'course_total': course_total,
                 })
     context['examiner_summary_rows'] = examiner_summary_rows
     

@@ -1953,8 +1953,13 @@
                                     <p class="text-muted small mb-3">
                                         Consolidated view of examiner totals. <strong>Variation</strong> is the absolute difference between the first and second examiner totals.
                                         A third examiner is required when that difference is greater than 14 marks.
-                                        <strong>Marks obtained</strong> matches the stored final exam total (average of first and second; if a third evaluation is required and entered, it is included in the average).
-                                        <strong>Status</strong> matches the former Semester Final “Third examiner / OK” rule (or “Single entry” for lab courses).
+                                        {% if selected_course.is_lab %}
+                                        <strong>Final total</strong> is the stored lab semester-final total (internal and external examiners, per course rules).
+                                        {% else %}
+                                        <strong>Final exam (70)</strong> is the stored theory semester-final exam total (average of first and second; if a third evaluation is required and entered, it is included in the average).
+                                        {% endif %}
+                                        <strong>Total CA</strong> matches the CA Marks tab: raw CA total rounded up to the next integer (e.g. 4.18 → 5).
+                                        <strong>Total</strong> is Total CA plus the final exam column. <strong>Status</strong> matches the former Semester Final “Third examiner / OK” rule (or “Single entry” for lab courses).
                                     </p>
                                     {% if selected_course.is_lab %}
                                     <div class="table-responsive">
@@ -1968,6 +1973,8 @@
                                                     <th>External (max {{ lab_final_exam_max|default:25 }})</th>
                                                     <th>Variation</th>
                                                     <th>Final total</th>
+                                                    <th>Total CA</th>
+                                                    <th>Total</th>
                                                     <th>Status</th>
                                                 </tr>
                                             </thead>
@@ -1981,6 +1988,8 @@
                                                     <td>{% if row.final_mark and row.final_mark.exam_absent %}AB{% else %}{{ row.lab_external_total|floatformat:2 }}{% endif %}</td>
                                                     <td>{% if row.final_mark and row.final_mark.exam_absent %}AB{% else %}{{ row.lab_diff|floatformat:2 }}{% endif %}</td>
                                                     <td>{% if row.final_mark and row.final_mark.exam_absent %}AB{% elif row.final_mark %}{{ row.marks_obtained|floatformat:2 }}{% else %}—{% endif %}</td>
+                                                    <td>{{ row.total_ca }}</td>
+                                                    <td>{% if row.course_total == 'AB' or row.course_total == '—' %}{{ row.course_total }}{% else %}{{ row.course_total|floatformat:2 }}{% endif %}</td>
                                                     <td>
                                                         {% if row.final_mark and row.final_mark.exam_absent %}
                                                             <span class="badge bg-secondary">AB</span>
@@ -1990,7 +1999,7 @@
                                                     </td>
                                                 </tr>
                                                 {% empty %}
-                                                <tr><td colspan="8" class="text-center text-muted">No students.</td></tr>
+                                                <tr><td colspan="10" class="text-center text-muted">No students.</td></tr>
                                                 {% endfor %}
                                             </tbody>
                                         </table>
@@ -2007,7 +2016,9 @@
                                                     <th>Second examiner (70)</th>
                                                     <th>Variation</th>
                                                     <th>Third examiner (70)</th>
-                                                    <th>Marks obtained</th>
+                                                    <th>Final exam (70)</th>
+                                                    <th>Total CA</th>
+                                                    <th>Total</th>
                                                     <th>Status</th>
                                                 </tr>
                                             </thead>
@@ -2042,6 +2053,8 @@
                                                         {% endif %}
                                                     </td>
                                                     <td>{% if row.final_mark and row.final_mark.exam_absent %}AB{% elif row.final_mark %}{{ row.marks_obtained|floatformat:2 }}{% else %}—{% endif %}</td>
+                                                    <td>{{ row.total_ca }}</td>
+                                                    <td>{% if row.course_total == 'AB' or row.course_total == '—' %}{{ row.course_total }}{% else %}{{ row.course_total|floatformat:2 }}{% endif %}</td>
                                                     <td>
                                                         {% if row.final_mark and row.final_mark.exam_absent %}
                                                             <span class="badge bg-secondary">AB</span>
@@ -2061,7 +2074,7 @@
                                                     </td>
                                                 </tr>
                                                 {% empty %}
-                                                <tr><td colspan="9" class="text-center text-muted">No students.</td></tr>
+                                                <tr><td colspan="11" class="text-center text-muted">No students.</td></tr>
                                                 {% endfor %}
                                             </tbody>
                                         </table>

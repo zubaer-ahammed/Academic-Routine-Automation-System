@@ -4844,39 +4844,34 @@ def attendance_calendar(request):
         messages.error(request, "You don't have a teacher profile. Please contact administrator.")
         return redirect('generate-routine')
     
-    # Get all curricula
     curricula = Curriculum.objects.filter(is_active=True).order_by('name')
-    
-    # Get all centres
     centres = Centre.objects.filter(is_active=True).order_by('name')
-    
-    # Get selected curriculum from request
-    selected_curriculum_id = request.GET.get('curriculum') or request.POST.get('curriculum')
+
+    # New curriculum only; do not keep ?curriculum= in the URL
+    if request.method == 'GET' and 'curriculum' in request.GET:
+        q = request.GET.copy()
+        q.pop('curriculum', None)
+        target = reverse('attendance-calendar')
+        if q:
+            target = f'{target}?{q.urlencode()}'
+        return redirect(target)
+
+    selected_curriculum_id = request.POST.get('curriculum') if request.method == 'POST' else None
     selected_curriculum = None
-    
     if selected_curriculum_id:
         try:
-            # Convert to integer to ensure type consistency
             selected_curriculum_id = int(selected_curriculum_id)
             selected_curriculum = Curriculum.objects.get(id=selected_curriculum_id)
-        except (Curriculum.DoesNotExist, ValueError):
+            if selected_curriculum.code == 'OLD':
+                selected_curriculum = None
+                selected_curriculum_id = None
+        except (Curriculum.DoesNotExist, ValueError, TypeError):
             selected_curriculum = None
             selected_curriculum_id = None
-    
-    # If no curriculum selected, use the New Curriculum by default
+
     if not selected_curriculum and curricula.exists():
-        try:
-            selected_curriculum = Curriculum.objects.get(code='NEW')
-            selected_curriculum_id = selected_curriculum.id
-        except Curriculum.DoesNotExist:
-            # Fallback: try NEW2024 if NEW doesn't exist
-            try:
-                selected_curriculum = Curriculum.objects.get(code='NEW2024')
-                selected_curriculum_id = selected_curriculum.id
-            except Curriculum.DoesNotExist:
-                selected_curriculum = curricula.first()
-                selected_curriculum_id = selected_curriculum.id if selected_curriculum else None
-    
+        selected_curriculum, selected_curriculum_id = _default_new_curriculum(curricula)
+
     # Get selected centre from request
     selected_centre_id = request.GET.get('centre') or request.POST.get('centre')
     selected_centre = None
@@ -4903,18 +4898,136 @@ def attendance_calendar(request):
             except Centre.DoesNotExist:
                 selected_centre = None
                 selected_centre_id = None
-    
-    # Filter semesters by selected curriculum
-    # Note: Semesters are now shared across centres. Centre-specific filtering happens at SemesterCourse level.
+
+    marks_default_semester_id = None
     if selected_curriculum:
-        semesters = Semester.objects.filter(curriculum=selected_curriculum).order_by('order', 'name')
+        _y1_att = (
+            Semester.objects.filter(curriculum=selected_curriculum, name='Y1S1')
+            .order_by('order', 'id')
+            .first()
+        )
+        if _y1_att:
+            marks_default_semester_id = _y1_att.id
+
+    raw_semester_for_filter = request.GET.get('semester') or request.POST.get('semester')
+    early_semester_id = None
+    if raw_semester_for_filter:
+        try:
+            early_semester_id = int(raw_semester_for_filter)
+        except (ValueError, TypeError):
+            early_semester_id = None
+
+    selected_term = (request.GET.get('term') or request.POST.get('term') or '').strip()
+    selected_session = (request.GET.get('session') or request.POST.get('session') or '').strip()
+
+    _term_session_source_id = early_semester_id
+    if (
+        _term_session_source_id is None
+        and request.method == 'GET'
+        and 'semester' not in request.GET
+        and marks_default_semester_id
+    ):
+        _term_session_source_id = marks_default_semester_id
+
+    if _term_session_source_id and selected_curriculum:
+        try:
+            _es = Semester.objects.get(id=_term_session_source_id, curriculum=selected_curriculum)
+            if 'term' not in request.GET:
+                selected_term = (_es.term or '').strip()
+            if 'session' not in request.GET:
+                selected_session = (_es.session or '').strip()
+        except Semester.DoesNotExist:
+            pass
+
+    term_choices = []
+    session_choices = []
+    if selected_curriculum:
+        _semester_base = Semester.objects.filter(curriculum=selected_curriculum)
+        term_choices = sorted(
+            {
+                (t or '').strip()
+                for t in _semester_base.exclude(term__isnull=True).exclude(term='').values_list('term', flat=True)
+            },
+            key=lambda x: (x.lower(), x),
+        )
+        session_choices = sorted(
+            {
+                (s or '').strip()
+                for s in _semester_base.exclude(session__isnull=True).exclude(session='').values_list('session', flat=True)
+            },
+            key=lambda x: (x.lower(), x),
+        )
+        semesters_qs = _semester_base.order_by('order', 'name')
+        if selected_term:
+            semesters_qs = semesters_qs.filter(term=selected_term)
+        if selected_session:
+            semesters_qs = semesters_qs.filter(session=selected_session)
+        semester_list = list(semesters_qs)
+        if (
+            marks_default_semester_id
+            and not any(s.id == marks_default_semester_id for s in semester_list)
+        ):
+            try:
+                _orph_y1 = Semester.objects.get(
+                    id=marks_default_semester_id, curriculum=selected_curriculum
+                )
+                semester_list.append(_orph_y1)
+                semester_list.sort(key=lambda s: (s.order, s.name))
+            except Semester.DoesNotExist:
+                pass
+        if early_semester_id:
+            try:
+                orphan = Semester.objects.get(id=early_semester_id, curriculum=selected_curriculum)
+                if not any(s.id == orphan.id for s in semester_list):
+                    semester_list.append(orphan)
+                    semester_list.sort(key=lambda s: (s.order, s.name))
+            except Semester.DoesNotExist:
+                pass
+        semesters = semester_list
     else:
-        semesters = Semester.objects.all().order_by('order', 'name')
-    
+        term_choices = []
+        session_choices = []
+        semesters = []
+
     # Get semester and course from request
-    semester_id = request.GET.get('semester')
-    course_id = request.GET.get('course')
+    semester_id = request.GET.get('semester') or request.POST.get('semester')
+    course_id = request.GET.get('course') or request.POST.get('course')
     selected_date = request.GET.get('date')
+
+    if semester_id:
+        try:
+            semester_id = int(semester_id)
+        except (ValueError, TypeError):
+            semester_id = None
+    else:
+        semester_id = None
+
+    if course_id:
+        try:
+            course_id = int(course_id)
+        except (ValueError, TypeError):
+            course_id = None
+
+    if semester_id:
+        try:
+            _sem_chk_att = Semester.objects.select_related('curriculum').get(pk=semester_id)
+            if _sem_chk_att.curriculum and _sem_chk_att.curriculum.code == 'OLD':
+                semester_id = None
+                course_id = None
+                messages.warning(
+                    request,
+                    'Attendance uses new curriculum only; old-curriculum semesters are not available here.',
+                )
+        except Semester.DoesNotExist:
+            pass
+
+    if (
+        semester_id is None
+        and marks_default_semester_id is not None
+        and request.method == 'GET'
+        and 'semester' not in request.GET
+    ):
+        semester_id = marks_default_semester_id
     
     # Filter courses by semester and teacher
     courses_queryset = Course.objects.none()  # Default to empty queryset
@@ -4955,6 +5068,10 @@ def attendance_calendar(request):
         'selected_centre': selected_centre,
         'selected_centre_id': selected_centre_id,
         'semesters': semesters,
+        'term_choices': term_choices,
+        'session_choices': session_choices,
+        'selected_term': selected_term,
+        'selected_session': selected_session,
         'allowed_date_range': allowed_date_range,  # Initialize in base context
         'courses': courses_queryset.order_by('code'),
         'selected_semester_id': semester_id,

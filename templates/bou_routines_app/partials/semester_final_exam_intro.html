@@ -11,7 +11,7 @@
                                 {% if can_select_evaluator %}
                                 <div class="teacher-role-selector">
                                         <div class="mb-3">
-                                            <label for="teacher-role"><strong>Select Examiner Role to View/Edit:</strong></label>
+                                            <label for="teacher-role"><strong>Examiner role to view/edit:</strong></label>
                                             <select id="teacher-role" class="form-control" style="width: 300px; display: inline-block; margin-left: 10px;" onchange="updateTeacherRole()">
                                                 <option value="teacher1" {% if teacher_role == 'teacher1' %}selected{% endif %}>
                                                     {% if teacher1_evaluator %}{{ teacher1_evaluator.name }} (Internal Examiner){% else %}Internal Examiner{% endif %}
@@ -40,7 +40,7 @@
                                                 <div class="col-md-6">
                                                     <label for="assign-teacher1" class="form-label">Internal Examiner:</label>
                                                     <select id="assign-teacher1" class="form-control" onchange="assignExaminer(1, this.value)">
-                                                        <option value="">-- Select Teacher --</option>
+                                                        <option value="">-- Teacher --</option>
                                                         {% for teacher in all_teachers %}
                                                         <option value="{{ teacher.id }}" {% if teacher1_evaluator and teacher1_evaluator.id == teacher.id %}selected{% endif %}>
                                                             {{ teacher.name }} ({{ teacher.centre.code }})
@@ -51,7 +51,7 @@
                                                 <div class="col-md-6">
                                                     <label for="assign-teacher2" class="form-label">External Examiner:</label>
                                                     <select id="assign-teacher2" class="form-control" onchange="assignExaminer(2, this.value)">
-                                                        <option value="">-- Select Teacher --</option>
+                                                        <option value="">-- Teacher --</option>
                                                         {% for teacher in all_teachers %}
                                                         <option value="{{ teacher.id }}" {% if teacher2_evaluator and teacher2_evaluator.id == teacher.id %}selected{% endif %}>
                                                             {{ teacher.name }} ({{ teacher.centre.code }})
@@ -87,7 +87,7 @@
                                 <div class="teacher-role-selector">
                                         <!-- Admin: always visible — which examiner role to view/edit -->
                                         <div class="mb-3">
-                                            <label for="teacher-role"><strong>Select Examiner Role to View/Edit:</strong></label>
+                                            <label for="teacher-role"><strong>Examiner role to view/edit:</strong></label>
                                             <select id="teacher-role" class="form-control" style="width: 300px; display: inline-block; margin-left: 10px;" onchange="updateTeacherRole()">
                                                 <option value="teacher1" {% if teacher_role == 'teacher1' %}selected{% endif %}>
                                                     {% if teacher1_evaluator %}{{ teacher1_evaluator.name }} (First Examiner){% else %}Teacher 1 (First Examiner){% endif %}
@@ -120,7 +120,7 @@
                                                 <div class="col-md-4">
                                                     <label for="assign-teacher1" class="form-label">First Examiner:</label>
                                                     <select id="assign-teacher1" class="form-control" onchange="assignExaminer(1, this.value)">
-                                                        <option value="">-- Select Teacher --</option>
+                                                        <option value="">-- Teacher --</option>
                                                         {% for teacher in all_teachers %}
                                                         <option value="{{ teacher.id }}" {% if teacher1_evaluator and teacher1_evaluator.id == teacher.id %}selected{% endif %}>
                                                             {{ teacher.name }} ({{ teacher.centre.code }})
@@ -131,7 +131,7 @@
                                                 <div class="col-md-4">
                                                     <label for="assign-teacher2" class="form-label">Second Examiner:</label>
                                                     <select id="assign-teacher2" class="form-control" onchange="assignExaminer(2, this.value)">
-                                                        <option value="">-- Select Teacher --</option>
+                                                        <option value="">-- Teacher --</option>
                                                         {% for teacher in all_teachers %}
                                                         <option value="{{ teacher.id }}" {% if teacher2_evaluator and teacher2_evaluator.id == teacher.id %}selected{% endif %}>
                                                             {{ teacher.name }} ({{ teacher.centre.code }})
@@ -142,7 +142,7 @@
                                                 <div class="col-md-4">
                                                     <label for="assign-teacher3" class="form-label">Third Examiner:</label>
                                                     <select id="assign-teacher3" class="form-control" onchange="assignExaminer(3, this.value)">
-                                                        <option value="">-- Select Teacher --</option>
+                                                        <option value="">-- Teacher --</option>
                                                         {% for teacher in all_teachers %}
                                                         <option value="{{ teacher.id }}" {% if teacher3_evaluator and teacher3_evaluator.id == teacher.id %}selected{% endif %}>
                                                             {{ teacher.name }} ({{ teacher.centre.code }})

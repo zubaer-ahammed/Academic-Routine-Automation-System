@@ -1875,7 +1875,7 @@
                         <a href="{% url 'attendance-calendar' %}{% if request.GET.curriculum %}?curriculum={{ request.GET.curriculum }}{% if request.GET.semester %}&semester={{ request.GET.semester }}{% endif %}{% if request.GET.course %}&course={{ request.GET.course }}{% endif %}{% endif %}" class="btn btn-primary">
                             <i class="fas fa-calendar-check"></i> Attendance
                         </a>
-                        <a href="{% url 'ca-management' %}{% if request.GET.curriculum %}?curriculum={{ request.GET.curriculum }}{% if request.GET.semester %}&semester={{ request.GET.semester }}{% endif %}{% if request.GET.course %}&course={{ request.GET.course }}{% endif %}{% endif %}" class="btn btn-outline-primary">
+                        <a href="{% url 'ca-management' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" class="btn btn-outline-primary">
                             <i class="fas fa-chart-line"></i> Marks Distribution
                         </a>
                     </div>

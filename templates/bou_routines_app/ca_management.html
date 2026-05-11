@@ -1318,10 +1318,10 @@
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h2><i class="fas fa-chart-line"></i> Marks Distribution</h2>
                     <div class="header-buttons">
-                        <a href="{% url 'attendance-calendar' %}{% if request.GET.curriculum %}?curriculum={{ request.GET.curriculum }}{% if request.GET.semester %}&semester={{ request.GET.semester }}{% endif %}{% if request.GET.course %}&course={{ request.GET.course }}{% endif %}{% endif %}" class="btn btn-outline-primary">
+                        <a href="{% url 'attendance-calendar' %}?{% if selected_curriculum_id %}curriculum={{ selected_curriculum_id }}&{% endif %}{% if selected_centre_id %}centre={{ selected_centre_id }}&{% endif %}{% if selected_semester_id %}semester={{ selected_semester_id }}&{% endif %}{% if selected_course_id %}course={{ selected_course_id }}&{% endif %}{% if selected_term %}term={{ selected_term|urlencode }}&{% endif %}{% if selected_session %}session={{ selected_session|urlencode }}{% endif %}" class="btn btn-outline-primary">
                             <i class="fas fa-calendar-check"></i> Attendance
                         </a>
-                        <a href="{% url 'ca-management' %}{% if request.GET.curriculum %}?curriculum={{ request.GET.curriculum }}{% if request.GET.semester %}&semester={{ request.GET.semester }}{% endif %}{% if request.GET.course %}&course={{ request.GET.course }}{% endif %}{% endif %}" class="btn btn-primary">
+                        <a href="{% url 'ca-management' %}?{% if selected_centre_id %}centre={{ selected_centre_id }}&{% endif %}{% if selected_semester_id %}semester={{ selected_semester_id }}&{% endif %}{% if selected_course_id %}course={{ selected_course_id }}&{% endif %}{% if selected_term %}term={{ selected_term|urlencode }}&{% endif %}{% if selected_session %}session={{ selected_session|urlencode }}{% endif %}" class="btn btn-primary">
                             <i class="fas fa-chart-line"></i> Marks Distribution
                         </a>
                     </div>
@@ -1330,25 +1330,13 @@
                 <div class="bou-filter-stack">
                 <!-- Selection Form -->
                 <form class="bou-filter-form" method="get" action="{% url 'ca-management' %}" style="overflow: visible;">
+                    <input type="hidden" id="curriculum" value="{{ selected_curriculum_id|default:'' }}">
                     <div class="row" style="overflow: visible;">
                         <div class="col-md-2">
                             <div class="form-group">
-                                <label for="curriculum">Select Curriculum:</label>
-                                <select name="curriculum" id="curriculum" onchange="loadSemestersForCurriculum(this.value)">
-                                    <option value="">-- Select Curriculum --</option>
-                                    {% for curriculum in curricula %}
-                                        <option value="{{ curriculum.id }}" {% if selected_curriculum_id|stringformat:"s" == curriculum.id|stringformat:"s" %}selected{% endif %}>
-                                            {{ curriculum.name }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-2">
-                            <div class="form-group">
-                                <label for="centre">Select Study Centre:</label>
+                                <label for="centre">Study Centre:</label>
                                 <select name="centre" id="centre" onchange="loadSemestersForCentre(this.value)">
-                                    <option value="">-- Select Centre --</option>
+                                    <option value="">-- Centre --</option>
                                     {% for centre in centres %}
                                         <option value="{{ centre.id }}" {% if selected_centre_id|stringformat:"s" == centre.id|stringformat:"s" %}selected{% endif %}>
                                             {{ centre.name }}
@@ -1359,10 +1347,9 @@
                         </div>
                         <div class="col-md-2">
                             <div class="form-group">
-                                <label for="semester">Select Semester:</label>
-                                <input type="hidden" name="semester" id="semester-hidden" value="{{ selected_semester_id }}">
-                                <select name="semester" id="semester" onchange="loadCoursesForSemester(this.value)">
-                                    <option value="">-- Select Semester --</option>
+                                <label for="semester">Semester:</label>
+                                <select name="semester" id="semester" data-server-selected="{{ selected_semester_id|default:'' }}" onchange="loadCoursesForSemester(this.value)">
+                                    <option value="">-- Semester --</option>
                                     {% for semester in semesters %}
                                         <option value="{{ semester.id }}" {% if selected_semester_id and selected_semester_id|stringformat:"s" == semester.id|stringformat:"s" %}selected{% endif %}>
                                             {{ semester.name }}
@@ -1371,11 +1358,33 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <div class="form-group">
-                                <label for="course">Select Course:</label>
+                                <label for="filter-term">Term</label>
+                                <select name="term" id="filter-term" title="Filter semesters by term">
+                                    <option value="">— Any —</option>
+                                    {% for t in term_choices %}
+                                        <option value="{{ t }}" {% if selected_term == t %}selected{% endif %}>{{ t }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="form-group">
+                                <label for="filter-session">Session</label>
+                                <select name="session" id="filter-session" title="Filter semesters by session">
+                                    <option value="">— Any —</option>
+                                    {% for s in session_choices %}
+                                        <option value="{{ s }}" {% if selected_session == s %}selected{% endif %}>{{ s }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="form-group">
+                                <label for="course">Course:</label>
                                 <select name="course" id="course" onchange="loadStudentsForCourse()">
-                                    <option value="">-- Select Course --</option>
+                                    <option value="">-- Course --</option>
                                     {% for course in courses %}
                                         <option value="{{ course.id }}" {% if selected_course_id and selected_course_id|stringformat:"s" == course.id|stringformat:"s" %}selected{% endif %}>
                                             {{ course.code }} - {{ course.name }}
@@ -1384,11 +1393,11 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <div class="form-group">
                                 <label>&nbsp;</label>
                                 <div>
-                                    <button type="submit" class="bou-filter-submit">
+                                    <button type="submit" id="loadStudentsBtn" class="bou-filter-submit">
                                         <i class="fas fa-search"></i> Load Students
                                     </button>
                                 </div>
@@ -1399,7 +1408,7 @@
                 {% if not selected_semester or not selected_course %}
                     <div class="info-message info-message--filter-hint">
                         <i class="fas fa-info-circle" aria-hidden="true"></i>
-                        <span>Please select a curriculum, semester, and course to manage CA marks.</span>
+                        <span>Please choose a study centre, semester, and course to manage marks (use Term and Session to narrow the semester list).</span>
                     </div>
                 {% endif %}
                 </div>
@@ -1891,7 +1900,7 @@
                             {% if selected_semester_id and selected_course_id %}
                             {% include "bou_routines_app/partials/semester_final_attendance.html" %}
                             {% else %}
-                                    <p class="text-muted mb-0">Select a semester and a course to manage semester final attendance.</p>
+                                    <p class="text-muted mb-0">Choose a semester and a course to manage semester final attendance.</p>
                             {% endif %}
                                 </div>
                                 <div class="tab-pane fade show active" id="sfa-sub-marks" role="tabpanel" aria-labelledby="sfa-sub-marks-tab" tabindex="0">
@@ -2250,6 +2259,19 @@ function updateURLParameter(key, value) {
     window.history.replaceState({}, '', url);
 }
 
+function marksFilterTermSessionQuery() {
+    const t = document.getElementById('filter-term');
+    const s = document.getElementById('filter-session');
+    let q = '';
+    if (t && t.value) {
+        q += `&term=${encodeURIComponent(t.value)}`;
+    }
+    if (s && s.value) {
+        q += `&session=${encodeURIComponent(s.value)}`;
+    }
+    return q;
+}
+
 // Function to load semesters for a selected curriculum and centre
 function loadSemestersForCurriculum(curriculumId, preserveSemesterId = null, centreId = null) {
     const centreSelect = document.getElementById('centre');
@@ -2261,8 +2283,8 @@ function loadSemestersForCurriculum(curriculumId, preserveSemesterId = null, cen
         centreId = centreSelect ? centreSelect.value : '';
     }
     
-    semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
-    courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
+    semesterSelect.innerHTML = '<option value="">-- Semester --</option>';
+    courseSelect.innerHTML = '<option value="">-- Course --</option>';
     
     if (!curriculumId) {
         return;
@@ -2274,12 +2296,14 @@ function loadSemestersForCurriculum(curriculumId, preserveSemesterId = null, cen
     if (centreId) {
         url += `&centre_id=${centreId}`;
     }
+    url += marksFilterTermSessionQuery();
+    url += '&for_marks=1';
     url += `&t=${Date.now()}`;
     
     fetch(url)
         .then(response => response.json())
         .then(data => {
-            semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
+            semesterSelect.innerHTML = '<option value="">-- Semester --</option>';
             data.semesters.forEach(semester => {
                 const option = document.createElement('option');
                 option.value = semester.id;
@@ -2306,32 +2330,32 @@ function loadSemestersForCurriculum(curriculumId, preserveSemesterId = null, cen
 
 // Function to load semesters when centre changes
 function loadSemestersForCentre(centreId) {
-    const curriculumSelect = document.getElementById('curriculum');
-    const curriculumId = curriculumSelect ? curriculumSelect.value : '';
+    const curriculumInput = document.getElementById('curriculum');
+    const curriculumId = curriculumInput ? curriculumInput.value : '';
     const semesterSelect = document.getElementById('semester');
     const courseSelect = document.getElementById('course');
     
     // Clear courses when centre changes
-    courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
+    courseSelect.innerHTML = '<option value="">-- Course --</option>';
     
     if (curriculumId) {
         loadSemestersForCurriculum(curriculumId, null, centreId);
     } else {
         // Clear semesters and courses if no curriculum selected
-        semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
-        courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
+        semesterSelect.innerHTML = '<option value="">-- Semester --</option>';
+        courseSelect.innerHTML = '<option value="">-- Course --</option>';
     }
 }
 
 // Function to load courses for a selected semester
 function loadCoursesForSemester(semesterId, preserveCourseId = null) {
-    const curriculumSelect = document.getElementById('curriculum');
+    const curriculumInput = document.getElementById('curriculum');
     const centreSelect = document.getElementById('centre');
     const courseSelect = document.getElementById('course');
-    const curriculumId = curriculumSelect.value;
+    const curriculumId = curriculumInput ? curriculumInput.value : '';
     const centreId = centreSelect ? centreSelect.value : '';
     
-    courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
+    courseSelect.innerHTML = '<option value="">-- Course --</option>';
     
     if (!semesterId) {
         return;
@@ -2343,12 +2367,13 @@ function loadCoursesForSemester(semesterId, preserveCourseId = null) {
     if (centreId) {
         url += `&centre_id=${centreId}`;
     }
+    url += '&for_marks=1';
     url += `&t=${Date.now()}`;
     
     fetch(url)
         .then(response => response.json())
         .then(data => {
-            courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
+            courseSelect.innerHTML = '<option value="">-- Course --</option>';
             data.courses.forEach(course => {
                 const option = document.createElement('option');
                 option.value = course.id;
@@ -2372,31 +2397,27 @@ function loadCoursesForSemester(semesterId, preserveCourseId = null) {
 
 // Function to update URL parameters and reload page
 function loadStudentsForCourse(skipUrlUpdate = false) {
-    const curriculumSelect = document.getElementById('curriculum');
+    const curriculumInput = document.getElementById('curriculum');
     const centreSelect = document.getElementById('centre');
     const semesterSelect = document.getElementById('semester');
     const courseSelect = document.getElementById('course');
     
-    const curriculumId = curriculumSelect ? curriculumSelect.value : '';
+    const curriculumId = curriculumInput ? curriculumInput.value : '';
     const centreId = centreSelect ? centreSelect.value : '';
     const semesterId = semesterSelect ? semesterSelect.value : '';
     const courseId = courseSelect ? courseSelect.value : '';
     
     // Only reload if we have all required selections and not skipping URL update
     if (curriculumId && semesterId && courseId && !skipUrlUpdate) {
-        updateUrlParams(curriculumId, centreId, semesterId, courseId);
+        updateUrlParams(centreId, semesterId, courseId);
     }
 }
 
-function updateUrlParams(curriculumId, centreId, semesterId, courseId, skipReload = false) {
+function updateUrlParams(centreId, semesterId, courseId, skipReload = false) {
     const url = new URL(window.location.href);
     const currentUrl = url.toString();
     
-    if (curriculumId) {
-        url.searchParams.set('curriculum', curriculumId);
-    } else {
-        url.searchParams.delete('curriculum');
-    }
+    url.searchParams.delete('curriculum');
     if (centreId) {
         url.searchParams.set('centre', centreId);
     } else {
@@ -2411,6 +2432,18 @@ function updateUrlParams(curriculumId, centreId, semesterId, courseId, skipReloa
         url.searchParams.set('course', courseId);
     } else {
         url.searchParams.delete('course');
+    }
+    const termEl = document.getElementById('filter-term');
+    const sessionEl = document.getElementById('filter-session');
+    if (termEl && termEl.value) {
+        url.searchParams.set('term', termEl.value);
+    } else {
+        url.searchParams.delete('term');
+    }
+    if (sessionEl && sessionEl.value) {
+        url.searchParams.set('session', sessionEl.value);
+    } else {
+        url.searchParams.delete('session');
     }
     
     const newUrl = url.toString();
@@ -2824,42 +2857,61 @@ function saveCAMarks(reloadPage = true) {
 // Initial load based on URL parameters
 document.addEventListener('DOMContentLoaded', function() {
     const urlParams = new URLSearchParams(window.location.search);
-    const curriculumId = urlParams.get('curriculum');
+    let curriculumId = null;
     const centreId = urlParams.get('centre');
-    const semesterId = urlParams.get('semester');
     const courseId = urlParams.get('course');
+    const termParam = urlParams.get('term');
+    const sessionParam = urlParams.get('session');
     
     // Flag to prevent change events from triggering reloads during initialization
     let isInitializing = true;
     
-    const curriculumSelect = document.getElementById('curriculum');
+    const curriculumInput = document.getElementById('curriculum');
     const centreSelect = document.getElementById('centre');
     const semesterSelect = document.getElementById('semester');
+    let semesterId = urlParams.get('semester') || '';
+    if (!semesterId && semesterSelect && semesterSelect.dataset.serverSelected) {
+        semesterId = String(semesterSelect.dataset.serverSelected).trim();
+    }
     const courseSelect = document.getElementById('course');
     const loadStudentsBtn = document.getElementById('loadStudentsBtn');
+    const termSelect = document.getElementById('filter-term');
+    const sessionSelect = document.getElementById('filter-session');
 
-    // Set up event listeners
-    if (curriculumSelect) {
-    curriculumSelect.addEventListener('change', function() {
-        const curriculumId = this.value;
-            // Clear semester and course when curriculum changes
-            if (semesterSelect) {
-                semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
-            }
-            if (courseSelect) {
-                courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
-            }
-        if (curriculumId) {
-                // Reload semesters with current centre
-            loadSemestersForCurriculum(curriculumId);
-        }
-    });
+    if (termSelect && termParam) {
+        termSelect.value = termParam;
+    }
+    if (sessionSelect && sessionParam) {
+        sessionSelect.value = sessionParam;
+    }
+    if (curriculumInput && curriculumInput.value) {
+        curriculumId = curriculumInput.value;
+    }
+    const curriculumForUrl = curriculumId || (curriculumInput ? curriculumInput.value : '');
+
+    function reloadSemestersFromFilters() {
+        const cid = curriculumInput ? curriculumInput.value : '';
+        if (!cid) return;
+        if (semesterSelect) semesterSelect.value = '';
+        if (courseSelect) courseSelect.innerHTML = '<option value="">-- Course --</option>';
+        loadSemestersForCurriculum(cid, null, centreSelect ? centreSelect.value : null);
+    }
+
+    if (termSelect) {
+        termSelect.addEventListener('change', function() {
+            if (!isInitializing) reloadSemestersFromFilters();
+        });
+    }
+    if (sessionSelect) {
+        sessionSelect.addEventListener('change', function() {
+            if (!isInitializing) reloadSemestersFromFilters();
+        });
     }
     
     if (centreSelect) {
         centreSelect.addEventListener('change', function() {
             const centreId = this.value;
-            const curriculumId = curriculumSelect ? curriculumSelect.value : '';
+            const curId = curriculumInput ? curriculumInput.value : '';
             const semesterId = semesterSelect ? semesterSelect.value : '';
             const courseId = courseSelect ? courseSelect.value : '';
             
@@ -2870,35 +2922,38 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 url.searchParams.delete('centre');
             }
-            if (curriculumId) {
-                url.searchParams.set('curriculum', curriculumId);
-            }
+            url.searchParams.delete('curriculum');
             if (semesterId) {
                 url.searchParams.set('semester', semesterId);
             }
             if (courseId) {
                 url.searchParams.set('course', courseId);
             }
+            if (termSelect && termSelect.value) {
+                url.searchParams.set('term', termSelect.value);
+            } else {
+                url.searchParams.delete('term');
+            }
+            if (sessionSelect && sessionSelect.value) {
+                url.searchParams.set('session', sessionSelect.value);
+            } else {
+                url.searchParams.delete('session');
+            }
             window.history.replaceState({}, '', url.toString());
             
-            // Reload semesters with both curriculum and centre filters
-            if (curriculumId) {
+            if (curId) {
                 loadSemestersForCentre(centreId);
             } else {
-                // Clear semesters if no curriculum selected
-                const semesterSelect = document.getElementById('semester');
-                const courseSelect = document.getElementById('course');
                 if (semesterSelect) {
-                    semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
+                    semesterSelect.innerHTML = '<option value="">-- Semester --</option>';
                 }
                 if (courseSelect) {
-                    courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
+                    courseSelect.innerHTML = '<option value="">-- Course --</option>';
                 }
             }
             
-            // Update URL with centre parameter and reload if all selections are made
-            if (curriculumId && semesterId && courseId && !isInitializing) {
-                updateUrlParams(curriculumId, centreId, semesterId, courseId);
+            if (curId && semesterId && courseId && !isInitializing) {
+                updateUrlParams(centreId, semesterId, courseId);
             }
         });
     }
@@ -2945,24 +3000,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Update URL to include DRC centre
                 const url = new URL(window.location.href);
                 url.searchParams.set('centre', drcOption.value);
-    if (curriculumId) {
-                    url.searchParams.set('curriculum', curriculumId);
-                }
+                url.searchParams.delete('curriculum');
                 window.history.replaceState({}, '', url.toString());
             }
         }
     }
     
+    const effectiveCurriculumId = curriculumForUrl;
     // Then load semesters with both curriculum and centre filters
-    if (curriculumId && finalCentreId) {
-        curriculumSelect.value = curriculumId;
-        // Load semesters with both curriculum and centre filters, preserving selected semester
-        loadSemestersForCurriculum(curriculumId, semesterId);
-    } else if (curriculumId) {
-        curriculumSelect.value = curriculumId;
-        // Load semesters, preserving selected semester if provided
+    if (effectiveCurriculumId && finalCentreId) {
+        if (curriculumInput && curriculumId) {
+            curriculumInput.value = curriculumId;
+        }
+        loadSemestersForCurriculum(effectiveCurriculumId, semesterId, finalCentreId);
+    } else if (effectiveCurriculumId) {
+        if (curriculumInput && curriculumId) {
+            curriculumInput.value = curriculumId;
+        }
         if (semesterId) {
-            loadSemestersForCurriculum(curriculumId, semesterId);
+            loadSemestersForCurriculum(effectiveCurriculumId, semesterId);
         }
     }
     
@@ -3890,7 +3946,7 @@ function saveFinalExamMarks(reloadPage = true) {
     const csrf = formData.get('csrfmiddlewaretoken') || (csrfEl ? csrfEl.value : '');
     if (!semesterId || !courseId) {
         updateSaveFinalExamMarksButtonStatus(false);
-        alert('Semester or course is missing in the form. Please reload the page, select a semester and course, then try again.');
+        alert('Semester or course is missing in the form. Please reload the page, choose a semester and course, then try again.');
         return;
     }
     if (!csrf) {
@@ -3978,7 +4034,7 @@ function assignExaminer(examinerNumber, teacherId) {
     const courseId = document.querySelector('input[name="course_id"]')?.value;
     
     if (!semesterId || !courseId) {
-        alert('Please select a semester and course first.');
+        alert('Please choose a semester and course first.');
         return;
     }
     

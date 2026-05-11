@@ -133,11 +133,72 @@ class CourseAdminForm(forms.ModelForm):
         
         return cleaned_data
 
+
+def _changelist_redirect_default_new_curriculum(request, param):
+    """If curriculum filter param is missing/empty, redirect to NEW (or legacy curriculum__id__exact)."""
+    if request.GET.get(param) not in (None, ''):
+        return None
+    query = request.GET.copy()
+    legacy = request.GET.get('curriculum__id__exact')
+    if legacy is not None and legacy != '':
+        query[param] = legacy
+        query.pop('curriculum__id__exact', None)
+    else:
+        new_c = Curriculum.objects.filter(code='NEW').first()
+        if new_c:
+            query[param] = str(new_c.id)
+    if query.get(param) not in (None, ''):
+        return HttpResponseRedirect(f'{request.path}?{query.urlencode()}')
+    return None
+
+
+class BaseCurriculumNewDefaultListFilter(admin.SimpleListFilter):
+    """Curriculum sidebar filter with explicit ?…=all so default NEW redirect does not loop."""
+    title = 'curriculum'
+    curriculum_fk = 'curriculum'
+
+    def lookups(self, request, model_admin):
+        for c in Curriculum.objects.order_by('name'):
+            yield (str(c.id), str(c))
+        yield ('none', '-')
+
+    def choices(self, changelist):
+        yield {
+            'selected': self.value() in (None, 'all'),
+            'query_string': changelist.get_query_string({self.parameter_name: 'all'}),
+            'display': 'All',
+        }
+        for lookup, title in self.lookup_choices:
+            yield {
+                'selected': self.value() is not None and str(self.value()) == str(lookup),
+                'query_string': changelist.get_query_string({self.parameter_name: lookup}),
+                'display': title,
+            }
+
+    def queryset(self, request, queryset):
+        v = self.value()
+        fk = self.curriculum_fk
+        if v in (None, 'all'):
+            return queryset
+        if v == 'none':
+            return queryset.filter(**{f'{fk}__isnull': True})
+        if v:
+            try:
+                return queryset.filter(**{f'{fk}_id': int(v)})
+            except (ValueError, TypeError):
+                return queryset
+        return queryset
+
+
+class CourseCurriculumListFilter(BaseCurriculumNewDefaultListFilter):
+    parameter_name = 'course_curriculum'
+
+
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
     form = CourseAdminForm
     list_display = ('id', 'code', 'name', 'curriculum', 'credits', 'course_type', 'is_theory', 'is_lab')
-    list_filter = ('curriculum', 'course_type', 'is_theory', 'is_lab')
+    list_filter = (CourseCurriculumListFilter, 'course_type', 'is_theory', 'is_lab')
     search_fields = ('code', 'name', 'curriculum__name')
     ordering = ('curriculum', 'code',)
     fieldsets = (
@@ -150,7 +211,15 @@ class CourseAdmin(admin.ModelAdmin):
         }),
         # CA Distribution fields removed - now managed at Curriculum level
     )
-    
+
+    def changelist_view(self, request, extra_context=None):
+        redir = _changelist_redirect_default_new_curriculum(
+            request, CourseCurriculumListFilter.parameter_name
+        )
+        if redir:
+            return redir
+        return super().changelist_view(request, extra_context)
+
     class Media:
         css = {
             'all': ('admin/css/course_type_radio.css',)
@@ -773,10 +842,15 @@ class ProgramCoordinatorAdmin(admin.ModelAdmin):
         }),
     )
 
+
+class SemesterCurriculumListFilter(BaseCurriculumNewDefaultListFilter):
+    parameter_name = 'semester_curriculum'
+
+
 @admin.register(Semester)
 class SemesterAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'semester_full_name', 'curriculum', 'theory_class_duration_minutes', 'lab_class_duration_minutes', 'start_date')
-    list_filter = ('curriculum',)
+    list_display = ('id', 'name', 'semester_full_name', 'term', 'session', 'curriculum')
+    list_filter = (SemesterCurriculumListFilter,)
     search_fields = ('name', 'curriculum__name')
     ordering = ('name',)
     fieldsets = (
@@ -798,6 +872,14 @@ class SemesterAdmin(admin.ModelAdmin):
             'description': 'Comma-separated dates in YYYY-MM-DD format'
         }),
     )
+
+    def changelist_view(self, request, extra_context=None):
+        redir = _changelist_redirect_default_new_curriculum(
+            request, SemesterCurriculumListFilter.parameter_name
+        )
+        if redir:
+            return redir
+        return super().changelist_view(request, extra_context)
 
 @admin.register(NewRoutine)
 class NewRoutineAdmin(admin.ModelAdmin):
@@ -897,10 +979,88 @@ class CAMarkAdmin(admin.ModelAdmin):
         }),
     )
 
+class MidtermNewCurriculumSemesterListFilter(admin.SimpleListFilter):
+    """Mid-term marks apply only to new curriculum; omit OLD-curriculum semesters from the sidebar."""
+    title = 'semester'
+    parameter_name = 'midterm_semester'
+
+    def lookups(self, request, model_admin):
+        semesters = (
+            Semester.objects.exclude(curriculum__code='OLD')
+            .select_related('curriculum')
+            .order_by('curriculum', 'order', 'name')
+        )
+        for s in semesters:
+            yield (str(s.id), str(s))
+
+    def choices(self, changelist):
+        yield {
+            'selected': self.value() in (None, 'all'),
+            'query_string': changelist.get_query_string({self.parameter_name: 'all'}),
+            'display': 'All',
+        }
+        for lookup, title in self.lookup_choices:
+            yield {
+                'selected': self.value() is not None and str(self.value()) == str(lookup),
+                'query_string': changelist.get_query_string({self.parameter_name: lookup}),
+                'display': title,
+            }
+
+    def queryset(self, request, queryset):
+        v = self.value()
+        if v in (None, 'all'):
+            return queryset
+        if v:
+            try:
+                return queryset.filter(semester_id=int(v))
+            except (ValueError, TypeError):
+                return queryset
+        return queryset
+
+
+class MidtermNewCurriculumCourseListFilter(admin.SimpleListFilter):
+    """Mid-term marks apply only to new curriculum; omit OLD-curriculum courses from the sidebar."""
+    title = 'course'
+    parameter_name = 'midterm_course'
+
+    def lookups(self, request, model_admin):
+        courses = (
+            Course.objects.exclude(curriculum__code='OLD')
+            .select_related('curriculum')
+            .order_by('curriculum', 'code')
+        )
+        for c in courses:
+            yield (str(c.id), str(c))
+
+    def choices(self, changelist):
+        yield {
+            'selected': self.value() in (None, 'all'),
+            'query_string': changelist.get_query_string({self.parameter_name: 'all'}),
+            'display': 'All',
+        }
+        for lookup, title in self.lookup_choices:
+            yield {
+                'selected': self.value() is not None and str(self.value()) == str(lookup),
+                'query_string': changelist.get_query_string({self.parameter_name: lookup}),
+                'display': title,
+            }
+
+    def queryset(self, request, queryset):
+        v = self.value()
+        if v in (None, 'all'):
+            return queryset
+        if v:
+            try:
+                return queryset.filter(course_id=int(v))
+            except (ValueError, TypeError):
+                return queryset
+        return queryset
+
+
 @admin.register(MidtermExamMark)
 class MidtermExamMarkAdmin(admin.ModelAdmin):
     list_display = ('student', 'course', 'semester', 'marked_by', 'updated_at')
-    list_filter = ('semester', 'course', 'marked_by')
+    list_filter = (MidtermNewCurriculumSemesterListFilter, MidtermNewCurriculumCourseListFilter, 'marked_by')
     search_fields = ('student__id', 'student__name', 'course__code')
     ordering = ('semester', 'course', 'student__id')
 

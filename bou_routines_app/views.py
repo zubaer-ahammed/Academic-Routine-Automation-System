@@ -149,6 +149,22 @@ def _make_deferred_footer_canvas_class(footer_draw):
     return _DeferredFooterCanvas
 
 
+def _default_new_curriculum(curricula_qs):
+    """
+    When no curriculum is selected, prefer new curriculum (NEW / NEW2024).
+    Old curriculum remains in the database for legacy rows only.
+    Returns (curriculum, id) or (None, None).
+    """
+    if not curricula_qs.exists():
+        return None, None
+    for code in ('NEW', 'NEW2024'):
+        c = curricula_qs.filter(code=code).first()
+        if c:
+            return c, c.id
+    c = curricula_qs.first()
+    return c, (c.id if c else None)
+
+
 def _attendance_calendar_class_dates(semester, course, selected_centre):
     """
     Class-date columns for attendance exports: same rules as attendance_calendar —
@@ -345,14 +361,9 @@ def generate_routine(request):
             selected_curriculum = None
             selected_curriculum_id = None
     
-    # If no curriculum selected, use the Old Curriculum by default
+    # If no curriculum selected, default to new curriculum
     if not selected_curriculum and curricula.exists():
-        try:
-            selected_curriculum = Curriculum.objects.get(code='OLD')
-            selected_curriculum_id = selected_curriculum.id
-        except Curriculum.DoesNotExist:
-            selected_curriculum = curricula.first()
-            selected_curriculum_id = selected_curriculum.id if selected_curriculum else None
+        selected_curriculum, selected_curriculum_id = _default_new_curriculum(curricula)
     
     # Get selected centre from request
     selected_centre_id = request.GET.get('centre') or request.POST.get('centre')
@@ -1571,14 +1582,9 @@ def update_semester_courses(request):
             selected_curriculum = None
             selected_curriculum_id = None
     
-    # If no curriculum selected, use the Old Curriculum by default
+    # If no curriculum selected, default to new curriculum
     if not selected_curriculum and curricula.exists():
-        try:
-            selected_curriculum = Curriculum.objects.get(code='OLD')
-            selected_curriculum_id = selected_curriculum.id
-        except Curriculum.DoesNotExist:
-            selected_curriculum = curricula.first()
-            selected_curriculum_id = selected_curriculum.id if selected_curriculum else None
+        selected_curriculum, selected_curriculum_id = _default_new_curriculum(curricula)
     
     # Get selected centre from request
     selected_centre_id = request.GET.get('centre') or request.POST.get('centre')
@@ -2526,12 +2532,7 @@ def download_routines(request):
     
     # Only set default if curriculum parameter was not in the request at all
     if not selected_curriculum and not curriculum_param_present and curricula.exists():
-        try:
-            selected_curriculum = Curriculum.objects.get(code='OLD')
-            selected_curriculum_id = selected_curriculum.id
-        except Curriculum.DoesNotExist:
-            selected_curriculum = curricula.first()
-            selected_curriculum_id = selected_curriculum.id if selected_curriculum else None
+        selected_curriculum, selected_curriculum_id = _default_new_curriculum(curricula)
     
     # Get selected centre from request
     selected_centre_id = request.GET.get('centre')
@@ -5384,21 +5385,44 @@ def set_attendance_midterm_override_dates(request):
 @login_required
 def get_semesters_for_curriculum(request):
     """AJAX endpoint to get semesters for a specific curriculum"""
-    # Check if user is admin/superuser or has attendance permission
-    if not (request.user.is_superuser or request.user.is_staff or check_teacher_permission(request.user, 'can_mark_attendance')):
+    if not (
+        request.user.is_superuser
+        or request.user.is_staff
+        or check_teacher_permission(request.user, 'can_mark_attendance')
+        or check_teacher_permission(request.user, 'can_manage_ca')
+    ):
         return JsonResponse({'error': 'Permission denied'}, status=403)
     
     curriculum_id = request.GET.get('curriculum_id')
     centre_id = request.GET.get('centre_id')
+    term = (request.GET.get('term') or '').strip()
+    session = (request.GET.get('session') or '').strip()
+    for_marks = (
+        request.GET.get('for_marks') == '1'
+        and (
+            request.user.is_superuser
+            or request.user.is_staff
+            or check_teacher_permission(request.user, 'can_manage_ca')
+        )
+    )
     
     if not curriculum_id:
         return JsonResponse({'error': 'Curriculum ID required'}, status=400)
     
     try:
         curriculum = Curriculum.objects.get(id=curriculum_id)
+        if for_marks and curriculum.code == 'OLD':
+            return JsonResponse(
+                {'error': 'Marks page uses new curriculum only.'},
+                status=400,
+            )
         semesters = Semester.objects.filter(curriculum=curriculum)
         
         # Note: Semesters are now shared across centres. Centre-specific filtering happens at SemesterCourse level.
+        if term:
+            semesters = semesters.filter(term=term)
+        if session:
+            semesters = semesters.filter(session=session)
         
         semesters = semesters.order_by('order', 'name')
         
@@ -5407,7 +5431,9 @@ def get_semesters_for_curriculum(request):
             semesters_data.append({
                 'id': semester.id,
                 'name': semester.name,
-                'semester_full_name': semester.semester_full_name
+                'semester_full_name': semester.semester_full_name,
+                'term': semester.term or '',
+                'session': semester.session or '',
             })
         
         return JsonResponse({'semesters': semesters_data})
@@ -5423,8 +5449,24 @@ def get_courses_for_semester(request):
     
     semester_id = request.GET.get('semester_id')
     centre_id = request.GET.get('centre_id')
+    for_marks = (
+        request.GET.get('for_marks') == '1'
+        and (
+            request.user.is_superuser
+            or request.user.is_staff
+            or check_teacher_permission(request.user, 'can_manage_ca')
+        )
+    )
     if not semester_id:
         return JsonResponse({'error': 'Semester ID required'}, status=400)
+    
+    if for_marks:
+        try:
+            _sem = Semester.objects.select_related('curriculum').get(pk=int(semester_id))
+            if _sem.curriculum and _sem.curriculum.code == 'OLD':
+                return JsonResponse({'courses': []})
+        except (Semester.DoesNotExist, ValueError, TypeError):
+            return JsonResponse({'courses': []})
     
     # Get teacher from logged-in user (optional for admin users)
     teacher = get_teacher_from_user(request.user)
@@ -10004,6 +10046,15 @@ def ca_management(request):
         messages.error(request, "You don't have permission to manage CA marks.")
         return redirect('teacher-dashboard')
     
+    # Marks page is new-curriculum only; never expose curriculum in the URL
+    if request.method == 'GET' and 'curriculum' in request.GET:
+        q = request.GET.copy()
+        q.pop('curriculum', None)
+        target = reverse('ca-management')
+        if q:
+            target = f'{target}?{q.urlencode()}'
+        return redirect(target)
+    
     # Get teacher profile
     teacher = None
     if hasattr(request.user, 'teacher'):
@@ -10017,31 +10068,23 @@ def ca_management(request):
     # Get all centres
     centres = Centre.objects.filter(is_active=True).order_by('name')
     
-    # Get selected curriculum from request
-    selected_curriculum_id = request.GET.get('curriculum') or request.POST.get('curriculum')
+    # Curriculum is not read from GET (URL); POST may send hidden field (coerce OLD away)
+    selected_curriculum_id = request.POST.get('curriculum')
     selected_curriculum = None
     
     if selected_curriculum_id:
         try:
             selected_curriculum_id = int(selected_curriculum_id)
             selected_curriculum = Curriculum.objects.get(id=selected_curriculum_id)
-        except (Curriculum.DoesNotExist, ValueError):
+            if selected_curriculum.code == 'OLD':
+                selected_curriculum = None
+                selected_curriculum_id = None
+        except (Curriculum.DoesNotExist, ValueError, TypeError):
             selected_curriculum = None
             selected_curriculum_id = None
     
-    # If no curriculum selected, use the New Curriculum by default
     if not selected_curriculum and curricula.exists():
-        try:
-            selected_curriculum = Curriculum.objects.get(code='NEW')
-            selected_curriculum_id = selected_curriculum.id
-        except Curriculum.DoesNotExist:
-            # Fallback: try NEW2024 if NEW doesn't exist
-            try:
-                selected_curriculum = Curriculum.objects.get(code='NEW2024')
-                selected_curriculum_id = selected_curriculum.id
-            except Curriculum.DoesNotExist:
-                selected_curriculum = curricula.first()
-                selected_curriculum_id = selected_curriculum.id if selected_curriculum else None
+        selected_curriculum, selected_curriculum_id = _default_new_curriculum(curricula)
     
     # Get selected centre from request
     selected_centre_id = request.GET.get('centre') or request.POST.get('centre')
@@ -10063,15 +10106,97 @@ def ca_management(request):
         except Centre.DoesNotExist:
             selected_centre = None
             selected_centre_id = None
-    
-    # Filter semesters by selected curriculum
-    # Note: Semesters are now shared across centres. Centre-specific filtering happens at SemesterCourse level.
+
+    # Default marks semester: Y1S1 (new curriculum); term/session are taken from that row, not hard-coded
+    marks_default_semester_id = None
     if selected_curriculum:
-        semesters = Semester.objects.filter(curriculum=selected_curriculum)
+        _y1_default = (
+            Semester.objects.filter(curriculum=selected_curriculum, name='Y1S1')
+            .order_by('order', 'id')
+            .first()
+        )
+        if _y1_default:
+            marks_default_semester_id = _y1_default.id
+
+    raw_semester_for_filter = request.GET.get('semester') or request.POST.get('semester')
+    early_semester_id = None
+    if raw_semester_for_filter:
+        try:
+            early_semester_id = int(raw_semester_for_filter)
+        except (ValueError, TypeError):
+            early_semester_id = None
+
+    selected_term = (request.GET.get('term') or request.POST.get('term') or '').strip()
+    selected_session = (request.GET.get('session') or request.POST.get('session') or '').strip()
+
+    _term_session_source_id = early_semester_id
+    if (
+        _term_session_source_id is None
+        and request.method == 'GET'
+        and 'semester' not in request.GET
+        and marks_default_semester_id
+    ):
+        _term_session_source_id = marks_default_semester_id
+
+    if _term_session_source_id and selected_curriculum:
+        try:
+            _es = Semester.objects.get(id=_term_session_source_id, curriculum=selected_curriculum)
+            if 'term' not in request.GET:
+                selected_term = (_es.term or '').strip()
+            if 'session' not in request.GET:
+                selected_session = (_es.session or '').strip()
+        except Semester.DoesNotExist:
+            pass
+
+    term_choices = []
+    session_choices = []
+    if selected_curriculum:
+        _semester_base = Semester.objects.filter(curriculum=selected_curriculum)
+        term_choices = sorted(
+            {
+                (t or '').strip()
+                for t in _semester_base.exclude(term__isnull=True).exclude(term='').values_list('term', flat=True)
+            },
+            key=lambda x: (x.lower(), x),
+        )
+        session_choices = sorted(
+            {
+                (s or '').strip()
+                for s in _semester_base.exclude(session__isnull=True).exclude(session='').values_list('session', flat=True)
+            },
+            key=lambda x: (x.lower(), x),
+        )
+        semesters_qs = _semester_base.order_by('order', 'name')
+        if selected_term:
+            semesters_qs = semesters_qs.filter(term=selected_term)
+        if selected_session:
+            semesters_qs = semesters_qs.filter(session=selected_session)
+        semester_list = list(semesters_qs)
+        if (
+            marks_default_semester_id
+            and not any(s.id == marks_default_semester_id for s in semester_list)
+        ):
+            try:
+                _orph_y1 = Semester.objects.get(
+                    id=marks_default_semester_id, curriculum=selected_curriculum
+                )
+                semester_list.append(_orph_y1)
+                semester_list.sort(key=lambda s: (s.order, s.name))
+            except Semester.DoesNotExist:
+                pass
+        if early_semester_id:
+            try:
+                orphan = Semester.objects.get(id=early_semester_id, curriculum=selected_curriculum)
+                if not any(s.id == orphan.id for s in semester_list):
+                    semester_list.append(orphan)
+                    semester_list.sort(key=lambda s: (s.order, s.name))
+            except Semester.DoesNotExist:
+                pass
+        semesters = semester_list
     else:
-        semesters = Semester.objects.all()
-    
-    semesters = semesters.order_by('order', 'name')
+        term_choices = []
+        session_choices = []
+        semesters = []
     
     # Get semester and course from request
     semester_id = request.GET.get('semester') or request.POST.get('semester')
@@ -10089,6 +10214,27 @@ def ca_management(request):
             course_id = int(course_id)
         except (ValueError, TypeError):
             course_id = None
+
+    if semester_id:
+        try:
+            _sem_chk = Semester.objects.select_related('curriculum').get(pk=semester_id)
+            if _sem_chk.curriculum and _sem_chk.curriculum.code == 'OLD':
+                semester_id = None
+                course_id = None
+                messages.warning(
+                    request,
+                    'Marks use new curriculum only; old-curriculum semesters are not available here.',
+                )
+        except Semester.DoesNotExist:
+            pass
+
+    if (
+        semester_id is None
+        and marks_default_semester_id is not None
+        and request.method == 'GET'
+        and 'semester' not in request.GET
+    ):
+        semester_id = marks_default_semester_id
     
     # Initialize selected semester and course objects
     selected_semester = None
@@ -10326,6 +10472,10 @@ def ca_management(request):
         'selected_centre': selected_centre,
         'selected_centre_id': selected_centre_id,
         'semesters': semesters,
+        'term_choices': term_choices,
+        'session_choices': session_choices,
+        'selected_term': selected_term,
+        'selected_session': selected_session,
         'courses': courses_queryset.order_by('code'),
         'selected_semester_id': semester_id,
         'selected_course_id': course_id,
@@ -10732,6 +10882,15 @@ def _is_final_exam_evaluator_for_scope(teacher, semester, course, centre_id):
     return False
 
 
+def _reject_old_curriculum_for_marks_json(semester, course=None):
+    """Marks UI is new-curriculum only; block API saves for OLD scope."""
+    if getattr(semester, 'curriculum', None) and semester.curriculum.code == 'OLD':
+        return JsonResponse({'error': 'Marks are not available for old curriculum.'}, status=400)
+    if course is not None and getattr(course, 'curriculum', None) and course.curriculum.code == 'OLD':
+        return JsonResponse({'error': 'Marks are not available for old curriculum.'}, status=400)
+    return None
+
+
 @login_required
 def save_ca_marks(request):
     """
@@ -10753,6 +10912,9 @@ def save_ca_marks(request):
         
         semester = Semester.objects.get(id=semester_id)
         course = Course.objects.get(id=course_id)
+        bad = _reject_old_curriculum_for_marks_json(semester, course)
+        if bad:
+            return bad
         
         # Get teacher
         teacher = None
@@ -11275,6 +11437,9 @@ def save_semester_final_attendance(request):
 
         semester = Semester.objects.get(id=semester_id)
         course = Course.objects.get(id=course_id)
+        bad = _reject_old_curriculum_for_marks_json(semester, course)
+        if bad:
+            return bad
 
         centre_id_for_perm = request.POST.get('centre_id') or request.POST.get('centre')
         teacher_user = get_teacher_from_user(request.user)
@@ -11392,6 +11557,9 @@ def save_final_exam_marks(request):
         
         semester = Semester.objects.get(id=semester_id)
         course = Course.objects.get(id=course_id)
+        bad = _reject_old_curriculum_for_marks_json(semester, course)
+        if bad:
+            return bad
         if course.is_lab and teacher_role == 'teacher3':
             teacher_role = 'teacher1'
 
@@ -11724,6 +11892,9 @@ def assign_evaluator(request):
         
         semester = Semester.objects.get(id=semester_id)
         course = Course.objects.get(id=course_id)
+        bad = _reject_old_curriculum_for_marks_json(semester, course)
+        if bad:
+            return bad
         teacher = Teacher.objects.get(id=teacher_id)
         evaluator_number = int(evaluator_number)
 

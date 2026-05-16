@@ -84,6 +84,8 @@
     /* Hide number input spinners (Chrome, Safari, Edge, Firefox) in CA / Final exam / Summary tabs */
     #ca-marks input[type="number"]::-webkit-outer-spin-button,
     #ca-marks input[type="number"]::-webkit-inner-spin-button,
+    #midterm-marks input[type="number"]::-webkit-outer-spin-button,
+    #midterm-marks input[type="number"]::-webkit-inner-spin-button,
     #final-exam input[type="number"]::-webkit-outer-spin-button,
     #final-exam input[type="number"]::-webkit-inner-spin-button,
     #examiner-summary input[type="number"]::-webkit-outer-spin-button,
@@ -92,6 +94,7 @@
         margin: 0;
     }
     #ca-marks input[type="number"],
+    #midterm-marks input[type="number"],
     #final-exam input[type="number"],
     #examiner-summary input[type="number"] {
         -moz-appearance: textfield;
@@ -1240,6 +1243,75 @@
         box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
         outline: none;
     }
+    #midterm-marks .ca-table th,
+    #midterm-marks .ca-table td {
+        -webkit-user-select: none;
+        user-select: none;
+        caret-color: transparent;
+        cursor: default;
+    }
+    #midterm-marks .ca-table input {
+        -webkit-user-select: auto;
+        user-select: auto;
+        caret-color: auto;
+        cursor: text;
+    }
+    #midterm-marks .ca-table .midterm-q-input::placeholder {
+        color: #adb5bd;
+        opacity: 1;
+        text-align: center;
+    }
+    #midterm-marks .ca-table .total-mark {
+        min-width: 3.5rem;
+    }
+
+    /* Mobile: horizontal scroll for Mid-Term Marks (same pattern as CA / Final Exam) */
+    @media screen and (max-width: 768px) {
+        #midterm-marks .table-header {
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        #midterm-marks .table-header .d-flex.align-items-center.gap-2 {
+            flex-wrap: wrap;
+            width: 100%;
+            justify-content: flex-start;
+        }
+        #midterm-marks .table-responsive {
+            overflow-x: auto;
+            overflow-y: visible;
+            -webkit-overflow-scrolling: touch;
+        }
+        #midterm-marks .ca-table {
+            table-layout: auto;
+            width: max-content;
+            min-width: 52rem; /* Student ID + Name + Q1–Q6 + Total */
+        }
+        #midterm-marks .ca-table thead tr:first-child > th.student-info:nth-child(1),
+        #midterm-marks .ca-table tbody td.student-id {
+            width: 7.5rem;
+            min-width: 7.5rem;
+        }
+        #midterm-marks .ca-table thead tr:first-child > th.student-info:nth-child(2),
+        #midterm-marks .ca-table tbody td.student-name {
+            width: 11rem;
+            min-width: 9rem;
+            max-width: 12rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #midterm-marks .ca-table .midterm-q-input {
+            width: 3.25rem;
+            min-width: 3.1rem;
+            max-width: 3.5rem;
+            padding: 6px 4px;
+            font-size: 0.875rem;
+        }
+        #midterm-marks .ca-table thead th small {
+            font-size: 0.7rem;
+            line-height: 1.2;
+        }
+    }
 
     /* Semester Final Attendance: same ca-table look; natural column widths; select like mark inputs */
     #final-exam .ca-table.semester-final-attendance-table {
@@ -1887,7 +1959,7 @@
 
                             {% if show_midterm_marks_tab %}
                             <div class="tab-pane fade" id="midterm-marks" role="tabpanel" aria-labelledby="midterm-marks-tab">
-                                <div class="final-exam-section">
+                                <div class="ca-table-section">
                                     {% include "bou_routines_app/partials/theory_midterm_marks_table.html" %}
                                 </div>
                             </div>

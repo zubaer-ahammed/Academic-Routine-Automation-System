@@ -2479,17 +2479,36 @@ function loadStudentSessionsSelect(semesterId, preserveSession) {
                        }
                        semesterSelect.appendChild(option);
                    });
+                   function semesterOptionExists(semId) {
+                       if (!semId || !semesterSelect) return false;
+                       return [...semesterSelect.options].some(
+                           (o) => o.value === String(semId)
+                       );
+                   }
+                   function reloadCoursesIfSemesterValid(semId) {
+                       if (semId && semesterOptionExists(semId)) {
+                           loadCoursesForSemester(String(semId));
+                       }
+                   }
+                   const activeSemesterId = preserveSemesterId
+                       ? String(preserveSemesterId)
+                       : (semesterSelect.value || '');
                    if (preserveSemesterId) {
                        setTimeout(function() {
-                           semesterSelect.value = String(preserveSemesterId);
+                           if (semesterOptionExists(preserveSemesterId)) {
+                               semesterSelect.value = String(preserveSemesterId);
+                           }
+                           const semId = semesterSelect.value || '';
                            const pv = window.__bouPreserveStudentSession;
                            window.__bouPreserveStudentSession = undefined;
-                           loadStudentSessionsSelect(String(preserveSemesterId), pv);
+                           loadStudentSessionsSelect(semId, pv);
+                           reloadCoursesIfSemesterValid(semId);
                        }, 50);
                    } else {
                        const pv = window.__bouPreserveStudentSession;
                        window.__bouPreserveStudentSession = undefined;
                        loadStudentSessionsSelect(semesterSelect.value || '', pv);
+                       reloadCoursesIfSemesterValid(activeSemesterId);
                    }
         })
         .catch(error => {
@@ -2503,15 +2522,23 @@ function loadSemestersForCentre(centreId) {
     const curriculumInput = document.getElementById('curriculum');
     const curriculumId = curriculumInput ? curriculumInput.value : '';
     const semesterSelect = document.getElementById('semester');
+    const courseSelect = document.getElementById('course');
     const prevSem = semesterSelect ? semesterSelect.value : '';
-    
+
+    if (courseSelect) {
+        courseSelect.innerHTML = '<option value="">-- Course --</option>';
+    }
+
     if (curriculumId) {
         loadSemestersForCurriculum(curriculumId, prevSem || null, centreId);
     } else {
         // Clear semesters and courses if no curriculum selected
-        const courseSelect = document.getElementById('course');
-        semesterSelect.innerHTML = '<option value="">-- Semester --</option>';
-        courseSelect.innerHTML = '<option value="">-- Course --</option>';
+        if (semesterSelect) {
+            semesterSelect.innerHTML = '<option value="">-- Semester --</option>';
+        }
+        if (courseSelect) {
+            courseSelect.innerHTML = '<option value="">-- Course --</option>';
+        }
     }
 }
 

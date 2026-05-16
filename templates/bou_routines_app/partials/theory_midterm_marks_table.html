@@ -51,62 +51,62 @@
                                                     <td>
                                                         <input type="number" class="midterm-q-input"
                                                                name="students_data[{{ student.id }}][q1]"
-                                                               value="{% if mm and mm.q1 %}{{ mm.q1|floatformat:0 }}{% endif %}"
+                                                               value="{% if mm %}{{ mm.q1|mark_input_value:0 }}{% endif %}"
                                                                min="0" max="{{ midterm_set_max }}" step="1"
                                                                data-student-id="{{ student.id }}" data-question="1" data-question-group="A"
                                                                placeholder="Q1"
-                                                               title="Group A: any 2 of Q1–Q3 with marks &gt; 0 (max {{ midterm_set_max }} each)"
+                                                               title="Group A: any 2 of Q1–Q3 with marks entered, including 0 (max {{ midterm_set_max }} each)"
                                                                oninput="validateMidtermQuestionSet(this); autoSaveMidtermMarks();"
                                                                onblur="saveMidtermMarksImmediately();">
                                                     </td>
                                                     <td>
                                                         <input type="number" class="midterm-q-input"
                                                                name="students_data[{{ student.id }}][q2]"
-                                                               value="{% if mm and mm.q2 %}{{ mm.q2|floatformat:0 }}{% endif %}"
+                                                               value="{% if mm %}{{ mm.q2|mark_input_value:0 }}{% endif %}"
                                                                min="0" max="{{ midterm_set_max }}" step="1"
                                                                data-student-id="{{ student.id }}" data-question="2" data-question-group="A"
                                                                placeholder="Q2"
-                                                               title="Group A: any 2 of Q1–Q3 with marks &gt; 0 (max {{ midterm_set_max }} each)"
+                                                               title="Group A: any 2 of Q1–Q3 with marks entered, including 0 (max {{ midterm_set_max }} each)"
                                                                oninput="validateMidtermQuestionSet(this); autoSaveMidtermMarks();"
                                                                onblur="saveMidtermMarksImmediately();">
                                                     </td>
                                                     <td>
                                                         <input type="number" class="midterm-q-input"
                                                                name="students_data[{{ student.id }}][q3]"
-                                                               value="{% if mm and mm.q3 %}{{ mm.q3|floatformat:0 }}{% endif %}"
+                                                               value="{% if mm %}{{ mm.q3|mark_input_value:0 }}{% endif %}"
                                                                min="0" max="{{ midterm_set_max }}" step="1"
                                                                data-student-id="{{ student.id }}" data-question="3" data-question-group="A"
                                                                placeholder="Q3"
-                                                               title="Group A: any 2 of Q1–Q3 with marks &gt; 0 (max {{ midterm_set_max }} each)"
+                                                               title="Group A: any 2 of Q1–Q3 with marks entered, including 0 (max {{ midterm_set_max }} each)"
                                                                oninput="validateMidtermQuestionSet(this); autoSaveMidtermMarks();"
                                                                onblur="saveMidtermMarksImmediately();">
                                                     </td>
                                                     <td>
                                                         <input type="number" class="midterm-q-input"
                                                                name="students_data[{{ student.id }}][q4]"
-                                                               value="{% if mm and mm.q4 %}{{ mm.q4|floatformat:0 }}{% endif %}"
+                                                               value="{% if mm %}{{ mm.q4|mark_input_value:0 }}{% endif %}"
                                                                min="0" max="{{ midterm_set_max }}" step="1"
                                                                data-student-id="{{ student.id }}" data-question="4" data-question-group="B"
                                                                placeholder="Q4"
-                                                               title="Group B: any one of Q4 or Q5 with marks &gt; 0 (max {{ midterm_set_max }})"
+                                                               title="Group B: any one of Q4 or Q5 with marks entered, including 0 (max {{ midterm_set_max }})"
                                                                oninput="validateMidtermQuestionSet(this); autoSaveMidtermMarks();"
                                                                onblur="saveMidtermMarksImmediately();">
                                                     </td>
                                                     <td>
                                                         <input type="number" class="midterm-q-input"
                                                                name="students_data[{{ student.id }}][q5]"
-                                                               value="{% if mm and mm.q5 %}{{ mm.q5|floatformat:0 }}{% endif %}"
+                                                               value="{% if mm %}{{ mm.q5|mark_input_value:0 }}{% endif %}"
                                                                min="0" max="{{ midterm_set_max }}" step="1"
                                                                data-student-id="{{ student.id }}" data-question="5" data-question-group="B"
                                                                placeholder="Q5"
-                                                               title="Group B: any one of Q4 or Q5 with marks &gt; 0 (max {{ midterm_set_max }})"
+                                                               title="Group B: any one of Q4 or Q5 with marks entered, including 0 (max {{ midterm_set_max }})"
                                                                oninput="validateMidtermQuestionSet(this); autoSaveMidtermMarks();"
                                                                onblur="saveMidtermMarksImmediately();">
                                                     </td>
                                                     <td>
                                                         <input type="number" class="midterm-q-input"
                                                                name="students_data[{{ student.id }}][q6]"
-                                                               value="{% if mm and mm.q6 %}{{ mm.q6|floatformat:0 }}{% endif %}"
+                                                               value="{% if mm %}{{ mm.q6|mark_input_value:0 }}{% endif %}"
                                                                min="0" max="{{ midterm_set_max }}" step="1"
                                                                data-student-id="{{ student.id }}" data-question="6" data-question-group="C"
                                                                placeholder="Q6"
@@ -115,7 +115,7 @@
                                                                onblur="saveMidtermMarksImmediately();">
                                                     </td>
                                                     <td class="total-mark text-center">
-                                                        <span id="midterm-raw-total-{{ student.id }}" class="midterm-raw-total-value">{% if mm %}{{ mm.raw_total_float|floatformat:0 }}{% else %}0{% endif %}</span>
+                                                        <span id="midterm-raw-total-{{ student.id }}" class="midterm-raw-total-value">{% if mm and mm.any_q_entered %}{{ mm.raw_total_float|floatformat:0 }}{% else %}0{% endif %}</span>
                                                     </td>
                                                 </tr>
                                                 {% endwith %}

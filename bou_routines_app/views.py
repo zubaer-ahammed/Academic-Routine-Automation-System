@@ -7345,9 +7345,9 @@ def export_ca_marks_pdf(request):
                         str(sl_no),
                         student.id,
                         student.name.upper(),
-                        f"{mark.project_supervisor_mark:.2f}",
-                        f"{mark.project_evaluation_mark:.2f}",
-                        f"{mark.project_presentation_mark:.2f}",
+                        _fmt_export_mark(mark.project_supervisor_mark),
+                        _fmt_export_mark(mark.project_evaluation_mark),
+                        _fmt_export_mark(mark.project_presentation_mark),
                         str(int(math.ceil(float(mark.calculate_total_ca_mark() or 0))))
                     ]
                 elif course.is_lab:
@@ -7356,13 +7356,13 @@ def export_ca_marks_pdf(request):
                             str(sl_no),
                             student.id,
                             student.name.upper(),
-                            f"{mark.attendance_mark:.2f}",
-                            f"{mark.first_lab_assignment_mark:.2f}",
-                            f"{mark.second_lab_assignment_mark:.2f}",
-                            f"{mark.third_lab_assignment_mark:.2f}",
-                            f"{mark.lab_assignment_mark:.2f}",
-                            f"{mark.lab_practical_mark:.2f}",
-                            f"{mark.second_lab_practical_mark:.2f}",
+                            _fmt_export_mark(mark.attendance_mark),
+                            _fmt_export_mark(mark.first_lab_assignment_mark),
+                            _fmt_export_mark(mark.second_lab_assignment_mark),
+                            _fmt_export_mark(mark.third_lab_assignment_mark),
+                            _fmt_export_mark(mark.lab_assignment_mark),
+                            _fmt_export_mark(mark.lab_practical_mark),
+                            _fmt_export_mark(mark.second_lab_practical_mark),
                             str(int(math.ceil(float(mark.calculate_total_ca_mark() or 0))))
                         ]
                     else:
@@ -7370,12 +7370,12 @@ def export_ca_marks_pdf(request):
                             str(sl_no),
                             student.id,
                             student.name.upper(),
-                            f"{mark.attendance_mark:.2f}",
-                            f"{mark.first_lab_assignment_mark:.2f}",
-                            f"{mark.second_lab_assignment_mark:.2f}",
-                            f"{mark.third_lab_assignment_mark:.2f}",
-                            f"{mark.lab_assignment_mark:.2f}",
-                            f"{mark.lab_practical_mark:.2f}",
+                            _fmt_export_mark(mark.attendance_mark),
+                            _fmt_export_mark(mark.first_lab_assignment_mark),
+                            _fmt_export_mark(mark.second_lab_assignment_mark),
+                            _fmt_export_mark(mark.third_lab_assignment_mark),
+                            _fmt_export_mark(mark.lab_assignment_mark),
+                            _fmt_export_mark(mark.lab_practical_mark),
                             str(int(math.ceil(float(mark.calculate_total_ca_mark() or 0))))
                         ]
                 else:
@@ -7387,14 +7387,14 @@ def export_ca_marks_pdf(request):
                             str(sl_no),
                             student.id,
                             student.name.upper(),
-                            f"{mark.attendance_mark:.2f}",
-                            f"{mark.first_assignment_mark:.2f}",
-                            f"{mark.second_assignment_mark:.2f}",
-                            f"{mark.third_assignment_mark:.2f}",
-                            f"{mark.assignment_mark:.2f}",
-                            f"{mark.first_class_test_mark:.2f}",
-                            f"{mark.second_class_test_mark:.2f}",
-                            f"{mark.class_test_mark:.2f}",
+                            _fmt_export_mark(mark.attendance_mark),
+                            _fmt_export_mark(mark.first_assignment_mark),
+                            _fmt_export_mark(mark.second_assignment_mark),
+                            _fmt_export_mark(mark.third_assignment_mark),
+                            _fmt_export_mark(mark.assignment_mark),
+                            _fmt_export_mark(mark.first_class_test_mark),
+                            _fmt_export_mark(mark.second_class_test_mark),
+                            _fmt_export_mark(mark.class_test_mark),
                             str(int(math.ceil(float(mark.calculate_total_ca_mark() or 0))))
                         ]
                     else:
@@ -7403,12 +7403,12 @@ def export_ca_marks_pdf(request):
                             str(sl_no),
                             student.id,
                             student.name.upper(),
-                            f"{mark.attendance_mark:.2f}",
-                            f"{mark.first_assignment_mark:.2f}",
-                            f"{mark.second_assignment_mark:.2f}",
-                            f"{mark.third_assignment_mark:.2f}",
-                            f"{mark.assignment_mark:.2f}",
-                            f"{mark.midterm_mark:.2f}",
+                            _fmt_export_mark(mark.attendance_mark),
+                            _fmt_export_mark(mark.first_assignment_mark),
+                            _fmt_export_mark(mark.second_assignment_mark),
+                            _fmt_export_mark(mark.third_assignment_mark),
+                            _fmt_export_mark(mark.assignment_mark),
+                            _fmt_export_mark(mark.midterm_mark),
                             str(int(math.ceil(float(mark.calculate_total_ca_mark() or 0))))
                         ]
             else:
@@ -8679,73 +8679,44 @@ def export_final_exam_pdf(request):
                 elif course.is_lab:
                     _n = 2 if teacher_role == 'teacher2' else 1
                     if semester.curriculum and semester.curriculum.code != 'OLD':
-                        _ps = float(getattr(mark, f'teacher{_n}_lab_final_exam_mark') or 0)
-                        _viv = float(getattr(mark, f'teacher{_n}_lab_viva_mark') or 0)
+                        _ps_raw = getattr(mark, f'teacher{_n}_lab_final_exam_mark', None)
+                        _viv_raw = getattr(mark, f'teacher{_n}_lab_viva_mark', None)
+                        _ps = float(_ps_raw or 0)
+                        _viv = float(_viv_raw or 0)
                         row = [
                             str(sl_no),
                             student.id,
                             student.name.upper(),
-                            f'{_ps:.2f}',
-                            f'{_viv:.2f}',
+                            _fmt_export_mark(_ps_raw),
+                            _fmt_export_mark(_viv_raw),
                             str(int(math.ceil(_ps + _viv))),
                         ]
                     else:
-                        _v = float(getattr(mark, f'teacher{_n}_lab_final_exam_mark') or 0)
+                        _v_raw = getattr(mark, f'teacher{_n}_lab_final_exam_mark', None)
+                        _v = float(_v_raw or 0)
                         row = [
                             str(sl_no),
                             student.id,
                             student.name.upper(),
-                            f'{_v:.2f}',
+                            _fmt_export_mark(_v_raw),
                             str(int(math.ceil(_v))),
                         ]
                 else:
                     # For theory courses, show marks based on teacher role
-                    if teacher_role == 'teacher1':
-                        q1 = mark.teacher1_q1 or 0
-                        q2 = mark.teacher1_q2 or 0
-                        q3 = mark.teacher1_q3 or 0
-                        q4 = mark.teacher1_q4 or 0
-                        q5 = mark.teacher1_q5 or 0
-                        q6 = mark.teacher1_q6 or 0
-                        q7 = mark.teacher1_q7 or 0
-                    elif teacher_role == 'teacher2':
-                        q1 = mark.teacher2_q1 or 0
-                        q2 = mark.teacher2_q2 or 0
-                        q3 = mark.teacher2_q3 or 0
-                        q4 = mark.teacher2_q4 or 0
-                        q5 = mark.teacher2_q5 or 0
-                        q6 = mark.teacher2_q6 or 0
-                        q7 = mark.teacher2_q7 or 0
+                    if teacher_role == 'teacher2':
+                        q_prefix = 'teacher2'
                     elif teacher_role == 'teacher3':
-                        q1 = mark.teacher3_q1 or 0
-                        q2 = mark.teacher3_q2 or 0
-                        q3 = mark.teacher3_q3 or 0
-                        q4 = mark.teacher3_q4 or 0
-                        q5 = mark.teacher3_q5 or 0
-                        q6 = mark.teacher3_q6 or 0
-                        q7 = mark.teacher3_q7 or 0
+                        q_prefix = 'teacher3'
                     else:
-                        # Default to teacher1
-                        q1 = mark.teacher1_q1 or 0
-                        q2 = mark.teacher1_q2 or 0
-                        q3 = mark.teacher1_q3 or 0
-                        q4 = mark.teacher1_q4 or 0
-                        q5 = mark.teacher1_q5 or 0
-                        q6 = mark.teacher1_q6 or 0
-                        q7 = mark.teacher1_q7 or 0
-                    
+                        q_prefix = 'teacher1'
+                    q_vals = [getattr(mark, f'{q_prefix}_q{i}', None) for i in range(1, 8)]
+                    raw_total = sum(float(v or 0) for v in q_vals)
                     row = [
                         str(sl_no),
                         student.id,
                         student.name.upper(),
-                        f"{q1:.2f}",
-                        f"{q2:.2f}",
-                        f"{q3:.2f}",
-                        f"{q4:.2f}",
-                        f"{q5:.2f}",
-                        f"{q6:.2f}",
-                        f"{q7:.2f}",
-                        str(int(math.ceil(float((q1 or 0) + (q2 or 0) + (q3 or 0) + (q4 or 0) + (q5 or 0) + (q6 or 0) + (q7 or 0)))))
+                        *[_fmt_export_mark(v) for v in q_vals],
+                        str(int(math.ceil(raw_total))),
                     ]
             else:
                 if course.is_lab:
@@ -9542,6 +9513,19 @@ def _ca_marks_dict_for_students_course_semester(students, course, semester):
             temp_mark.attendance_mark = temp_mark.calculate_attendance_mark()
             ca_marks[student.id] = temp_mark
     return ca_marks
+
+
+def _fmt_export_mark(value, places=2):
+    """Format a mark for PDF/Excel export; None (unset) exports as a blank cell."""
+    if value is None:
+        return ''
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return ''
+    if places <= 0:
+        return str(int(num))
+    return f'{num:.{places}f}'
 
 
 def _ca_total_float(cam):
@@ -10811,8 +10795,39 @@ def _clamp_mark_float(raw, maximum=None):
     return x
 
 
+def _parse_optional_mark_float(raw, maximum=None):
+    """Parse teacher-entered mark: None/blank -> None; 0 is a valid explicit mark."""
+    if raw is None:
+        return None
+    if isinstance(raw, str) and raw.strip() == '':
+        return None
+    try:
+        x = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if x < 0:
+        x = 0.0
+    if maximum is not None:
+        try:
+            mx = float(maximum)
+            if x > mx:
+                x = mx
+        except (TypeError, ValueError):
+            pass
+    return x
+
+
+def _optional_mark_decimal(raw, maximum=None):
+    from decimal import Decimal
+
+    val = _parse_optional_mark_float(raw, maximum)
+    if val is None:
+        return None
+    return Decimal(str(val))
+
+
 def _parse_final_exam_q_mark(raw):
-    """Theory final exam one question set: integer 1..14; blank/0 clears (None)."""
+    """Theory final exam one question set: integer 0..14; blank clears (None)."""
     if raw is None or raw == '':
         return None
     try:
@@ -10826,11 +10841,11 @@ def _parse_final_exam_q_mark(raw):
     xi = int(x)  # truncate toward zero; UI is integer-only
     if xi > 14:
         xi = 14
-    return xi if xi > 0 else None
+    return xi
 
 
 def _parse_midterm_q_mark(raw):
-    """Theory mid-term one question set: integer 1..SET_MARKS_MAX; blank/0 clears (None)."""
+    """Theory mid-term one question set: integer 0..SET_MARKS_MAX; blank clears (None)."""
     mx = MidtermExamMark.SET_MARKS_MAX
     if raw is None or raw == '':
         return None
@@ -10845,7 +10860,7 @@ def _parse_midterm_q_mark(raw):
     xi = int(x)
     if xi > mx:
         xi = mx
-    return xi if xi > 0 else None
+    return xi
 
 
 def _apply_theory_final_exam_q_fields(final_mark, teacher_role, marks_data):
@@ -10877,31 +10892,22 @@ def _merge_theory_q_state(marks_data, final_mark, teacher_role):
 
 
 def _theory_q_group_rules_ok(state):
-    """At most two positive marks in Q1–Q3, at most two in Q4–Q6; Q7 is unrestricted (matches UI)."""
-    def is_pos(i):
-        v = state.get(i)
-        if v is None:
-            return False
-        return float(v) > 0
+    """At most two entered marks in Q1–Q3, at most two in Q4–Q6; Q7 is unrestricted (matches UI)."""
+    def is_entered(i):
+        return state.get(i) is not None
 
-    a = sum(1 for i in (1, 2, 3) if is_pos(i))
-    b = sum(1 for i in (4, 5, 6) if is_pos(i))
+    a = sum(1 for i in (1, 2, 3) if is_entered(i))
+    b = sum(1 for i in (4, 5, 6) if is_entered(i))
     return a <= 2 and b <= 2
 
 
 def _midterm_theory_q_group_rules_ok(state):
-    """Six-set mid-term: at most two positive in Q1–Q3, at most one in Q4–Q5; Q6 unrestricted."""
-    def is_pos(i):
-        v = state.get(i)
-        if v is None:
-            return False
-        try:
-            return float(v) > 0
-        except (TypeError, ValueError):
-            return False
+    """Six-set mid-term: at most two entered in Q1–Q3, at most one in Q4–Q5; Q6 unrestricted."""
+    def is_entered(i):
+        return state.get(i) is not None
 
-    a = sum(1 for i in (1, 2, 3) if is_pos(i))
-    b = sum(1 for i in (4, 5) if is_pos(i))
+    a = sum(1 for i in (1, 2, 3) if is_entered(i))
+    b = sum(1 for i in (4, 5) if is_entered(i))
     return a <= 2 and b <= 1
 
 
@@ -10915,11 +10921,11 @@ def _merge_midterm_q_state(marks_data, mm):
             state[i] = _parse_midterm_q_mark(marks_data.get(k))
         else:
             prev = getattr(mm, f'q{i}', None) if mm else None
-            if prev is None or float(prev) == 0:
+            if prev is None:
                 state[i] = None
             else:
                 pv = int(float(prev))
-                state[i] = min(mx, pv) if pv > 0 else None
+                state[i] = min(mx, max(0, pv))
     return state
 
 
@@ -10932,7 +10938,7 @@ def _apply_midterm_q_fields(mm, marks_data):
         if k not in marks_data:
             continue
         val = _parse_midterm_q_mark(marks_data.get(k))
-        setattr(mm, f'q{i}', Decimal(str(val)) if val is not None else Decimal('0'))
+        setattr(mm, f'q{i}', None if val is None else Decimal(str(val)))
 
 
 def _is_final_exam_evaluator_for_scope(teacher, semester, course, centre_id):
@@ -11163,59 +11169,58 @@ def save_ca_marks(request):
                 # Update marks based on course type
                 if course.course_type == 'PROJECT':
                     # Project Work marks
-                    ca_mark.project_supervisor_mark = _clamp_mark_float(
-                        marks_data.get('project_supervisor_mark', 0), course.effective_project_supervisor_weight
+                    ca_mark.project_supervisor_mark = _optional_mark_decimal(
+                        marks_data.get('project_supervisor_mark'), course.effective_project_supervisor_weight
                     )
-                    ca_mark.project_evaluation_mark = _clamp_mark_float(
-                        marks_data.get('project_evaluation_mark', 0), course.effective_project_evaluation_weight
+                    ca_mark.project_evaluation_mark = _optional_mark_decimal(
+                        marks_data.get('project_evaluation_mark'), course.effective_project_evaluation_weight
                     )
-                    ca_mark.project_presentation_mark = _clamp_mark_float(
-                        marks_data.get('project_presentation_mark', 0), course.effective_project_presentation_weight
+                    ca_mark.project_presentation_mark = _optional_mark_decimal(
+                        marks_data.get('project_presentation_mark'), course.effective_project_presentation_weight
                     )
                 elif course.is_lab:
                     # Lab course marks
-                    ca_mark.first_lab_assignment_mark = _clamp_mark_float(
-                        marks_data.get('first_lab_assignment_mark', 0), course.effective_lab_ca_assignment_weight
+                    ca_mark.first_lab_assignment_mark = _optional_mark_decimal(
+                        marks_data.get('first_lab_assignment_mark'), course.effective_lab_ca_assignment_weight
                     )
-                    ca_mark.second_lab_assignment_mark = _clamp_mark_float(
-                        marks_data.get('second_lab_assignment_mark', 0), course.effective_lab_ca_assignment_weight
+                    ca_mark.second_lab_assignment_mark = _optional_mark_decimal(
+                        marks_data.get('second_lab_assignment_mark'), course.effective_lab_ca_assignment_weight
                     )
-                    ca_mark.third_lab_assignment_mark = _clamp_mark_float(
-                        marks_data.get('third_lab_assignment_mark', 0), course.effective_lab_ca_assignment_weight
+                    ca_mark.third_lab_assignment_mark = _optional_mark_decimal(
+                        marks_data.get('third_lab_assignment_mark'), course.effective_lab_ca_assignment_weight
                     )
-                    ca_mark.lab_practical_mark = _clamp_mark_float(
-                        marks_data.get('lab_practical_mark', 0), course.effective_lab_ca_practical_weight
+                    ca_mark.lab_practical_mark = _optional_mark_decimal(
+                        marks_data.get('lab_practical_mark'), course.effective_lab_ca_practical_weight
                     )
                     if course.effective_lab_ca_practical2_weight:
-                        ca_mark.second_lab_practical_mark = _clamp_mark_float(
-                            marks_data.get('second_lab_practical_mark', 0),
+                        ca_mark.second_lab_practical_mark = _optional_mark_decimal(
+                            marks_data.get('second_lab_practical_mark'),
                             course.effective_lab_ca_practical2_weight,
                         )
                     else:
-                        ca_mark.second_lab_practical_mark = 0.0
+                        ca_mark.second_lab_practical_mark = None
                 else:
                     # Theory course marks
-                    ca_mark.first_assignment_mark = _clamp_mark_float(
-                        marks_data.get('first_assignment_mark', 0), course.effective_ca_assignment_weight
+                    ca_mark.first_assignment_mark = _optional_mark_decimal(
+                        marks_data.get('first_assignment_mark'), course.effective_ca_assignment_weight
                     )
-                    ca_mark.second_assignment_mark = _clamp_mark_float(
-                        marks_data.get('second_assignment_mark', 0), course.effective_ca_assignment_weight
+                    ca_mark.second_assignment_mark = _optional_mark_decimal(
+                        marks_data.get('second_assignment_mark'), course.effective_ca_assignment_weight
                     )
-                    ca_mark.third_assignment_mark = _clamp_mark_float(
-                        marks_data.get('third_assignment_mark', 0), course.effective_ca_assignment_weight
+                    ca_mark.third_assignment_mark = _optional_mark_decimal(
+                        marks_data.get('third_assignment_mark'), course.effective_ca_assignment_weight
                     )
                     
                     # Determine which exam type to use based on curriculum
                     if semester.curriculum and semester.curriculum.code == 'OLD':
                         # Old curriculum: use class tests (best of first and second)
-                        ca_mark.first_class_test_mark = _clamp_mark_float(
-                            marks_data.get('first_class_test_mark', 0), course.effective_ca_quiz_weight
+                        ca_mark.first_class_test_mark = _optional_mark_decimal(
+                            marks_data.get('first_class_test_mark'), course.effective_ca_quiz_weight
                         )
-                        ca_mark.second_class_test_mark = _clamp_mark_float(
-                            marks_data.get('second_class_test_mark', 0), course.effective_ca_quiz_weight
+                        ca_mark.second_class_test_mark = _optional_mark_decimal(
+                            marks_data.get('second_class_test_mark'), course.effective_ca_quiz_weight
                         )
-                        # Set midterm to 0 for old curriculum
-                        ca_mark.midterm_mark = 0
+                        ca_mark.midterm_mark = None
                     else:
                         # New curriculum: mid-term from MidtermExamMark sheet when present
                         if MidtermExamMark.objects.filter(student=student, course=course, semester=semester).exists():
@@ -11224,16 +11229,16 @@ def save_ca_marks(request):
                             )
                             ca_mark.midterm_mark = mm_sync.scaled_midterm_contribution()
                         else:
-                            ca_mark.midterm_mark = _clamp_mark_float(
-                                marks_data.get('midterm_mark', 0), course.effective_ca_midterm_weight
+                            ca_mark.midterm_mark = _optional_mark_decimal(
+                                marks_data.get('midterm_mark'), course.effective_ca_midterm_weight
                             )
-                        # Set class tests to 0 for new curriculum
-                        ca_mark.first_class_test_mark = 0
-                        ca_mark.second_class_test_mark = 0
+                        ca_mark.first_class_test_mark = None
+                        ca_mark.second_class_test_mark = None
                 
                 # Update metadata
                 ca_mark.marked_by = teacher
-                ca_mark.notes = marks_data.get('notes', '')
+                notes_val = marks_data.get('notes')
+                ca_mark.notes = '' if notes_val is None else str(notes_val)
                 
                 # Validate that required fields are set before save
                 if not ca_mark.marked_by:
@@ -11411,7 +11416,7 @@ def save_midterm_marks(request):
                     {
                         'error': (
                             'Mid-term rules: at most 2 of Q1–Q3 and at most 1 of Q4–Q5 can have marks '
-                            'greater than 0. Adjust Group A, Group B, and Q6, then save again.'
+                            'entered (including 0). Adjust Group A, Group B, and Q6, then save again.'
                         )
                     },
                     status=400,
@@ -11850,12 +11855,13 @@ def save_final_exam_marks(request):
                         for k in (ps_key, viv_key, 'lab_final_exam_mark', 'lab_viva_mark'):
                             if k not in marks_data:
                                 continue
-                            try:
-                                if float(marks_data.get(k) or 0) > 0:
-                                    has_positive_final = True
-                                    break
-                            except (TypeError, ValueError):
-                                pass
+                            raw = marks_data.get(k)
+                            if raw is None:
+                                continue
+                            if isinstance(raw, str) and raw.strip() == '':
+                                continue
+                            has_positive_final = True
+                            break
                     if has_positive_final:
                         final_mark.exam_absent = False
                     elif 'exam_absent' in marks_data:
@@ -11877,23 +11883,28 @@ def save_final_exam_marks(request):
                                 marks_data = {**marks_data, viv_key: marks_data.get('lab_viva_mark')}
                             if semester.curriculum_id and semester.curriculum.code == 'OLD':
                                 lab_final_max = 60.0
-                                try:
-                                    lab_raw = float(marks_data.get(ps_key, 0) or 0)
-                                except (TypeError, ValueError):
-                                    lab_raw = 0.0
-                                setattr(final_mark, ps_key, max(0.0, min(lab_raw, lab_final_max)))
-                                setattr(final_mark, viv_key, 0.0)
+                                pr = _parse_optional_mark_float(marks_data.get(ps_key), lab_final_max)
+                                from decimal import Decimal
+                                setattr(
+                                    final_mark,
+                                    ps_key,
+                                    None if pr is None else Decimal(str(max(0.0, min(pr, lab_final_max)))),
+                                )
+                                setattr(final_mark, viv_key, None)
                             else:
-                                try:
-                                    pr = float(marks_data.get(ps_key, 0) or 0)
-                                except (TypeError, ValueError):
-                                    pr = 0.0
-                                try:
-                                    viv = float(marks_data.get(viv_key, 0) or 0)
-                                except (TypeError, ValueError):
-                                    viv = 0.0
-                                setattr(final_mark, ps_key, max(0.0, min(pr, 20.0)))
-                                setattr(final_mark, viv_key, max(0.0, min(viv, 5.0)))
+                                pr = _parse_optional_mark_float(marks_data.get(ps_key), 20.0)
+                                viv = _parse_optional_mark_float(marks_data.get(viv_key), 5.0)
+                                from decimal import Decimal
+                                setattr(
+                                    final_mark,
+                                    ps_key,
+                                    None if pr is None else Decimal(str(max(0.0, min(pr, 20.0)))),
+                                )
+                                setattr(
+                                    final_mark,
+                                    viv_key,
+                                    None if viv is None else Decimal(str(max(0.0, min(viv, 5.0)))),
+                                )
                             if not apply_assign_from_post:
                                 if lab_prefix == 'teacher1':
                                     final_mark.teacher1_evaluator = teacher
@@ -11908,7 +11919,7 @@ def save_final_exam_marks(request):
                                     {
                                         'error': (
                                             'Theory final rules: at most 2 of Q1–Q3 and at most 2 of Q4–Q6 can have marks '
-                                            'greater than 0. Adjust Group A, Group B, and Q7, then save again.'
+                                            'entered (including 0). Adjust Group A, Group B, and Q7, then save again.'
                                         )
                                     },
                                     status=400,

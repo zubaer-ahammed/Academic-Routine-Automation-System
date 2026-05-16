@@ -541,32 +541,32 @@ class CAMark(models.Model):
     attendance_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Attendance mark (auto-calculated)")
     
     # Assignment/Presentation fields (3 assignments + average)
-    first_assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="First Assignment/Presentation mark")
-    second_assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Second Assignment/Presentation mark")
-    third_assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Third Assignment/Presentation mark")
+    first_assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="First Assignment/Presentation mark")
+    second_assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Second Assignment/Presentation mark")
+    third_assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Third Assignment/Presentation mark")
     assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Average Assignment mark (auto-calculated)")
     
     # Class Test fields (for old curriculum - best of two is counted)
-    first_class_test_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="First Class Test mark (for old curriculum)")
-    second_class_test_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Second Class Test mark (for old curriculum)")
+    first_class_test_mark = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="First Class Test mark (for old curriculum)")
+    second_class_test_mark = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Second Class Test mark (for old curriculum)")
     class_test_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Best Class Test mark (auto-calculated, best of first and second)")
-    midterm_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Midterm mark (for new curriculum)")
+    midterm_mark = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Midterm mark (for new curriculum)")
     
     # Lab course CA components
     # Lab Assignment/Presentation fields (3 assignments + average)
-    first_lab_assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="First Lab Assignment/Report mark")
-    second_lab_assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Second Lab Assignment/Report mark")
-    third_lab_assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Third Lab Assignment/Report mark")
+    first_lab_assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="First Lab Assignment/Report mark")
+    second_lab_assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Second Lab Assignment/Report mark")
+    third_lab_assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Third Lab Assignment/Report mark")
     lab_assignment_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Average Lab Assignment mark (auto-calculated)")
-    lab_practical_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Lab practical / first experiment mark")
+    lab_practical_mark = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Lab practical / first experiment mark")
     second_lab_practical_mark = models.DecimalField(
-        max_digits=5, decimal_places=2, default=0, help_text="Second experiment / lab project mark (new curriculum split)"
+        max_digits=5, decimal_places=2, null=True, blank=True, help_text="Second experiment / lab project mark (new curriculum split)"
     )
     
     # Project Work CA components
-    project_supervisor_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Project supervisor mark")
-    project_evaluation_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Project evaluation mark")
-    project_presentation_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Project presentation mark")
+    project_supervisor_mark = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Project supervisor mark")
+    project_evaluation_mark = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Project evaluation mark")
+    project_presentation_mark = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Project presentation mark")
     
     # Total CA mark (calculated)
     total_ca_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Total CA mark")
@@ -623,18 +623,30 @@ class CAMark(models.Model):
         return 0
     
     def calculate_assignment_mark(self):
-        """Calculate average assignment mark from the three assignments"""
-        total = self.first_assignment_mark + self.second_assignment_mark + self.third_assignment_mark
-        if total > 0:
-            return round(total / 3, 2)
-        return 0
+        """Calculate average assignment mark from the three assignments (unset counts as 0)."""
+        v1 = float(self.first_assignment_mark or 0)
+        v2 = float(self.second_assignment_mark or 0)
+        v3 = float(self.third_assignment_mark or 0)
+        if (
+            self.first_assignment_mark is None
+            and self.second_assignment_mark is None
+            and self.third_assignment_mark is None
+        ):
+            return 0
+        return round((v1 + v2 + v3) / 3, 2)
     
     def calculate_lab_assignment_mark(self):
-        """Calculate average lab assignment mark from the three lab assignments"""
-        total = self.first_lab_assignment_mark + self.second_lab_assignment_mark + self.third_lab_assignment_mark
-        if total > 0:
-            return round(total / 3, 2)
-        return 0
+        """Calculate average lab assignment mark from the three lab assignments (unset counts as 0)."""
+        v1 = float(self.first_lab_assignment_mark or 0)
+        v2 = float(self.second_lab_assignment_mark or 0)
+        v3 = float(self.third_lab_assignment_mark or 0)
+        if (
+            self.first_lab_assignment_mark is None
+            and self.second_lab_assignment_mark is None
+            and self.third_lab_assignment_mark is None
+        ):
+            return 0
+        return round((v1 + v2 + v3) / 3, 2)
     
     def calculate_class_test_mark(self):
         """Calculate best class test mark (best of first and second)"""
@@ -647,9 +659,9 @@ class CAMark(models.Model):
         if self.course.course_type == 'PROJECT':
             # Project Work: supervisor + evaluation + presentation
             return (
-                self.project_supervisor_mark +
-                self.project_evaluation_mark +
-                self.project_presentation_mark
+                float(self.project_supervisor_mark or 0)
+                + float(self.project_evaluation_mark or 0)
+                + float(self.project_presentation_mark or 0)
             )
         elif self.course.is_lab:
             # Lab course: attendance + lab assignment + lab practical (+ optional second experiment)
@@ -688,34 +700,33 @@ class CAMark(models.Model):
     def save(self, *args, **kwargs):
         from decimal import Decimal
 
-        def _to_decimal(val):
+        def _to_decimal_or_none(val):
             if val is None:
-                return Decimal('0')
+                return None
             if isinstance(val, Decimal):
                 return val
-            # Handles float/int/str safely
             return Decimal(str(val))
 
-        # Normalize numeric fields (POST assigns floats; calculations expect Decimals)
-        self.first_assignment_mark = _to_decimal(self.first_assignment_mark)
-        self.second_assignment_mark = _to_decimal(self.second_assignment_mark)
-        self.third_assignment_mark = _to_decimal(self.third_assignment_mark)
-        self.midterm_mark = _to_decimal(self.midterm_mark)
-        self.first_class_test_mark = _to_decimal(self.first_class_test_mark)
-        self.second_class_test_mark = _to_decimal(self.second_class_test_mark)
+        # Normalize teacher-entered fields (preserve None = not entered)
+        self.first_assignment_mark = _to_decimal_or_none(self.first_assignment_mark)
+        self.second_assignment_mark = _to_decimal_or_none(self.second_assignment_mark)
+        self.third_assignment_mark = _to_decimal_or_none(self.third_assignment_mark)
+        self.midterm_mark = _to_decimal_or_none(self.midterm_mark)
+        self.first_class_test_mark = _to_decimal_or_none(self.first_class_test_mark)
+        self.second_class_test_mark = _to_decimal_or_none(self.second_class_test_mark)
 
-        self.first_lab_assignment_mark = _to_decimal(self.first_lab_assignment_mark)
-        self.second_lab_assignment_mark = _to_decimal(self.second_lab_assignment_mark)
-        self.third_lab_assignment_mark = _to_decimal(self.third_lab_assignment_mark)
-        self.lab_practical_mark = _to_decimal(self.lab_practical_mark)
+        self.first_lab_assignment_mark = _to_decimal_or_none(self.first_lab_assignment_mark)
+        self.second_lab_assignment_mark = _to_decimal_or_none(self.second_lab_assignment_mark)
+        self.third_lab_assignment_mark = _to_decimal_or_none(self.third_lab_assignment_mark)
+        self.lab_practical_mark = _to_decimal_or_none(self.lab_practical_mark)
         if self.course.is_lab and not self.course.effective_lab_ca_practical2_weight:
-            self.second_lab_practical_mark = Decimal('0')
+            self.second_lab_practical_mark = None
         else:
-            self.second_lab_practical_mark = _to_decimal(self.second_lab_practical_mark)
+            self.second_lab_practical_mark = _to_decimal_or_none(self.second_lab_practical_mark)
 
-        self.project_supervisor_mark = _to_decimal(self.project_supervisor_mark)
-        self.project_evaluation_mark = _to_decimal(self.project_evaluation_mark)
-        self.project_presentation_mark = _to_decimal(self.project_presentation_mark)
+        self.project_supervisor_mark = _to_decimal_or_none(self.project_supervisor_mark)
+        self.project_evaluation_mark = _to_decimal_or_none(self.project_evaluation_mark)
+        self.project_presentation_mark = _to_decimal_or_none(self.project_presentation_mark)
         
         # Auto-calculate attendance mark
         attendance_mark_float = self.calculate_attendance_mark()
@@ -736,12 +747,12 @@ class CAMark(models.Model):
         # Set midterm to 0 for old curriculum, class tests to 0 for new curriculum
         if self.semester and self.semester.curriculum:
             if self.semester.curriculum.code == 'OLD':
-                # Old curriculum: set midterm to 0 (use class tests)
-                self.midterm_mark = Decimal('0')
+                # Old curriculum: mid-term sheet not used
+                self.midterm_mark = None
             else:
-                # New curriculum: set class tests to 0 (use midterm)
-                self.first_class_test_mark = Decimal('0')
-                self.second_class_test_mark = Decimal('0')
+                # New curriculum: class tests not used
+                self.first_class_test_mark = None
+                self.second_class_test_mark = None
                 self.class_test_mark = Decimal('0')
         
         # Calculate total CA mark
@@ -765,12 +776,12 @@ class MidtermExamMark(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
     course = models.ForeignKey(Course, on_delete=models.CASCADE)
     semester = models.ForeignKey(Semester, on_delete=models.CASCADE)
-    q1 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, default=0)
-    q2 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, default=0)
-    q3 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, default=0)
-    q4 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, default=0)
-    q5 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, default=0)
-    q6 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, default=0)
+    q1 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    q2 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    q3 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    q4 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    q5 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    q6 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     marked_by = models.ForeignKey('Teacher', on_delete=models.CASCADE, related_name='midterm_exam_marks_marked_by')
     marked_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -781,6 +792,13 @@ class MidtermExamMark(models.Model):
 
     def __str__(self):
         return f"{self.student_id} - {self.course.code} - Midterm raw"
+
+    def any_q_entered(self):
+        """True if any question set has been entered (including explicit 0)."""
+        for i in range(1, 7):
+            if getattr(self, f'q{i}') is not None:
+                return True
+        return False
 
     def raw_total_float(self):
         """Sum of Q1–Q6 (each treated as 0 if null)."""
@@ -793,9 +811,12 @@ class MidtermExamMark(models.Model):
         """Map raw total (max RAW_TOTAL_MAX) onto 0..course effective mid-term CA weight."""
         from decimal import Decimal
 
+        if not self.any_q_entered():
+            return None
+
         course = self.course
         if not course:
-            return Decimal('0')
+            return None
         weight = float(course.effective_ca_midterm_weight or 0)
         cap = float(self.RAW_TOTAL_MAX)
         raw = min(self.raw_total_float(), cap)
@@ -816,43 +837,43 @@ class FinalExamMark(models.Model):
     
     # Theory course: 7 question sets (each max 14 marks, total max 70)
     # Teacher 1 evaluation
-    teacher1_q1 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 1 - Question Set 1 (max 14)")
-    teacher1_q2 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 1 - Question Set 2 (max 14)")
-    teacher1_q3 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 1 - Question Set 3 (max 14)")
-    teacher1_q4 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 1 - Question Set 4 (max 14)")
-    teacher1_q5 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 1 - Question Set 5 (max 14)")
-    teacher1_q6 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 1 - Question Set 6 (max 14)")
-    teacher1_q7 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 1 - Question Set 7 (max 14)")
+    teacher1_q1 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Teacher 1 - Question Set 1 (max 14)")
+    teacher1_q2 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Teacher 1 - Question Set 2 (max 14)")
+    teacher1_q3 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Teacher 1 - Question Set 3 (max 14)")
+    teacher1_q4 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Teacher 1 - Question Set 4 (max 14)")
+    teacher1_q5 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Teacher 1 - Question Set 5 (max 14)")
+    teacher1_q6 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Teacher 1 - Question Set 6 (max 14)")
+    teacher1_q7 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Teacher 1 - Question Set 7 (max 14)")
     teacher1_total = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Teacher 1 total (auto-calculated, max 70)")
     
     # Teacher 2 evaluation
-    teacher2_q1 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 2 - Question Set 1 (max 14)")
-    teacher2_q2 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 2 - Question Set 2 (max 14)")
-    teacher2_q3 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 2 - Question Set 3 (max 14)")
-    teacher2_q4 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 2 - Question Set 4 (max 14)")
-    teacher2_q5 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 2 - Question Set 5 (max 14)")
-    teacher2_q6 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 2 - Question Set 6 (max 14)")
-    teacher2_q7 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 2 - Question Set 7 (max 14)")
+    teacher2_q1 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Teacher 2 - Question Set 1 (max 14)")
+    teacher2_q2 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Teacher 2 - Question Set 2 (max 14)")
+    teacher2_q3 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Teacher 2 - Question Set 3 (max 14)")
+    teacher2_q4 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Teacher 2 - Question Set 4 (max 14)")
+    teacher2_q5 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Teacher 2 - Question Set 5 (max 14)")
+    teacher2_q6 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Teacher 2 - Question Set 6 (max 14)")
+    teacher2_q7 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Teacher 2 - Question Set 7 (max 14)")
     teacher2_total = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Teacher 2 total (auto-calculated, max 70)")
     
     # Teacher 3 evaluation (only if |T1 total − T2 total| > 14 marks)
-    teacher3_q1 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 3 - Question Set 1 (max 14)")
-    teacher3_q2 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 3 - Question Set 2 (max 14)")
-    teacher3_q3 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 3 - Question Set 3 (max 14)")
-    teacher3_q4 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 3 - Question Set 4 (max 14)")
-    teacher3_q5 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 3 - Question Set 5 (max 14)")
-    teacher3_q6 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 3 - Question Set 6 (max 14)")
-    teacher3_q7 = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Teacher 3 - Question Set 7 (max 14)")
+    teacher3_q1 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Teacher 3 - Question Set 1 (max 14)")
+    teacher3_q2 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Teacher 3 - Question Set 2 (max 14)")
+    teacher3_q3 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Teacher 3 - Question Set 3 (max 14)")
+    teacher3_q4 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Teacher 3 - Question Set 4 (max 14)")
+    teacher3_q5 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Teacher 3 - Question Set 5 (max 14)")
+    teacher3_q6 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Teacher 3 - Question Set 6 (max 14)")
+    teacher3_q7 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Teacher 3 - Question Set 7 (max 14)")
     teacher3_total = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Teacher 3 total (auto-calculated, max 70)")
     
     # Lab course: old curriculum = single field (max 60). New curriculum = problem solving (max 20) + viva (max 5)
     # Per examiner (internal = teacher1, external = teacher2); legacy lab_* are denormalized averages for exports.
-    teacher1_lab_final_exam_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Internal examiner — problem solving / old curriculum final")
-    teacher1_lab_viva_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Internal examiner — viva (new curriculum)")
-    teacher2_lab_final_exam_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="External examiner — problem solving / old curriculum final")
-    teacher2_lab_viva_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="External examiner — viva (new curriculum)")
-    lab_final_exam_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Lab course: denormalized avg problem solving / old curriculum (legacy readers)")
-    lab_viva_mark = models.DecimalField(max_digits=5, decimal_places=2, default=0, null=True, blank=True, help_text="Lab viva: denormalized average (legacy readers)")
+    teacher1_lab_final_exam_mark = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Internal examiner — problem solving / old curriculum final")
+    teacher1_lab_viva_mark = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Internal examiner — viva (new curriculum)")
+    teacher2_lab_final_exam_mark = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="External examiner — problem solving / old curriculum final")
+    teacher2_lab_viva_mark = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="External examiner — viva (new curriculum)")
+    lab_final_exam_mark = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Lab course: denormalized avg problem solving / old curriculum (legacy readers)")
+    lab_viva_mark = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Lab viva: denormalized average (legacy readers)")
     
     # Final total (for theory: average of teachers, for lab: single value)
     final_exam_total = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Final exam total mark")
@@ -955,7 +976,7 @@ class FinalExamMark(models.Model):
         for i in range(1, 8):
             field_name = f'teacher{teacher_num}_q{i}'
             value = getattr(self, field_name, None)
-            if value:
+            if value is not None:
                 total += Decimal(str(value))
         return total
     
@@ -989,13 +1010,13 @@ class FinalExamMark(models.Model):
                 self.teacher2_lab_final_exam_mark,
                 self.teacher2_lab_viva_mark,
             ):
-                if f is not None and float(f) > 0:
+                if f is not None:
                     return True
             return False
         for tn in (1, 2, 3):
             for i in range(1, 8):
                 v = getattr(self, f'teacher{tn}_q{i}', None)
-                if v is not None and float(v) > 0:
+                if v is not None:
                     return True
         return False
 

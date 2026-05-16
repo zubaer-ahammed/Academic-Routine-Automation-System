@@ -115,7 +115,7 @@
                                                                onblur="saveMidtermMarksImmediately();">
                                                     </td>
                                                     <td class="total-mark text-center">
-                                                        <span id="midterm-raw-total-{{ student.id }}" class="midterm-raw-total-value">{% if mm and mm.any_q_entered %}{{ mm.raw_total_float|floatformat:0 }}{% else %}0{% endif %}</span>
+                                                        <span id="midterm-raw-total-{{ student.id }}" class="midterm-raw-total-value">{% if mm %}{{ mm.raw_total_display }}{% else %}-{% endif %}</span>
                                                     </td>
                                                 </tr>
                                                 {% endwith %}

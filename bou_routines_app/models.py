@@ -807,6 +807,12 @@ class MidtermExamMark(models.Model):
             total += float(getattr(self, f'q{i}') or 0)
         return total
 
+    def raw_total_display(self):
+        """UI/PDF total column: '-' when no question entered, else raw sum (0 if all zeros)."""
+        if not self.any_q_entered():
+            return '-'
+        return str(int(self.raw_total_float()))
+
     def scaled_midterm_contribution(self):
         """Map raw total (max RAW_TOTAL_MAX) onto 0..course effective mid-term CA weight."""
         from decimal import Decimal

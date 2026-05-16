@@ -3319,21 +3319,7 @@ function validateMidtermQuestionSet(inputElement) {
         });
     }
 
-    let total = 0;
-    questionInputs.forEach(function (input) {
-        const raw = (input.value || '').trim();
-        if (raw === '') {
-            return;
-        }
-        const v = parseInt(raw, 10);
-        if (!isNaN(v) && v >= 0) {
-            total += v;
-        }
-    });
-    const totEl = document.getElementById('midterm-raw-total-' + studentId);
-    if (totEl) {
-        totEl.textContent = String(total);
-    }
+    updateMidtermRawTotalDisplay(row);
 
     const rawTrim = (inputElement.value || '').trim();
     const advanceRe = new RegExp('^[1-' + String(MIDTERM_SET_MAX) + ']$');
@@ -3540,6 +3526,45 @@ function saveMidtermMarks(reloadPage) {
 const MIDTERM_CA_WEIGHT = parseFloat("{% if show_midterm_marks_tab and selected_course %}{{ selected_course.effective_ca_midterm_weight|default:0 }}{% else %}0{% endif %}", 10) || 0;
 const MIDTERM_SET_MAX = parseInt("{{ midterm_set_max|default:5 }}", 10) || 5;
 const MIDTERM_RAW_TOTAL_MAX = parseInt("{{ midterm_raw_total_max|default:20 }}", 10) || 20;
+
+function midtermRawTotalDisplayForRow(row) {
+    if (!row) {
+        return '-';
+    }
+    const questionInputs = row.querySelectorAll('.midterm-q-input');
+    let total = 0;
+    let anyEntered = false;
+    questionInputs.forEach(function (input) {
+        const raw = (input.value || '').trim();
+        if (raw === '') {
+            return;
+        }
+        const v = parseInt(raw, 10);
+        if (!isNaN(v) && v >= 0) {
+            anyEntered = true;
+            total += v;
+        }
+    });
+    return anyEntered ? String(total) : '-';
+}
+
+function updateMidtermRawTotalDisplay(row) {
+    if (!row) {
+        return;
+    }
+    const sidCell = row.querySelector('td.student-id[data-student-id]');
+    let studentId = sidCell ? sidCell.getAttribute('data-student-id') : null;
+    if (!studentId && row.id && row.id.indexOf('midterm-row-') === 0) {
+        studentId = row.id.replace('midterm-row-', '');
+    }
+    if (!studentId) {
+        return;
+    }
+    const totEl = document.getElementById('midterm-raw-total-' + studentId);
+    if (totEl) {
+        totEl.textContent = midtermRawTotalDisplayForRow(row);
+    }
+}
 
 function scaledMidtermContribFromRawSum(rawSum) {
     var r = parseFloat(String(rawSum)) || 0;

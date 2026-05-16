@@ -92,8 +92,13 @@ def filter_students_queryset_by_centre(students_qs, centre_id):
         return students_qs
 
 
+def _pdf_page_number_label(page_num, total_pages):
+    """Standard footer page label for marks/attendance PDF exports."""
+    return f'Page {page_num} of {total_pages}'
+
+
 def _pdf_add_page_number(canvas, doc):
-    """Footer page number for PDF exports."""
+    """Footer page number for PDF exports (total unknown; current page only)."""
     canvas.saveState()
     canvas.setFont('Helvetica', 9)
     page_width, _page_height = doc.pagesize
@@ -6484,7 +6489,9 @@ def export_attendance_pdf(request):
             faculty_text = 'Faculty:' if hide_faculty_pdf else f'Faculty: {teacher_name_for_signature}'
             cnv.drawString(footer_left_x, footer_text_y, faculty_text)
             cnv.setFont('Helvetica', 9)
-            cnv.drawRightString(footer_right_x, footer_text_y, f'Page {page_num}-{total_pages}')
+            cnv.drawRightString(
+                footer_right_x, footer_text_y, _pdf_page_number_label(page_num, total_pages)
+            )
             cnv.restoreState()
 
         _AttFooterCanvas = _make_deferred_footer_canvas_class(_draw_attendance_pdf_footer)
@@ -6859,7 +6866,9 @@ def export_blank_attendance_pdf(request):
             faculty_text = 'Faculty:' if hide_faculty_pdf else f'Faculty: {teacher_name_for_signature}'
             cnv.drawString(footer_left_x, footer_text_y, faculty_text)
             cnv.setFont('Helvetica', 9)
-            cnv.drawRightString(footer_right_x, footer_text_y, f'Page {page_num}-{total_pages}')
+            cnv.drawRightString(
+                footer_right_x, footer_text_y, _pdf_page_number_label(page_num, total_pages)
+            )
             cnv.restoreState()
 
         _BlankAttFooterCanvas = _make_deferred_footer_canvas_class(_draw_blank_attendance_pdf_footer)
@@ -7543,7 +7552,9 @@ def export_ca_marks_pdf(request):
             cnv.setFont('Helvetica', 10)
             cnv.drawString(left_x, footer_y_text, 'Signature of the course teacher')
             cnv.setFont('Helvetica', 9)
-            cnv.drawRightString(right_x, footer_y_text, f'Page {page_num}-{total_pages}')
+            cnv.drawRightString(
+                right_x, footer_y_text, _pdf_page_number_label(page_num, total_pages)
+            )
             cnv.restoreState()
 
         _CaFooterCanvas = _make_deferred_footer_canvas_class(_draw_ca_marks_pdf_footer)
@@ -8780,7 +8791,9 @@ def export_final_exam_pdf(request):
             cnv.drawString(left_x, footer_y_text, 'Internal Examiner')
             cnv.drawRightString(right_x_end, footer_y_text, 'External Examiner')
             cnv.setFont('Helvetica', 9)
-            cnv.drawCentredString(pw / 2.0, footer_y_text, f'Page {page_num}-{total_pages}')
+            cnv.drawCentredString(
+                pw / 2.0, footer_y_text, _pdf_page_number_label(page_num, total_pages)
+            )
             cnv.restoreState()
 
         _FeMarksFooterCanvas = _make_deferred_footer_canvas_class(_draw_final_exam_marks_pdf_footer)
@@ -9188,7 +9201,9 @@ def export_blank_final_exam_pdf(request):
             cnv.drawString(left_x, footer_y_text, 'Internal Examiner')
             cnv.drawRightString(right_x_end, footer_y_text, 'External Examiner')
             cnv.setFont('Helvetica', 9)
-            cnv.drawCentredString(pw / 2.0, footer_y_text, f'Page {page_num}-{total_pages}')
+            cnv.drawCentredString(
+                pw / 2.0, footer_y_text, _pdf_page_number_label(page_num, total_pages)
+            )
             cnv.restoreState()
 
         _BlankFeFooterCanvas = _make_deferred_footer_canvas_class(_draw_blank_final_exam_pdf_footer)
@@ -9801,7 +9816,7 @@ def export_final_exam_summary_pdf(request):
     """
     Export Final Exam Summary (admin consolidated view) to PDF.
     Matches Semester Final Marks PDF layout (banner, study center, table borders,
-    zebra rows, footer signatures + page numbers) but omits the Examiner line.
+    zebra rows, chairman signature + page numbers) but omits the Examiner line.
     """
     try:
         if not _is_ca_management_admin(request):
@@ -10007,20 +10022,19 @@ def export_final_exam_summary_pdf(request):
         def _draw_final_exam_summary_pdf_footer(cnv, page_num, total_pages):
             pw, _ph = landscape(A4)
             left_x = _fes_lm
-            right_x_end = pw - _fes_rm
-            right_x = right_x_end - 250
             footer_y_line = 48
             footer_y_text = 34
+            sig_line_width = 280
             cnv.saveState()
             cnv.setLineWidth(1)
             cnv.setStrokeColor(colors.black)
-            cnv.line(left_x, footer_y_line, left_x + 250, footer_y_line)
-            cnv.line(right_x, footer_y_line, right_x_end, footer_y_line)
+            cnv.line(left_x, footer_y_line, left_x + sig_line_width, footer_y_line)
             cnv.setFont('Helvetica', 10)
-            cnv.drawString(left_x, footer_y_text, 'Internal Examiner')
-            cnv.drawRightString(right_x_end, footer_y_text, 'External Examiner')
+            cnv.drawString(left_x, footer_y_text, 'Chairman of the Examination Committee')
             cnv.setFont('Helvetica', 9)
-            cnv.drawCentredString(pw / 2.0, footer_y_text, f'Page {page_num}-{total_pages}')
+            cnv.drawRightString(
+                pw - _fes_rm, footer_y_text, _pdf_page_number_label(page_num, total_pages)
+            )
             cnv.restoreState()
 
         _FesFooterCanvas = _make_deferred_footer_canvas_class(_draw_final_exam_summary_pdf_footer)

@@ -97,6 +97,25 @@ def _pdf_page_number_label(page_num, total_pages):
     return f'Page {page_num} of {total_pages}'
 
 
+def _draw_course_teacher_signature_pdf_footer(cnv, page_num, total_pages, left_margin, right_margin):
+    """CA / Mid-Term marks PDF: course-teacher signature line left, page number right."""
+    pw, _ph = landscape(A4)
+    left_x = left_margin
+    right_x = pw - right_margin
+    footer_y_line = 48
+    footer_y_text = 34
+    line_w = 280
+    cnv.saveState()
+    cnv.setLineWidth(1)
+    cnv.setStrokeColor(colors.black)
+    cnv.line(left_x, footer_y_line, left_x + line_w, footer_y_line)
+    cnv.setFont('Helvetica', 10)
+    cnv.drawString(left_x, footer_y_text, 'Signature of the course teacher')
+    cnv.setFont('Helvetica', 9)
+    cnv.drawRightString(right_x, footer_y_text, _pdf_page_number_label(page_num, total_pages))
+    cnv.restoreState()
+
+
 def _pdf_add_page_number(canvas, doc):
     """Footer page number for PDF exports (total unknown; current page only)."""
     canvas.saveState()
@@ -7539,23 +7558,9 @@ def export_ca_marks_pdf(request):
         elements.append(table)
 
         def _draw_ca_marks_pdf_footer(cnv, page_num, total_pages):
-            pw, _ph = landscape(A4)
-            left_x = _ca_lm
-            right_x = pw - _ca_rm
-            footer_y_line = 48
-            footer_y_text = 34
-            line_w = 280
-            cnv.saveState()
-            cnv.setLineWidth(1)
-            cnv.setStrokeColor(colors.black)
-            cnv.line(left_x, footer_y_line, left_x + line_w, footer_y_line)
-            cnv.setFont('Helvetica', 10)
-            cnv.drawString(left_x, footer_y_text, 'Signature of the course teacher')
-            cnv.setFont('Helvetica', 9)
-            cnv.drawRightString(
-                right_x, footer_y_text, _pdf_page_number_label(page_num, total_pages)
+            _draw_course_teacher_signature_pdf_footer(
+                cnv, page_num, total_pages, _ca_lm, _ca_rm
             )
-            cnv.restoreState()
 
         _CaFooterCanvas = _make_deferred_footer_canvas_class(_draw_ca_marks_pdf_footer)
         buffer = io.BytesIO()
@@ -7577,6 +7582,450 @@ def export_ca_marks_pdf(request):
         
     except Exception as e:
         return HttpResponse(f"Error generating PDF: {str(e)}", status=500)
+
+
+@login_required
+def export_midterm_marks_pdf(request):
+    """Export theory mid-term Q1–Q6 marks to PDF (new curriculum)."""
+    try:
+        semester, course, students, centre_id = _midterm_marks_export_queryset(request)
+        if semester is None:
+            return redirect('ca-management')
+
+        midterm_marks = {
+            m.student_id: m
+            for m in MidtermExamMark.objects.filter(
+                student__in=students,
+                course=course,
+                semester=semester,
+            )
+        }
+        return _build_midterm_marks_pdf_response(
+            semester, course, students, centre_id, midterm_marks, blank=False
+        )
+
+    except Exception as e:
+        return HttpResponse(f'Error generating PDF: {str(e)}', status=500)
+
+
+def _midterm_marks_export_queryset(request, *, staff_only=False):
+    """
+    Validate mid-term export request and return (semester, course, students, centre_id).
+    On failure returns (None, None, None, None) after setting messages and redirect is caller's duty.
+    """
+    if staff_only:
+        if not (request.user.is_superuser or request.user.is_staff):
+            messages.error(request, "You don't have permission to export blank mid-term marks sheets.")
+            return None, None, None, None
+    elif not (
+        request.user.is_superuser
+        or request.user.is_staff
+        or check_teacher_permission(request.user, 'can_manage_ca')
+    ):
+        messages.error(request, "You don't have permission to export mid-term marks.")
+        return None, None, None, None
+
+    semester_id = request.GET.get('semester')
+    course_id = request.GET.get('course')
+    centre_id = request.GET.get('centre')
+
+    if not semester_id or not course_id:
+        messages.error(request, 'Please select a semester and course.')
+        return None, None, None, None
+
+    try:
+        semester = Semester.objects.get(id=semester_id)
+        course = Course.objects.get(id=course_id)
+    except (Semester.DoesNotExist, Course.DoesNotExist):
+        messages.error(request, 'Invalid semester or course.')
+        return None, None, None, None
+
+    if course.is_lab or course.course_type == 'PROJECT':
+        messages.error(request, 'Mid-term marks export applies only to theory courses.')
+        return None, None, None, None
+    if not semester.curriculum or semester.curriculum.code == 'OLD':
+        messages.error(request, 'Mid-term marks export applies only to new curriculum semesters.')
+        return None, None, None, None
+
+    students = Student.objects.filter(semesters=semester).extra(
+        select={
+            'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
+            'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)",
+        }
+    ).order_by('-first_two_digits', 'last_three_digits')
+    students = filter_students_queryset_by_centre(students, centre_id)
+    return semester, course, students, centre_id
+
+
+def _build_midterm_marks_pdf_response(semester, course, students, centre_id, midterm_marks, *, blank=False):
+    """Build mid-term marks PDF (filled or blank sheet)."""
+    _mt_lm = 54
+    _mt_rm = 54
+    _mt_tm = 34
+    _mt_bm = 70
+
+    page_width, _page_height = landscape(A4)
+    available_width = page_width - _mt_lm - _mt_rm
+    elements = []
+
+    header_img_path = 'bou_routines_app/static/pdf_routine_top.png'
+    try:
+        padding_for_image = 2
+        img_obj = Image(
+            header_img_path,
+            width=available_width - (2 * padding_for_image),
+            height=45,
+        )
+        header_img_table = Table([[img_obj]], colWidths=[available_width])
+        header_img_table.setStyle(
+            TableStyle(
+                [
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), padding_for_image),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), padding_for_image),
+                    ('TOPPADDING', (0, 0), (-1, -1), 0),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+        elements.append(header_img_table)
+    except Exception:
+        pass
+    elements.append(Spacer(1, -4))
+
+    centre_name = ''
+    if centre_id:
+        try:
+            centre_name = Centre.objects.get(id=int(centre_id)).name
+        except (Centre.DoesNotExist, ValueError, TypeError):
+            pass
+
+    header_style = ParagraphStyle(
+        'MtHeaderStyle',
+        fontName='Helvetica-Bold',
+        fontSize=15,
+        alignment=1,
+        leading=18,
+        spaceAfter=0,
+        spaceBefore=0,
+    )
+    header_style_small = ParagraphStyle(
+        'MtHeaderStyleSmall',
+        fontName='Helvetica-Bold',
+        fontSize=11,
+        alignment=1,
+        leading=14,
+        spaceAfter=0,
+        spaceBefore=0,
+    )
+    header_style_normal = ParagraphStyle(
+        'MtHeaderStyleNormal',
+        fontName='Helvetica',
+        fontSize=10,
+        alignment=1,
+        leading=11,
+        spaceAfter=0,
+        spaceBefore=0,
+    )
+    header_style_bold = ParagraphStyle(
+        'MtHeaderStyleBold',
+        fontName='Helvetica-Bold',
+        fontSize=12,
+        alignment=1,
+        leading=15,
+        spaceAfter=0,
+        spaceBefore=0,
+    )
+
+    left_content = []
+    left_content.append(Paragraph('B. Sc in Computer Science and Engineering Program', header_style))
+    session = semester.session or ''
+    if session:
+        left_content.append(Paragraph(f'{session} Session', header_style_small))
+    term = semester.term or ''
+    semester_full_name = semester.semester_full_name or ''
+    if term or semester_full_name:
+        left_content.append(Paragraph(f'{term} Term {semester_full_name}'.strip(), header_style_small))
+    left_content.append(Spacer(1, 2))
+    course_name_display = f'{course.code} - {course.name}' if course else 'Course'
+    title_prefix = 'Mid-Term Marks Sheet' if blank else 'Mid-Term Marks'
+    left_content.append(Paragraph(f'{title_prefix} - {course_name_display}', header_style_bold))
+
+    teacher_name = None
+    if centre_id:
+        try:
+            centre = Centre.objects.get(id=int(centre_id))
+            semester_course = SemesterCourse.objects.filter(
+                semester=semester,
+                course=course,
+                centre=centre,
+            ).select_related('teacher').first()
+            if semester_course and semester_course.teacher:
+                teacher_name = semester_course.teacher.name
+                if not centre_name:
+                    centre_name = centre.name
+        except (Centre.DoesNotExist, ValueError, TypeError):
+            pass
+    if teacher_name:
+        left_content.append(Paragraph(f'<b>Faculty:</b> {teacher_name}', header_style_normal))
+    if not centre_name:
+        first_sc = SemesterCourse.objects.filter(semester=semester).select_related('centre').first()
+        if first_sc and first_sc.centre:
+            centre_name = first_sc.centre.name
+    if centre_name:
+        left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
+
+    left_box_table = Table(
+        [[left_content]],
+        colWidths=[available_width],
+        hAlign='CENTER',
+        style=TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE')]),
+    )
+    elements.append(Spacer(1, 4))
+    elements.append(left_box_table)
+    elements.append(Spacer(1, 4))
+
+    set_max = MidtermExamMark.SET_MARKS_MAX
+    raw_max = MidtermExamMark.RAW_TOTAL_MAX
+
+    table_data = [
+        [
+            'SL. No',
+            'Student ID',
+            'Name',
+            f'Theory Mid-Term Exam (total max {raw_max})',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'Total',
+        ],
+        [
+            '',
+            '',
+            '',
+            f'Group A\n(Any 2 of Q1–Q3, max {set_max} each)',
+            '',
+            '',
+            f'Group B\n(Any 1 of Q4–Q5, max {set_max})',
+            '',
+            f'Group C\n(Q6, max {set_max})',
+            '',
+        ],
+        ['', '', '', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', ''],
+    ]
+
+    for sl_no, student in enumerate(students, start=1):
+        if blank:
+            table_data.append(
+                [str(sl_no), student.id, student.name.upper(), '', '', '', '', '', '', '']
+            )
+        else:
+            mm = midterm_marks.get(student.id)
+            if mm:
+                q_cells = [_fmt_export_mark(getattr(mm, f'q{i}', None), 0) for i in range(1, 7)]
+                total_cell = mm.raw_total_display()
+            else:
+                q_cells = [''] * 6
+                total_cell = '-'
+            table_data.append(
+                [str(sl_no), student.id, student.name.upper(), *q_cells, total_cell]
+            )
+
+    sl_width = 40
+    student_id_width = 80
+    name_width = 150
+    remaining_width = available_width - sl_width - student_id_width - name_width
+    mark_col_width = remaining_width / 7.0
+    col_widths = [sl_width, student_id_width, name_width] + [mark_col_width] * 7
+
+    table = Table(table_data, colWidths=col_widths, repeatRows=3)
+    header_rows = 3
+    style_commands = [
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('ALIGN', (2, 0), (2, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('FONTNAME', (0, 0), (-1, header_rows - 1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, header_rows - 1), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, header_rows - 1), 8),
+        ('TOPPADDING', (0, 0), (-1, header_rows - 1), 8),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('FONTSIZE', (0, header_rows), (-1, -1), 8),
+        ('FONTSIZE', (1, header_rows), (1, -1), 9),
+        ('FONTNAME', (1, header_rows), (1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (2, header_rows), (2, -1), 7),
+        ('FONTNAME', (2, header_rows), (2, -1), 'Helvetica-Bold'),
+        ('ROWBACKGROUNDS', (0, header_rows), (-1, -1), [colors.white, colors.lightgrey]),
+        ('SPAN', (0, 0), (0, 2)),
+        ('SPAN', (1, 0), (1, 2)),
+        ('SPAN', (2, 0), (2, 2)),
+        ('SPAN', (3, 0), (8, 0)),
+        ('SPAN', (3, 1), (5, 1)),
+        ('SPAN', (6, 1), (7, 1)),
+        ('SPAN', (8, 1), (8, 1)),
+        ('SPAN', (9, 0), (9, 2)),
+    ]
+    table.setStyle(TableStyle(style_commands))
+    elements.append(table)
+
+    def _draw_midterm_pdf_footer(cnv, page_num, total_pages):
+        _draw_course_teacher_signature_pdf_footer(
+            cnv, page_num, total_pages, _mt_lm, _mt_rm
+        )
+
+    _MtFooterCanvas = _make_deferred_footer_canvas_class(_draw_midterm_pdf_footer)
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        rightMargin=_mt_rm,
+        leftMargin=_mt_lm,
+        topMargin=_mt_tm,
+        bottomMargin=_mt_bm,
+    )
+    doc.build(elements, canvasmaker=_MtFooterCanvas)
+    pdf_bytes = buffer.getvalue()
+
+    prefix = 'Blank_' if blank else ''
+    filename = f'{prefix}Midterm_Marks_{course.code}_{semester.name}.pdf'
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required
+def export_blank_midterm_marks_pdf(request):
+    """Export blank mid-term marks sheet (Student ID and Name only; Q1–Q6 and Total blank)."""
+    try:
+        semester, course, students, centre_id = _midterm_marks_export_queryset(
+            request, staff_only=True
+        )
+        if semester is None:
+            return redirect('ca-management')
+        return _build_midterm_marks_pdf_response(
+            semester, course, students, centre_id, {}, blank=True
+        )
+    except Exception as e:
+        return HttpResponse(f'Error generating PDF: {str(e)}', status=500)
+
+
+@login_required
+def export_midterm_marks_excel(request):
+    """Export theory mid-term Q1–Q6 marks to Excel (new curriculum)."""
+    try:
+        semester, course, students, centre_id = _midterm_marks_export_queryset(request)
+        if semester is None:
+            return redirect('ca-management')
+
+        midterm_marks = {
+            m.student_id: m
+            for m in MidtermExamMark.objects.filter(
+                student__in=students,
+                course=course,
+                semester=semester,
+            )
+        }
+
+        output = io.BytesIO()
+        workbook = xlsxwriter.Workbook(output)
+        worksheet = workbook.add_worksheet('Mid-Term Marks')
+
+        title_format = workbook.add_format({
+            'bold': True,
+            'font_size': 14,
+            'align': 'center',
+            'valign': 'vcenter',
+        })
+        header_format = workbook.add_format({
+            'bold': True,
+            'font_size': 11,
+            'align': 'center',
+            'valign': 'vcenter',
+            'bg_color': '#2c3e50',
+            'font_color': 'white',
+            'border': 1,
+        })
+        cell_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1,
+        })
+        name_header_format = workbook.add_format({
+            'bold': True,
+            'font_size': 11,
+            'align': 'left',
+            'valign': 'vcenter',
+            'bg_color': '#2c3e50',
+            'font_color': 'white',
+            'border': 1,
+        })
+        name_cell_format = workbook.add_format({
+            'align': 'left',
+            'valign': 'vcenter',
+            'border': 1,
+        })
+
+        headers = ['Student ID', 'Name', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Total']
+        worksheet.merge_range(
+            0, 0, 0, len(headers) - 1,
+            f'Mid-Term Marks Report - {semester.name}',
+            title_format,
+        )
+        worksheet.write(1, 0, f'Course: {course.code} - {course.name}', cell_format)
+
+        row = 3
+        for col, header in enumerate(headers):
+            fmt = name_header_format if col == 1 else header_format
+            worksheet.write(row, col, header, fmt)
+
+        row = 4
+        for student in students:
+            col = 0
+            mm = midterm_marks.get(student.id)
+            worksheet.write(row, col, student.id, cell_format)
+            col += 1
+            worksheet.write(row, col, student.name, name_cell_format)
+            col += 1
+            if mm:
+                for i in range(1, 7):
+                    val = getattr(mm, f'q{i}', None)
+                    if val is None:
+                        worksheet.write(row, col, '', cell_format)
+                    else:
+                        worksheet.write(row, col, float(val), cell_format)
+                    col += 1
+                total_display = mm.raw_total_display()
+                if total_display == '-':
+                    worksheet.write(row, col, '-', cell_format)
+                else:
+                    worksheet.write(row, col, total_display, cell_format)
+            else:
+                for _ in range(6):
+                    worksheet.write(row, col, '', cell_format)
+                    col += 1
+                worksheet.write(row, col, '-', cell_format)
+            row += 1
+
+        worksheet.set_column(0, 0, 15)
+        worksheet.set_column(1, 1, 30)
+        worksheet.set_column(2, len(headers) - 1, 12)
+
+        workbook.close()
+        output.seek(0)
+
+        response = HttpResponse(
+            output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        filename = f'Midterm_Marks_{course.code}_{semester.name}.xlsx'
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+    except Exception as e:
+        return HttpResponse(f'Error generating Excel: {str(e)}', status=500)
+
 
 @login_required
 def export_blank_ca_marks_pdf(request):

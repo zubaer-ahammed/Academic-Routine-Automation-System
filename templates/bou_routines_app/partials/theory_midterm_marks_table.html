@@ -6,6 +6,30 @@
                                     <button type="button" class="btn btn-success" id="save-midterm-marks-btn-header" onclick="saveMidtermMarks(true)">
                                         <i class="fas fa-save"></i> Save Mid-Term Marks
                                     </button>
+                                    <div class="dropdown">
+                                        <button class="btn btn-secondary dropdown-toggle" type="button" id="exportMidtermMarksDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                            <i class="fas fa-download"></i> Export
+                                        </button>
+                                        <ul class="dropdown-menu" aria-labelledby="exportMidtermMarksDropdown">
+                                            <li>
+                                                <a class="dropdown-item" href="{% url 'export-midterm-marks-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}">
+                                                    <i class="fas fa-file-pdf text-danger"></i> PDF
+                                                </a>
+                                            </li>
+                                            {% if user.is_superuser or user.is_staff %}
+                                            <li>
+                                                <a class="dropdown-item" href="{% url 'export-blank-midterm-marks-pdf' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}">
+                                                    <i class="fas fa-file-pdf text-danger"></i> Blank PDF
+                                                </a>
+                                            </li>
+                                            {% endif %}
+                                            <li>
+                                                <a class="dropdown-item" href="{% url 'export-midterm-marks-excel' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}">
+                                                    <i class="fas fa-file-excel text-success"></i> Excel
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </div>
                                 </div>
                                 {% endif %}
                             </div>

@@ -1,0 +1,122 @@
+{% extends 'bou_routines_app/base.html' %}
+{% load static %}
+{% load attendance_tags %}
+
+{% block title %}{% block assign_title %}Assignments{% endblock %} — BOUSST{% endblock %}
+
+{% block extra_css %}
+<style>
+    .container-box-bou {
+        background: white;
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-top: 2rem;
+        margin-bottom: 2rem;
+        max-width: 96%;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .assign-nav-tabs .nav-link {
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 0.02em;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container container-box-bou">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h2 class="h4 mb-0"><i class="fas fa-user-check me-2 text-primary"></i>Assignments</h2>
+    </div>
+
+    <ul class="nav nav-tabs assign-nav-tabs mb-4">
+        {% if user|can_assign_course_teacher %}
+        <li class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'assign-course-teacher' %}active{% endif %}"
+               href="{% url 'assign-course-teacher' %}?curriculum={{ selected_curriculum_id }}&term={{ selected_term|urlencode }}&semester={{ selected_semester_id|default:'' }}&centre={{ selected_centre_id|default:'' }}">
+                Course Teacher
+            </a>
+        </li>
+        {% endif %}
+        {% if user|can_assign_examiners %}
+        <li class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'assign-examiners' %}active{% endif %}"
+               href="{% url 'assign-examiners' %}?curriculum={{ selected_curriculum_id }}&term={{ selected_term|urlencode }}&semester={{ selected_semester_id|default:'' }}&centre={{ selected_centre_id|default:'' }}&course={{ selected_course_id|default:'' }}">
+                Examiners
+            </a>
+        </li>
+        {% endif %}
+        {% if user|can_assign_chairman %}
+        <li class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'assign-chairman' %}active{% endif %}"
+               href="{% url 'assign-chairman' %}?curriculum={{ selected_curriculum_id }}&term={{ selected_term|urlencode }}&semester={{ selected_semester_id|default:'' }}&centre={{ selected_centre_id|default:'' }}&course={{ selected_course_id|default:'' }}">
+                Chairman
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+
+    <form method="get" class="row g-3 align-items-end bou-filter-form mb-4">
+        <div class="col-md-6 col-lg-2">
+            <label for="curriculum" class="form-label">Curriculum</label>
+            <select name="curriculum" id="curriculum" class="form-select form-select-sm">
+                {% for c in curricula %}
+                <option value="{{ c.id }}" {% if selected_curriculum_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-6 col-lg-2">
+            <label for="term" class="form-label">Term</label>
+            <select name="term" id="term" class="form-select form-select-sm">
+                <option value="">All terms</option>
+                {% for t in terms %}
+                <option value="{{ t }}" {% if selected_term == t %}selected{% endif %}>{{ t }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <label for="semester" class="form-label">Semester</label>
+            <select name="semester" id="semester" class="form-select form-select-sm" required>
+                <option value="">-- Semester --</option>
+                {% for s in semesters %}
+                <option value="{{ s.id }}" {% if selected_semester_id == s.id %}selected{% endif %}>{{ s.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-6 col-lg-2">
+            <label for="centre" class="form-label">Study Centre</label>
+            <select name="centre" id="centre" class="form-select form-select-sm" required>
+                {% for c in centres %}
+                <option value="{{ c.id }}" {% if selected_centre_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% if request.resolver_match.url_name == 'assign-examiners' or request.resolver_match.url_name == 'assign-chairman' %}
+        <div class="col-md-6 col-lg-3">
+            <label for="course" class="form-label">Course</label>
+            <select name="course" id="course" class="form-select form-select-sm">
+                <option value="">-- Course --</option>
+                {% for c in courses %}
+                <option value="{{ c.id }}" {% if selected_course_id == c.id %}selected{% endif %}>{{ c.code }} — {{ c.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+        <div class="col-md-6 col-lg-2">
+            <button type="submit" class="btn btn-primary btn-sm w-100">
+                <i class="fas fa-search me-1"></i> Load
+            </button>
+        </div>
+    </form>
+
+    {% csrf_token %}
+    {% block assign_content %}{% endblock %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% block assign_extra_js %}{% endblock %}
+{% endblock %}

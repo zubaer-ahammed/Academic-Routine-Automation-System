@@ -34,6 +34,36 @@ def is_teacher_only(user):
     # Superusers can access everything, but regular teachers (even with staff status) should be restricted
     return not user.is_superuser
 
+
+@register.filter
+def is_office_staff(user):
+    from bou_routines_app.views import user_is_office_staff
+    return user_is_office_staff(user)
+
+
+@register.filter
+def can_assign_course_teacher(user):
+    from bou_routines_app.views import user_can_assign_course_teacher
+    return user_can_assign_course_teacher(user)
+
+
+@register.filter
+def can_assign_examiners(user):
+    from bou_routines_app.views import user_can_assign_examiners
+    return user_can_assign_examiners(user)
+
+
+@register.filter
+def can_assign_chairman(user):
+    from bou_routines_app.views import user_can_assign_chairman
+    return user_can_assign_chairman(user)
+
+
+@register.filter
+def can_use_assign_menu(user):
+    from bou_routines_app.views import user_has_any_assign_permission
+    return user_has_any_assign_permission(user)
+
 @register.filter
 def is_date_allowed(check_date, allowed_range):
     """

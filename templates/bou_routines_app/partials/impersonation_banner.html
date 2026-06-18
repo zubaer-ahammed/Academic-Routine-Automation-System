@@ -1,0 +1,15 @@
+{% if impersonation_active %}
+<div class="bou-impersonation-banner">
+    <div class="bou-impersonation-banner-inner">
+        <span>
+            <i class="fas fa-user-secret me-2" aria-hidden="true"></i>
+            Logged in as: <strong>{{ user.username }}</strong>
+            {% if user.email %}({{ user.email }}){% endif %}
+        </span>
+        <form method="post" action="{% url 'exit-impersonation' %}" class="d-inline mb-0">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-outline-light bou-impersonation-exit">Exit</button>
+        </form>
+    </div>
+</div>
+{% endif %}

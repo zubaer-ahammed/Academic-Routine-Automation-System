@@ -84,6 +84,9 @@ class Teacher(models.Model):
             ("can_manage_ca", "Can manage continuous assessment"),
             ("can_manage_final_marks", "Can manage semester final marks"),
             ("can_chair_examination", "Can act as examination chairman (e.g. enter lab viva marks)"),
+            ("can_assign_course_teacher", "Can assign course teachers"),
+            ("can_assign_examiners", "Can assign final exam examiners"),
+            ("can_assign_chairman", "Can assign lab examination chairman"),
         ]
 
     def __str__(self):
@@ -390,6 +393,14 @@ class SemesterCourse(models.Model):
         blank=True,
         related_name='semester_courses_as_final_exam_evaluator3',
         help_text="Third examiner if required (large T1/T2 discrepancy)",
+    )
+    lab_examination_chairman = models.ForeignKey(
+        Teacher,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='semester_courses_as_lab_examination_chairman',
+        help_text="Examination chairman for lab course viva (per semester/course/centre)",
     )
     # Attendance-only schedule override (does NOT affect routine/calendar generation)
     attendance_midterm_override_dates = models.TextField(

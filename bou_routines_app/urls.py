@@ -1,5 +1,7 @@
 from django.urls import path
 from . import views
+from . import assign_views
+from . import impersonation_views
 
 urlpatterns = [
     path('', views.attendance_calendar, name='home'),
@@ -53,4 +55,15 @@ urlpatterns = [
     path('marks/export-final-exam-summary-pdf/', views.export_final_exam_summary_pdf, name='export-final-exam-summary-pdf'),
     path('marks/export-final-exam-summary-excel/', views.export_final_exam_summary_excel, name='export-final-exam-summary-excel'),
     path('marks/assign-evaluator/', views.assign_evaluator, name='assign-evaluator'),
+    path('marks/assign-chairman/', views.assign_chairman, name='assign-chairman-api'),
+
+    # Assignment pages (office staff and administrators)
+    path('assign/', assign_views.assign_home, name='assign-home'),
+    path('assign/course-teacher/', assign_views.assign_course_teacher, name='assign-course-teacher'),
+    path('assign/examiners/', assign_views.assign_examiners, name='assign-examiners'),
+    path('assign/chairman/', assign_views.assign_chairman, name='assign-chairman'),
+
+    # Admin user switching (impersonation)
+    path('accounts/switch-user/<int:user_id>/', impersonation_views.switch_user, name='switch-user'),
+    path('accounts/exit-impersonation/', impersonation_views.exit_impersonation, name='exit-impersonation'),
 ]

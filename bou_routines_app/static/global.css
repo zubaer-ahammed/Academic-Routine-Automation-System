@@ -155,6 +155,25 @@ a:hover {
     text-transform: uppercase;
 }
 
+.bou-header-menu > .bou-header-dropdown {
+    display: inline-flex !important;
+    align-items: center !important;
+    margin: 0 8px !important;
+}
+
+.bou-header-menu > .bou-header-dropdown > .bou-header-link {
+    margin: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+    line-height: 1.2 !important;
+}
+
+.bou-header-menu > .bou-header-dropdown > .bou-header-link.dropdown-toggle::after {
+    margin-left: 0 !important;
+    vertical-align: middle !important;
+}
+
 .bou-logo-box {
     display: inline-flex !important;
     align-items: center !important;

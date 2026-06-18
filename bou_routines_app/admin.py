@@ -9,6 +9,7 @@ from django.urls import path, reverse
 from django.http import HttpResponseRedirect, Http404
 from django.contrib.auth import update_session_auth_hash, logout
 from django.template.response import TemplateResponse
+from django.utils.translation import gettext_lazy as _
 from .models import Teacher, Semester, Course, CurrentRoutine, NewRoutine, SemesterCourse, LoginLog, Student, Attendance, Curriculum, CAMark, MidtermExamMark, FinalExamMark, Centre, ProgramCoordinator
 
 @admin.register(CurrentRoutine)
@@ -239,6 +240,7 @@ class SemesterCourseAdmin(admin.ModelAdmin):
         'final_exam_evaluator1',
         'final_exam_evaluator2',
         'final_exam_evaluator3',
+        'lab_examination_chairman',
         'number_of_classes',
     )
     autocomplete_fields = (
@@ -246,13 +248,75 @@ class SemesterCourseAdmin(admin.ModelAdmin):
         'final_exam_evaluator1',
         'final_exam_evaluator2',
         'final_exam_evaluator3',
+        'lab_examination_chairman',
     )
+
+def _sync_user_type_role(user, user_type):
+    """Apply role-specific flags and assignment permissions for custom user types."""
+    from django.contrib.auth.models import Permission
+    from django.contrib.contenttypes.models import ContentType
+
+    ct = ContentType.objects.get_for_model(Teacher)
+    assign_teacher_perm = Permission.objects.get(
+        codename='can_assign_course_teacher', content_type=ct
+    )
+    assign_exam_perm = Permission.objects.get(
+        codename='can_assign_examiners', content_type=ct
+    )
+    assign_chairman_perm = Permission.objects.get(
+        codename='can_assign_chairman', content_type=ct
+    )
+    user.user_permissions.remove(assign_teacher_perm, assign_exam_perm, assign_chairman_perm)
+
+    if user_type == 'office_staff':
+        user.is_staff = False
+        user.is_superuser = False
+        user.user_permissions.add(assign_teacher_perm, assign_exam_perm, assign_chairman_perm)
+        user.save(update_fields=['is_staff', 'is_superuser'])
+
+
+def _apply_user_type_from_form(user, cleaned_data):
+    """Link teacher/student profiles and apply role permissions after admin save."""
+    user_type = cleaned_data.get('user_type')
+    teacher = cleaned_data.get('teacher')
+    student = cleaned_data.get('student')
+
+    try:
+        current_teacher = user.teacher
+        current_teacher.user = None
+        current_teacher.save()
+    except Teacher.DoesNotExist:
+        pass
+
+    try:
+        current_student = user.student
+        current_student.user = None
+        current_student.save()
+    except Student.DoesNotExist:
+        pass
+
+    if user_type == 'teacher' and teacher:
+        if teacher.user_id and teacher.user_id != user.pk:
+            teacher.user = None
+            teacher.save(update_fields=['user'])
+        teacher.user = user
+        teacher.save(update_fields=['user'])
+    elif user_type == 'student' and student:
+        if student.user_id and student.user_id != user.pk:
+            student.user = None
+            student.save(update_fields=['user'])
+        student.user = user
+        student.save(update_fields=['user'])
+
+    _sync_user_type_role(user, user_type)
+
 
 class BaseTeacherUserAdminForm:
     """Base class with common fields for both add and change forms"""
     USER_TYPE_CHOICES = [
         ('', 'Select Type'),
         ('administrator', 'Administrator'),
+        ('office_staff', 'Office Staff'),
         ('teacher', 'Teacher'),
         ('student', 'Student'),
     ]
@@ -260,7 +324,10 @@ class BaseTeacherUserAdminForm:
     user_type = forms.ChoiceField(
         choices=USER_TYPE_CHOICES,
         required=False,
-        help_text="Select the type of user. This determines which profile can be linked."
+        help_text=(
+            "Select the type of user. Office Staff can only use Assign pages "
+            "(course teachers, examiners, and chairman) — not admin or other frontend pages."
+        ),
     )
     
     teacher = forms.ModelChoiceField(
@@ -331,6 +398,11 @@ class TeacherUserAdminAddForm(UserCreationForm, BaseTeacherUserAdminForm):
             raise forms.ValidationError(
                 'Administrators should not have teacher or student profiles.'
             )
+
+        if user_type == 'office_staff' and (teacher_id or student_id):
+            raise forms.ValidationError(
+                'Office staff should not have teacher or student profiles.'
+            )
         
         # Validate that required profile is selected
         if user_type == 'teacher' and not teacher_id:
@@ -347,49 +419,8 @@ class TeacherUserAdminAddForm(UserCreationForm, BaseTeacherUserAdminForm):
     
     def save(self, commit=True):
         user = super().save(commit=commit)
-        
         if commit:
-            user_type = self.cleaned_data.get('user_type')
-            teacher_id = self.cleaned_data.get('teacher')
-            student_id = self.cleaned_data.get('student')
-            
-            # Now link based on type
-            if user_type == 'teacher' and teacher_id:
-                # Unlink the selected teacher from its current user (if any)
-                try:
-                    existing_teacher = Teacher.objects.get(id=teacher_id)
-                    if existing_teacher.user and existing_teacher.user != user:
-                        existing_teacher.user = None
-                        existing_teacher.save()
-                except Teacher.DoesNotExist:
-                    pass
-                
-                # Link the selected teacher to this user
-                try:
-                    teacher = Teacher.objects.get(id=teacher_id)
-                    teacher.user = user
-                    teacher.save()
-                except Teacher.DoesNotExist:
-                    pass
-                    
-            elif user_type == 'student' and student_id:
-                # Unlink the selected student from its current user (if any)
-                try:
-                    existing_student = Student.objects.get(id=student_id)
-                    if existing_student.user and existing_student.user != user:
-                        existing_student.user = None
-                        existing_student.save()
-                except Student.DoesNotExist:
-                    pass
-                
-                # Link the selected student to this user
-                try:
-                    student = Student.objects.get(id=student_id)
-                    student.user = user
-                    student.save()
-                except Student.DoesNotExist:
-                    pass
-        
+            _apply_user_type_from_form(user, self.cleaned_data)
         return user
 
 class TeacherUserAdminChangeForm(UserChangeForm, BaseTeacherUserAdminForm):
@@ -439,6 +470,12 @@ class TeacherUserAdminChangeForm(UserChangeForm, BaseTeacherUserAdminForm):
                     # Check if user is staff/superuser to determine if administrator
                     if self.instance.is_staff or self.instance.is_superuser:
                         self.fields['user_type'].initial = 'administrator'
+                    elif (
+                        self.instance.has_perm('bou_routines_app.can_assign_course_teacher')
+                        or self.instance.has_perm('bou_routines_app.can_assign_examiners')
+                        or self.instance.has_perm('bou_routines_app.can_assign_chairman')
+                    ):
+                        self.fields['user_type'].initial = 'office_staff'
     
     def clean(self):
         """Validate that user can only be one type at a time"""
@@ -462,6 +499,11 @@ class TeacherUserAdminChangeForm(UserChangeForm, BaseTeacherUserAdminForm):
             raise forms.ValidationError(
                 'Administrators should not have teacher or student profiles.'
             )
+
+        if user_type == 'office_staff' and (teacher_id or student_id):
+            raise forms.ValidationError(
+                'Office staff should not have teacher or student profiles.'
+            )
         
         # Validate that required profile is selected
         if user_type == 'teacher' and not teacher_id:
@@ -478,64 +520,8 @@ class TeacherUserAdminChangeForm(UserChangeForm, BaseTeacherUserAdminForm):
     
     def save(self, commit=True):
         user = super().save(commit=commit)
-        
         if commit:
-            user_type = self.cleaned_data.get('user_type')
-            teacher_id = self.cleaned_data.get('teacher')
-            student_id = self.cleaned_data.get('student')
-            
-            # First, unlink any existing relationships
-            try:
-                current_teacher = user.teacher
-                current_teacher.user = None
-                current_teacher.save()
-            except Teacher.DoesNotExist:
-                pass
-            
-            try:
-                current_student = user.student
-                current_student.user = None
-                current_student.save()
-            except Student.DoesNotExist:
-                pass
-            
-            # Now link based on type
-            if user_type == 'teacher' and teacher_id:
-                # Unlink the selected teacher from its current user (if any)
-                try:
-                    existing_teacher = Teacher.objects.get(id=teacher_id)
-                    if existing_teacher.user and existing_teacher.user != user:
-                        existing_teacher.user = None
-                        existing_teacher.save()
-                except Teacher.DoesNotExist:
-                    pass
-                
-                # Link the selected teacher to this user
-                try:
-                    teacher = Teacher.objects.get(id=teacher_id)
-                    teacher.user = user
-                    teacher.save()
-                except Teacher.DoesNotExist:
-                    pass
-                    
-            elif user_type == 'student' and student_id:
-                # Unlink the selected student from its current user (if any)
-                try:
-                    existing_student = Student.objects.get(id=student_id)
-                    if existing_student.user and existing_student.user != user:
-                        existing_student.user = None
-                        existing_student.save()
-                except Student.DoesNotExist:
-                    pass
-                
-                # Link the selected student to this user
-                try:
-                    student = Student.objects.get(id=student_id)
-                    student.user = user
-                    student.save()
-                except Student.DoesNotExist:
-                    pass
-        
+            _apply_user_type_from_form(user, self.cleaned_data)
         return user
 
 class WeakPasswordAdminPasswordChangeForm(AdminPasswordChangeForm):
@@ -611,16 +597,66 @@ class TeacherUserAdmin(UserAdmin):
     form = TeacherUserAdminChangeForm
     add_form = TeacherUserAdminAddForm
     change_password_form = WeakPasswordAdminPasswordChangeForm
+    change_form_template = 'admin/auth/user/change_form.html'
+    add_form_template = 'admin/auth/user/add_form.html'
     list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'get_user_type', 'get_profile_name')
     list_filter = ('is_staff', 'is_superuser', 'is_active', 'date_joined')
-    
-    # Override add_fieldsets to exclude custom fields (they're form fields, not model fields)
+
+    ROLE_FIELDS = frozenset({'user_type', 'teacher', 'student'})
+
+    fieldsets = (
+        (None, {'fields': ('username', 'password')}),
+        (_('Personal info'), {'fields': ('first_name', 'last_name', 'email')}),
+        (_('Permissions'), {
+            'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions'),
+        }),
+        (_('Important dates'), {'fields': ('last_login', 'date_joined')}),
+    )
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
             'fields': ('username', 'password1', 'password2'),
         }),
     )
+
+    def get_form(self, request, obj=None, **kwargs):
+        """Use ModelAdmin form building (filter_horizontal widgets) without role fields in `fields`."""
+        kwargs.pop('change', None)
+        fields = kwargs.get('fields')
+        if fields is not None:
+            kwargs['fields'] = tuple(f for f in fields if f not in self.ROLE_FIELDS)
+        if obj is None:
+            kwargs.setdefault('form', self.add_form)
+        else:
+            kwargs.setdefault('form', self.form)
+        return super(UserAdmin, self).get_form(request, obj, **kwargs)
+
+    def render_change_form(self, request, context, add=False, change=False, form_url='', obj=None):
+        admin_form = context.get('adminform')
+        if admin_form is not None:
+            form = admin_form.form
+            context['role_form_fields'] = [
+                form[field_name]
+                for field_name in ('user_type', 'teacher', 'student')
+                if field_name in form.fields
+            ]
+        from .impersonation import can_switch_to_user, is_impersonating
+
+        context['can_switch_to_user'] = (
+            change
+            and obj is not None
+            and not is_impersonating(request)
+            and can_switch_to_user(request.user, obj)
+        )
+        return super().render_change_form(
+            request, context, add=add, change=change, form_url=form_url, obj=obj
+        )
+
+    def save_related(self, request, form, formsets, change):
+        """Admin saves with commit=False; apply role/profile after M2M fields are saved."""
+        super().save_related(request, form, formsets, change)
+        if form.cleaned_data:
+            _apply_user_type_from_form(form.instance, form.cleaned_data)
     
     def get_urls(self):
         urls = super().get_urls()
@@ -717,14 +753,6 @@ class TeacherUserAdmin(UserAdmin):
             context,
         )
     
-    def get_fieldsets(self, request, obj=None):
-        """Override to get fieldsets without custom fields"""
-        # Custom fields will be rendered by the form automatically
-        # and positioned via JavaScript
-        if obj is None:
-            return self.add_fieldsets
-        return super().get_fieldsets(request, obj)
-    
     def get_user_type(self, obj):
         try:
             obj.teacher
@@ -736,6 +764,12 @@ class TeacherUserAdmin(UserAdmin):
             except Student.DoesNotExist:
                 if obj.is_staff or obj.is_superuser:
                     return "Administrator"
+                if (
+                    obj.has_perm('bou_routines_app.can_assign_course_teacher')
+                    or obj.has_perm('bou_routines_app.can_assign_examiners')
+                    or obj.has_perm('bou_routines_app.can_assign_chairman')
+                ):
+                    return "Office Staff"
                 return "None"
     get_user_type.short_description = 'Type'
     
@@ -749,17 +783,11 @@ class TeacherUserAdmin(UserAdmin):
                 return "No Profile"
     get_profile_name.short_description = 'Profile Name'
     
-    def get_fieldsets(self, request, obj=None):
-        """Override to add custom form fields (not model fields) to fieldsets"""
-        # Don't add custom fields to fieldsets - Django validates them against the model
-        # Instead, we'll let the form handle them and they'll appear automatically
-        # We can add them to fieldsets after form creation if needed
-        if obj is None:
-            return super().add_fieldsets
-        return super().get_fieldsets(request, obj)
-    
     class Media:
-        js = ('admin/js/user_type_handler.js', 'admin/js/weak_password_handler.js',)
+        css = {
+            'all': ('admin/css/user_role_admin.css',),
+        }
+        js = ('admin/js/user_role_fields.js', 'admin/js/weak_password_handler.js',)
 
 # Custom logout view that redirects to home
 def admin_logout_view(request):

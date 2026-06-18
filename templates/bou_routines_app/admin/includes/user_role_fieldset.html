@@ -1,0 +1,18 @@
+{% load i18n %}
+<fieldset class="module aligned user-role-fieldset">
+    <h2>{% trans "Role" %}</h2>
+    {% for field in role_form_fields %}
+    <div class="form-row field-{{ field.name }}{% if field.name == 'teacher' %} user-role-teacher-row{% elif field.name == 'student' %} user-role-student-row{% endif %}">
+        <div>
+            <label{% if field.field.required %} class="required"{% endif %} for="{{ field.id_for_label }}">{{ field.label }}:</label>
+            {{ field }}
+            {% if field.help_text %}
+            <div class="help">{{ field.help_text|safe }}</div>
+            {% endif %}
+            {{ field.errors }}
+        </div>
+    </div>
+    {% empty %}
+    <p class="help">Role fields could not be loaded. Please reload the page.</p>
+    {% endfor %}
+</fieldset>

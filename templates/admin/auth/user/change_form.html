@@ -1,0 +1,27 @@
+{% extends "admin/change_form.html" %}
+{% load i18n %}
+
+{% block object-tools-items %}
+{{ block.super }}
+{% if can_switch_to_user %}
+<li>
+    <form method="post" action="{% url 'switch-user' original.pk %}" class="bou-admin-switch-user-form">
+        {% csrf_token %}
+        <button type="submit" class="bou-admin-switch-user-btn">Switch to this user</button>
+    </form>
+</li>
+{% endif %}
+{% endblock %}
+
+{% block field_sets %}
+{% for fieldset in adminform %}
+    {% include "admin/includes/fieldset.html" %}
+    {% if add %}
+        {% if forloop.counter == 1 %}
+            {% include "bou_routines_app/admin/includes/user_role_fieldset.html" %}
+        {% endif %}
+    {% elif forloop.counter == 2 %}
+        {% include "bou_routines_app/admin/includes/user_role_fieldset.html" %}
+    {% endif %}
+{% endfor %}
+{% endblock %}

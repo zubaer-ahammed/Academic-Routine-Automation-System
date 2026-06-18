@@ -8,7 +8,7 @@
     <title>{% block title %}BOUSST{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="{% static 'global.css' %}?ver=1.0.24">
+    <link rel="stylesheet" href="{% static 'global.css' %}?ver=1.0.25">
     <style>
         html, body {
             height: 100% !important;
@@ -24,14 +24,39 @@
             flex-shrink: 0 !important;
             margin-top: 1em !important;
         }
+        .bou-impersonation-banner {
+            background: #856404;
+            color: #fff;
+            padding: 0.55rem 1rem;
+            font-size: 0.92rem;
+            border-bottom: 1px solid #6c5200;
+        }
+        .bou-impersonation-banner-inner {
+            max-width: 96%;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .bou-impersonation-exit {
+            border-color: rgba(255, 255, 255, 0.85) !important;
+            color: #fff !important;
+        }
+        .bou-impersonation-exit:hover {
+            background: rgba(255, 255, 255, 0.15) !important;
+            color: #fff !important;
+        }
     </style>
     {% block extra_head %}{% endblock %}
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+    {% include 'bou_routines_app/partials/impersonation_banner.html' %}
     <div class="bou-header-bar">
         <div class="bou-header-content">
-            <a href="{% url 'home' %}" class="bou-logo-box">
+            <a href="{% if user|is_office_staff %}{% url 'assign-home' %}{% else %}{% url 'home' %}{% endif %}" class="bou-logo-box">
                 <img src="{% static 'bou_logo.png' %}" alt="BOU Logo" class="bou-logo-header">
             </a>
             <!-- Mobile menu toggle button -->
@@ -40,6 +65,25 @@
             </button>
             <!-- Desktop menu -->
             <div class="bou-header-menu d-none d-md-flex">
+                {% if user|is_office_staff %}
+                    {% if user|can_use_assign_menu %}
+                    <div class="dropdown bou-header-dropdown">
+                        <a href="#" class="bou-header-link dropdown-toggle" role="button" data-bs-toggle="dropdown" aria-expanded="false">Assign</a>
+                        <ul class="dropdown-menu dropdown-menu-dark">
+                            {% if user|can_assign_course_teacher %}
+                            <li><a class="dropdown-item" href="{% url 'assign-course-teacher' %}">Assign Course Teacher</a></li>
+                            {% endif %}
+                            {% if user|can_assign_examiners %}
+                            <li><a class="dropdown-item" href="{% url 'assign-examiners' %}">Assign Examiners</a></li>
+                            {% endif %}
+                            {% if user|can_assign_chairman %}
+                            <li><a class="dropdown-item" href="{% url 'assign-chairman' %}">Assign Chairman</a></li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                    <a href="{% url 'logout' %}?next={{ request.path }}" class="bou-header-link">Logout</a>
+                {% else %}
                 {% if not user|is_teacher_only %}
                     <a href="/generate/" class="bou-header-link">Generate Routine</a>
                     <a href="{% url 'update-semester-courses' %}" class="bou-header-link">Semester Courses</a>
@@ -47,6 +91,22 @@
                 <a href="{% url 'download-routines' %}" class="bou-header-link">Download Routines</a>
                 <a href="{% url 'attendance-calendar' %}" class="bou-header-link">Attendance</a>
                 <a href="{% url 'ca-management' %}" class="bou-header-link">Marks</a>
+                {% if user|can_use_assign_menu %}
+                <div class="dropdown bou-header-dropdown">
+                    <a href="#" class="bou-header-link dropdown-toggle" role="button" data-bs-toggle="dropdown" aria-expanded="false">Assign</a>
+                    <ul class="dropdown-menu dropdown-menu-dark">
+                        {% if user|can_assign_course_teacher %}
+                        <li><a class="dropdown-item" href="{% url 'assign-course-teacher' %}">Assign Course Teacher</a></li>
+                        {% endif %}
+                        {% if user|can_assign_examiners %}
+                        <li><a class="dropdown-item" href="{% url 'assign-examiners' %}">Assign Examiners</a></li>
+                        {% endif %}
+                        {% if user|can_assign_chairman %}
+                        <li><a class="dropdown-item" href="{% url 'assign-chairman' %}">Assign Chairman</a></li>
+                        {% endif %}
+                    </ul>
+                </div>
+                {% endif %}
                 {% if user.is_authenticated %}
                     {% if user|has_teacher_profile %}
                         <a href="{% url 'teacher-dashboard' %}" class="bou-header-link">Dashboard</a>
@@ -58,11 +118,20 @@
                 {% else %}
                     <a href="{% url 'login' %}?next={{ request.path }}" class="bou-header-link">Login</a>
                 {% endif %}
+                {% endif %}
             </div>
         </div>
         <!-- Mobile collapsible menu -->
         <div class="collapse" id="bouMobileMenu">
             <div class="bou-mobile-menu">
+                {% if user|is_office_staff %}
+                    {% if user|can_use_assign_menu %}
+                    <a href="{% url 'assign-course-teacher' %}" class="bou-mobile-link">Assign Course Teacher</a>
+                    <a href="{% url 'assign-examiners' %}" class="bou-mobile-link">Assign Examiners</a>
+                    <a href="{% url 'assign-chairman' %}" class="bou-mobile-link">Assign Chairman</a>
+                    {% endif %}
+                    <a href="{% url 'logout' %}?next={{ request.path }}" class="bou-mobile-link">Logout</a>
+                {% else %}
                 {% if not user|is_teacher_only %}
                     <a href="/generate/" class="bou-mobile-link">Generate Routine</a>
                     <a href="{% url 'update-semester-courses' %}" class="bou-mobile-link">Semester Courses</a>
@@ -70,6 +139,11 @@
                 <a href="{% url 'download-routines' %}" class="bou-mobile-link">Download Routines</a>
                 <a href="{% url 'attendance-calendar' %}" class="bou-mobile-link">Attendance</a>
                 <a href="{% url 'ca-management' %}" class="bou-mobile-link">Marks</a>
+                {% if user|can_use_assign_menu %}
+                <a href="{% url 'assign-course-teacher' %}" class="bou-mobile-link">Assign Course Teacher</a>
+                <a href="{% url 'assign-examiners' %}" class="bou-mobile-link">Assign Examiners</a>
+                <a href="{% url 'assign-chairman' %}" class="bou-mobile-link">Assign Chairman</a>
+                {% endif %}
                 {% if user.is_authenticated %}
                     {% if user|has_teacher_profile %}
                         <a href="{% url 'teacher-dashboard' %}" class="bou-mobile-link">Dashboard</a>
@@ -80,6 +154,7 @@
                     <a href="{% url 'logout' %}?next={{ request.path }}" class="bou-mobile-link">Logout</a>
                 {% else %}
                     <a href="{% url 'login' %}?next={{ request.path }}" class="bou-mobile-link">Login</a>
+                {% endif %}
                 {% endif %}
             </div>
         </div>

@@ -1,6 +1,11 @@
 {% extends "admin/base.html" %}
 {% load static %}
 
+{% block header %}
+{% include "bou_routines_app/partials/impersonation_banner.html" %}
+{{ block.super }}
+{% endblock %}
+
 {% block extrastyle %}
 {{ block.super }}
 <style>
@@ -414,6 +419,62 @@
   }
   ul.object-tools li a {
     color: #fff !important;
+  }
+
+  .bou-admin-switch-user-form {
+    display: inline;
+    margin: 0;
+    padding: 0;
+  }
+
+  .bou-admin-switch-user-btn {
+    background: var(--object-tools-bg, #417690);
+    border: none;
+    border-radius: 15px;
+    color: #fff !important;
+    cursor: pointer;
+    font-size: 0.6875rem;
+    font-weight: 400;
+    letter-spacing: 0.5px;
+    line-height: 1rem;
+    padding: 3px 12px;
+    text-transform: uppercase;
+  }
+
+  .bou-admin-switch-user-btn:hover {
+    background: var(--object-tools-hover-bg, #205067);
+  }
+
+  .bou-impersonation-banner {
+    background: #856404;
+    color: #fff;
+    padding: 0.55rem 1rem;
+    font-size: 0.92rem;
+    border-bottom: 1px solid #6c5200;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .bou-impersonation-banner-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .bou-impersonation-exit {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    border-radius: 4px;
+    color: #fff;
+    cursor: pointer;
+    font-size: 0.82rem;
+    padding: 0.2rem 0.65rem;
+  }
+
+  .bou-impersonation-exit:hover {
+    background: rgba(255, 255, 255, 0.15);
   }
   
   /* Hide theme toggle button completely */

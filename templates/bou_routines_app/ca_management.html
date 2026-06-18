@@ -1056,6 +1056,30 @@
         border-left: 4px solid #2196f3;
     }
 
+    .lab-chairman-selector {
+        margin-bottom: 20px;
+        padding: 15px;
+        background: linear-gradient(135deg, #fff8e1 0%, #fce4ec 100%);
+        border-radius: 8px;
+        border-left: 4px solid #ff9800;
+    }
+
+    #final-exam .lab-chairman-selector p,
+    #final-exam .lab-chairman-selector small,
+    #final-exam .lab-chairman-selector > label,
+    #final-exam .lab-chairman-selector .mb-3 > label,
+    #final-exam .lab-chairman-selector .form-label {
+        user-select: none;
+        -webkit-user-select: none;
+        caret-color: transparent;
+        cursor: default;
+    }
+    #final-exam .lab-chairman-selector .form-control,
+    #final-exam .lab-chairman-selector .form-control option {
+        user-select: auto;
+        -webkit-user-select: auto;
+    }
+
     #final-exam .final-exam-examiner-toggle[aria-expanded="true"] .final-exam-examiner-chevron {
         transform: rotate(180deg);
     }
@@ -4224,51 +4248,77 @@ function saveFinalExamMarks(reloadPage = true) {
 }
 
 // Function to assign examiners (for admin only)
+function getMarksAssignScope() {
+    const chairmanPanel = document.querySelector('.lab-chairman-selector');
+    const feForm = document.getElementById('final-exam-marks-form');
+    const urlParamsAssign = new URLSearchParams(window.location.search);
+    const semesterId = (
+        document.getElementById('assign-chairman-semester-id')?.value
+        || chairmanPanel?.dataset.semesterId
+        || feForm?.querySelector('input[name="semester_id"]')?.value
+        || document.querySelector('input[name="semester_id"]')?.value
+    );
+    const courseId = (
+        document.getElementById('assign-chairman-course-id')?.value
+        || chairmanPanel?.dataset.courseId
+        || feForm?.querySelector('input[name="course_id"]')?.value
+        || document.querySelector('input[name="course_id"]')?.value
+    );
+    const centreId = (
+        document.getElementById('assign-chairman-centre-id')?.value
+        || chairmanPanel?.dataset.centreId
+        || urlParamsAssign.get('centre')
+        || feForm?.dataset.pageCentreId
+        || ''
+    );
+    const csrfToken = (
+        feForm?.querySelector('input[name="csrfmiddlewaretoken"]')?.value
+        || document.querySelector('[name="csrfmiddlewaretoken"]')?.value
+    );
+    return { semesterId, courseId, centreId, csrfToken };
+}
+
+function reloadMarksPagePreservingFinalExamTab() {
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', 'final-exam');
+    url.searchParams.set('_', String(Date.now()));
+    window.location.replace(url.toString());
+}
+
 function assignExaminer(examinerNumber, teacherId) {
     if (!teacherId) {
         return; // Don't do anything if no teacher selected
     }
-    
-    const semesterId = document.querySelector('input[name="semester_id"]')?.value;
-    const courseId = document.querySelector('input[name="course_id"]')?.value;
-    
-    if (!semesterId || !courseId) {
+
+    const scope = getMarksAssignScope();
+    if (!scope.semesterId || !scope.courseId) {
         alert('Please choose a semester and course first.');
         return;
     }
-    
-    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
-    const urlParamsAssign = new URLSearchParams(window.location.search);
-    const centreSelectAssign = document.getElementById('centre');
-    const centreIdAssign = urlParamsAssign.get('centre') || (centreSelectAssign ? centreSelectAssign.value : '');
 
     const assignBody = {
-        'semester_id': semesterId,
-        'course_id': courseId,
+        'semester_id': scope.semesterId,
+        'course_id': scope.courseId,
         'evaluator_number': examinerNumber,
         'teacher_id': teacherId
     };
-    if (centreIdAssign) {
-        assignBody['centre_id'] = centreIdAssign;
+    if (scope.centreId) {
+        assignBody['centre_id'] = scope.centreId;
     }
 
     fetch('{% url "assign-evaluator" %}', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-            'X-CSRFToken': csrfToken
+            'X-CSRFToken': scope.csrfToken
         },
+        credentials: 'same-origin',
         body: new URLSearchParams(assignBody)
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Update the examiner role dropdown to reflect the change
-            const roleSelect = document.getElementById('teacher-role');
-            if (roleSelect) {
-                // Reload page to show updated examiner
-                window.location.reload();
-            }
+            reloadMarksPagePreservingFinalExamTab();
         } else {
             alert('Error: ' + (data.error || 'Failed to assign examiner'));
         }
@@ -4278,5 +4328,71 @@ function assignExaminer(examinerNumber, teacherId) {
         alert('An error occurred while assigning examiner.');
     });
 }
+
+function assignChairman(teacherId) {
+    if (!teacherId) {
+        return;
+    }
+
+    const scope = getMarksAssignScope();
+    if (!scope.semesterId || !scope.courseId) {
+        alert('Please choose a semester and course first.');
+        return;
+    }
+    if (!scope.centreId) {
+        alert('Please choose a study centre first.');
+        return;
+    }
+
+    const select = document.getElementById('assign-chairman');
+    if (select) {
+        select.disabled = true;
+    }
+
+    fetch('{% url "assign-chairman-api" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': scope.csrfToken
+        },
+        credentials: 'same-origin',
+        cache: 'no-store',
+        body: new URLSearchParams({
+            semester_id: scope.semesterId,
+            course_id: scope.courseId,
+            teacher_id: teacherId,
+            centre_id: scope.centreId,
+        })
+    })
+    .then(response => response.json().then(data => ({ ok: response.ok, data })))
+    .then(({ ok, data }) => {
+        if (ok && data.success) {
+            reloadMarksPagePreservingFinalExamTab();
+            return;
+        }
+        throw new Error(data.error || 'Failed to assign chairman');
+    })
+    .catch((error) => {
+        console.error('Error:', error);
+        alert('Error: ' + (error.message || 'An error occurred while assigning chairman.'));
+        if (select) {
+            select.disabled = false;
+        }
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    const chairmanSelect = document.getElementById('assign-chairman');
+    if (chairmanSelect) {
+        chairmanSelect.dataset.lastValue = chairmanSelect.value || '';
+        chairmanSelect.addEventListener('change', function () {
+            const teacherId = this.value;
+            if (!teacherId) {
+                return;
+            }
+            assignChairman(teacherId);
+        });
+    }
+});
 </script>
 {% endblock %}

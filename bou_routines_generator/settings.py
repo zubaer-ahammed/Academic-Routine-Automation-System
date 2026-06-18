@@ -50,6 +50,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'bou_routines_app.middleware.TeacherAccessMiddleware',
+    'bou_routines_app.middleware.OfficeStaffAccessMiddleware',
 ]
 
 ROOT_URLCONF = 'bou_routines_generator.urls'
@@ -66,6 +67,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'bou_routines_app.context_processors.impersonation',
             ],
         },
     },

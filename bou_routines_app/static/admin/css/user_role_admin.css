@@ -1,0 +1,16 @@
+.user-role-fieldset label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 0.25rem;
+}
+
+.user-role-fieldset select {
+    display: block;
+    width: 100%;
+    max-width: 32rem;
+    min-height: 2.25rem;
+}
+
+.user-role-fieldset .form-row {
+    margin-bottom: 1rem;
+}

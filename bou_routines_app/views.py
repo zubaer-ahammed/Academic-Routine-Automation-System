@@ -35,6 +35,7 @@ from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from django.urls import reverse
 from django.utils.http import urlencode
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 from django.db.models import Q
 from django.utils import timezone
@@ -4903,6 +4904,64 @@ def export_academic_calendar_pdf(request, semester_id):
 def check_teacher_permission(user, permission_codename):
     """Check if a user has a specific permission"""
     return user.has_perm(f'bou_routines_app.{permission_codename}')
+
+
+def user_can_assign_course_teacher(user):
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    if user.is_staff and not get_teacher_from_user(user):
+        return True
+    return check_teacher_permission(user, 'can_assign_course_teacher')
+
+
+def user_can_assign_examiners(user):
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    if user.is_staff and not get_teacher_from_user(user):
+        return True
+    return check_teacher_permission(user, 'can_assign_examiners')
+
+
+def user_can_assign_chairman(user):
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    if user.is_staff and not get_teacher_from_user(user):
+        return True
+    return check_teacher_permission(user, 'can_assign_chairman')
+
+
+def user_is_office_staff(user):
+    """
+    Office staff: assignment-only users (no teacher profile, not full admin).
+    Identified by assign permissions without staff/superuser admin access.
+    """
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return False
+    if get_teacher_from_user(user):
+        return False
+    if user.is_staff:
+        return False
+    return (
+        check_teacher_permission(user, 'can_assign_course_teacher')
+        or check_teacher_permission(user, 'can_assign_examiners')
+        or check_teacher_permission(user, 'can_assign_chairman')
+    )
+
+
+def user_has_any_assign_permission(user):
+    return (
+        user_can_assign_course_teacher(user)
+        or user_can_assign_examiners(user)
+        or user_can_assign_chairman(user)
+    )
 
 def get_teacher_from_user(user):
     """Get teacher profile from user"""
@@ -10556,6 +10615,7 @@ def teacher_dashboard(request):
 
 
 @login_required
+@never_cache
 def ca_management(request):
     """
     CA (Continuous Assessment) management page
@@ -10808,6 +10868,7 @@ def ca_management(request):
     ca_marks = {}
     final_exam_marks = {}
     midterm_marks = {}
+    lab_chairman_obj = None
     if semester_id and course_id:
         try:
             selected_semester = Semester.objects.get(id=semester_id)
@@ -10823,7 +10884,12 @@ def ca_management(request):
                         semester=selected_semester,
                         course_id=course_id,
                         centre=centre
-                    ).select_related('course', 'teacher', 'teacher__centre').first()
+                    ).select_related(
+                        'course',
+                        'teacher',
+                        'teacher__centre',
+                        'lab_examination_chairman',
+                    ).first()
                 except Centre.DoesNotExist:
                     pass
             
@@ -10832,12 +10898,19 @@ def ca_management(request):
                 semester_course = SemesterCourse.objects.filter(
                     semester=selected_semester,
                     course_id=course_id
-                ).select_related('course', 'teacher', 'teacher__centre').first()
+                ).select_related(
+                    'course',
+                    'teacher',
+                    'teacher__centre',
+                    'lab_examination_chairman',
+                ).first()
             
             if semester_course:
                 selected_course = semester_course.course
                 # Use semester-specific teacher
                 course_teacher = semester_course.teacher
+                if semester_course.lab_examination_chairman_id:
+                    lab_chairman_obj = semester_course.lab_examination_chairman
             else:
                 # Fallback to direct course lookup if SemesterCourse not found
                 selected_course = Course.objects.get(id=course_id)
@@ -11017,12 +11090,20 @@ def ca_management(request):
         'midterm_marks': midterm_marks,
         'teacher_role': teacher_role,
         'can_select_evaluator': can_select_evaluator,
+        'can_select_chairman': can_select_evaluator and lab_final_uses_viva,
         'lab_final_exam_max': lab_final_exam_max,
         'lab_final_uses_viva': lab_final_uses_viva,
         'lab_final_problem_solving_max': lab_final_problem_solving_max,
         'lab_final_viva_max': lab_final_viva_max,
         'can_edit_lab_viva': lab_final_uses_viva and (
-            is_admin or _user_can_edit_lab_viva(request.user, teacher=teacher)
+            is_admin
+            or _user_can_edit_lab_viva(
+                request.user,
+                teacher=teacher,
+                semester=selected_semester,
+                course=selected_course,
+                centre=selected_centre,
+            )
         ),
         'show_midterm_marks_tab': show_midterm_marks_tab,
         'midterm_set_max': MidtermExamMark.SET_MARKS_MAX,
@@ -11085,6 +11166,7 @@ def ca_management(request):
                         'final_exam_evaluator1',
                         'final_exam_evaluator2',
                         'final_exam_evaluator3',
+                        'lab_examination_chairman',
                     ).first()
                     if sc_ev:
                         if sc_ev.final_exam_evaluator1:
@@ -11093,6 +11175,8 @@ def ca_management(request):
                             teacher2_evaluator_obj = sc_ev.final_exam_evaluator2
                         if sc_ev.final_exam_evaluator3:
                             teacher3_evaluator_obj = sc_ev.final_exam_evaluator3
+                        if sc_ev.lab_examination_chairman:
+                            lab_chairman_obj = sc_ev.lab_examination_chairman
                 except (Centre.DoesNotExist, ValueError, TypeError):
                     pass
 
@@ -11135,6 +11219,7 @@ def ca_management(request):
     context['teacher1_evaluator'] = teacher1_evaluator_obj
     context['teacher2_evaluator'] = teacher2_evaluator_obj
     context['teacher3_evaluator'] = teacher3_evaluator_obj
+    context['lab_chairman'] = lab_chairman_obj
     
     # Check if current teacher is assigned as an evaluator for this course/semester
     # Admin users can always see the tab
@@ -11407,10 +11492,10 @@ def _apply_midterm_q_fields(mm, marks_data):
         setattr(mm, f'q{i}', None if val is None else Decimal(str(val)))
 
 
-def _user_can_edit_lab_viva(user, teacher=None):
+def _user_can_edit_lab_viva(user, teacher=None, semester=None, course=None, centre=None):
     """
-    Lab final viva column: examination chairman, superuser, or marks-page admin
-    (staff without a teacher profile — same rule as ca_management is_admin).
+    Lab final viva column: assigned chairman for this offering, global chairman
+    permission, superuser, or marks-page admin (staff without a teacher profile).
     """
     if user.is_superuser:
         return True
@@ -11418,6 +11503,21 @@ def _user_can_edit_lab_viva(user, teacher=None):
         teacher = get_teacher_from_user(user)
     if user.is_staff and not teacher:
         return True
+    if teacher and semester and course and centre:
+        centre_obj = centre if isinstance(centre, Centre) else None
+        if centre_obj is None:
+            try:
+                centre_obj = Centre.objects.get(id=int(centre))
+            except (Centre.DoesNotExist, ValueError, TypeError):
+                centre_obj = None
+        if centre_obj:
+            sc = SemesterCourse.objects.filter(
+                semester=semester,
+                course=course,
+                centre=centre_obj,
+            ).only('lab_examination_chairman_id').first()
+            if sc and sc.lab_examination_chairman_id == teacher.id:
+                return True
     return check_teacher_permission(user, 'can_chair_examination')
 
 
@@ -12379,7 +12479,13 @@ def save_final_exam_marks(request):
                                     ps_key,
                                     None if pr is None else Decimal(str(max(0.0, min(pr, 20.0)))),
                                 )
-                                if _user_can_edit_lab_viva(request.user, get_teacher_from_user(request.user)):
+                                if _user_can_edit_lab_viva(
+                                    request.user,
+                                    teacher=get_teacher_from_user(request.user),
+                                    semester=semester,
+                                    course=course,
+                                    centre=centre_id_for_perm,
+                                ):
                                     viv = _parse_optional_mark_float(marks_data.get(viv_key), 5.0)
                                     setattr(
                                         final_mark,
@@ -12465,7 +12571,7 @@ def assign_evaluator(request):
     """
     Assign or change evaluators for final exam marks (admin only)
     """
-    if not (request.user.is_superuser or request.user.is_staff):
+    if not user_can_assign_examiners(request.user):
         return JsonResponse({'error': 'Permission denied'}, status=403)
     
     try:
@@ -12534,6 +12640,65 @@ def assign_evaluator(request):
             'teacher_name': teacher.name
         })
         
+    except (Semester.DoesNotExist, Course.DoesNotExist, Teacher.DoesNotExist) as e:
+        return JsonResponse({'error': str(e)}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@require_POST
+def assign_chairman(request):
+    """Assign examination chairman for lab course viva (per semester/course/centre)."""
+    if not user_can_assign_chairman(request.user):
+        return JsonResponse({'error': 'Permission denied'}, status=403)
+
+    try:
+        semester_id = request.POST.get('semester_id')
+        course_id = request.POST.get('course_id')
+        teacher_id = request.POST.get('teacher_id')
+
+        if not all([semester_id, course_id, teacher_id]):
+            return JsonResponse({'error': 'Missing required parameters'}, status=400)
+
+        cid = (request.POST.get('centre_id') or request.POST.get('centre') or '').strip()
+        if not cid:
+            return JsonResponse({'error': 'Study centre is required to assign chairman'}, status=400)
+
+        semester = Semester.objects.get(id=semester_id)
+        course = Course.objects.get(id=course_id)
+        if not course.is_lab:
+            return JsonResponse({'error': 'Chairman can only be assigned for lab courses'}, status=400)
+
+        bad = _reject_old_curriculum_for_marks_json(semester, course)
+        if bad:
+            return bad
+
+        teacher = Teacher.objects.get(id=teacher_id)
+
+        try:
+            centre = Centre.objects.get(id=int(cid))
+        except (Centre.DoesNotExist, ValueError, TypeError):
+            return JsonResponse({'error': 'Invalid study centre'}, status=400)
+
+        sc = SemesterCourse.objects.filter(
+            semester=semester, course=course, centre=centre
+        ).first()
+        if not sc:
+            return JsonResponse(
+                {'error': 'No Semester course row for this semester, course, and study centre.'},
+                status=400,
+            )
+
+        sc.lab_examination_chairman = teacher
+        sc.save(update_fields=['lab_examination_chairman'])
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Lab examination chairman saved.',
+            'teacher_name': teacher.name,
+        })
+
     except (Semester.DoesNotExist, Course.DoesNotExist, Teacher.DoesNotExist) as e:
         return JsonResponse({'error': str(e)}, status=404)
     except Exception as e:

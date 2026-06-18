@@ -1,6 +1,25 @@
 from django.shortcuts import redirect
 from django.contrib import messages
 from .models import Teacher
+from .views import user_is_office_staff
+
+
+def _path_allowed_for_office_staff(path):
+  allowed_prefixes = (
+      '/assign/',
+      '/marks/assign-evaluator/',
+      '/marks/assign-chairman/',
+      '/logout',
+      '/accounts/logout',
+      '/login',
+      '/accounts/login',
+      '/accounts/exit-impersonation/',
+      '/static/',
+      '/media/',
+      '/attendance/courses/',
+      '/attendance/semesters/',
+  )
+  return any(path.startswith(prefix) for prefix in allowed_prefixes)
 
 
 class TeacherAccessMiddleware:
@@ -12,19 +31,41 @@ class TeacherAccessMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        # Check if user is trying to access admin
         if request.path.startswith('/admin/'):
             if request.user.is_authenticated:
+                if user_is_office_staff(request.user):
+                    messages.error(
+                        request,
+                        "You don't have permission to access the admin panel. "
+                        "Office staff can only use the Assign pages.",
+                    )
+                    return redirect('assign-home')
                 try:
                     teacher = request.user.teacher
-                    # If user has teacher profile but is not superuser, block admin access
                     if teacher is not None and not request.user.is_superuser:
-                        messages.error(request, "You don't have permission to access the admin panel. Teachers can only access Download Routines, Attendance, and Marks pages.")
+                        messages.error(
+                            request,
+                            "You don't have permission to access the admin panel. "
+                            "Teachers can only access Download Routines, Attendance, and Marks pages.",
+                        )
                         return redirect('download-routines')
                 except (Teacher.DoesNotExist, AttributeError):
-                    # User doesn't have teacher profile, allow access if they're staff/superuser
                     pass
 
         response = self.get_response(request)
         return response
 
+
+class OfficeStaffAccessMiddleware:
+    """Restrict office staff to assignment pages and related APIs only."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.user.is_authenticated and user_is_office_staff(request.user):
+            if request.path == '/':
+                return redirect('assign-home')
+            if not _path_allowed_for_office_staff(request.path):
+                return redirect('assign-home')
+        return self.get_response(request)

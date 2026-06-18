@@ -113,12 +113,16 @@
                                                                    min="0" 
                                                                    max="{{ lab_final_viva_max|default:5 }}"
                                                                    step="0.01"
-                                                                   class="mark-input"
+                                                                   class="mark-input{% if not can_edit_lab_viva %} lab-viva-readonly{% endif %}"
                                                                    data-student-id="{{ student.id }}"
                                                                    placeholder="Viva"
                                                                    data-lab-field="viva"
+                                                                   {% if can_edit_lab_viva %}
                                                                    oninput="calculateFinalExamTotal(this); autoSaveFinalExamMarks();"
-                                                                   onblur="saveFinalExamMarksImmediately();"{% if final_mark and final_mark.exam_absent %} disabled{% endif %}>
+                                                                   onblur="saveFinalExamMarksImmediately();"
+                                                                   {% else %}
+                                                                   disabled readonly tabindex="-1" title="Viva marks can only be entered by the Examination Chairman"
+                                                                   {% endif %}{% if final_mark and final_mark.exam_absent %} disabled{% endif %}>
                                                         </td>
                                                         {% endif %}
                                                         <td class="total-mark">

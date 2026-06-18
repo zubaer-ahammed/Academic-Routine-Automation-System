@@ -83,6 +83,7 @@ class Teacher(models.Model):
             ("can_mark_attendance", "Can mark class attendance"),
             ("can_manage_ca", "Can manage continuous assessment"),
             ("can_manage_final_marks", "Can manage semester final marks"),
+            ("can_chair_examination", "Can act as examination chairman (e.g. enter lab viva marks)"),
         ]
 
     def __str__(self):

@@ -1178,6 +1178,11 @@
     #final-exam .ca-table.semester-final-exam-marks-table .mark-input[data-lab-field="viva"] {
         min-width: 7rem;
     }
+    #final-exam .ca-table.semester-final-exam-marks-table .mark-input.lab-viva-readonly {
+        background-color: #e9ecef;
+        color: #495057;
+        cursor: not-allowed;
+    }
     #final-exam .ca-table.semester-final-exam-marks-table .mark-input::placeholder {
         color: #adb5bd;
         opacity: 1;
@@ -3651,6 +3656,7 @@ const LAB_FINAL_EXAM_MAX = parseInt("{{ lab_final_exam_max|default:50 }}", 10) |
 const LAB_FINAL_USES_VIVA = {% if lab_final_uses_viva %}true{% else %}false{% endif %};
 const LAB_PROBLEM_MAX = parseInt("{{ lab_final_problem_solving_max|default:20 }}", 10) || 20;
 const LAB_VIVA_MAX = LAB_FINAL_USES_VIVA ? (parseInt("{{ lab_final_viva_max|default:5 }}", 10) || 5) : 0;
+const CAN_EDIT_LAB_VIVA = {% if can_edit_lab_viva %}true{% else %}false{% endif %};
 
 /** Lab row input names include [teacher1_…] or [teacher2_…]; keep in sync with save payload keys. */
 function currentFinalExamLabRolePrefix() {
@@ -3698,7 +3704,7 @@ function calculateFinalExamTotal(inputElement) {
             inputElement.value = '0';
         }
         var cap = (inputElement.name && inputElement.name.indexOf('_lab_viva_mark') >= 0) ? LAB_VIVA_MAX : LAB_PROBLEM_MAX;
-        if (value > cap) {
+        if (value !== null && value > cap) {
             inputElement.value = cap;
             alert('Maximum for this field is ' + cap + ' (lab final total 25: problem solving ' + LAB_PROBLEM_MAX + ', viva ' + LAB_VIVA_MAX + ').');
         }
@@ -4088,15 +4094,17 @@ function saveFinalExamMarks(reloadPage = true) {
                 const inpP = row.querySelector('input[name*="[' + rolePrefix + '_lab_final_exam_mark]"]');
                 const inpV = row.querySelector('input[name*="[' + rolePrefix + '_lab_viva_mark]"]');
                 let p = optionalMarkFromInput(inpP);
-                let v = optionalMarkFromInput(inpV);
                 if (p !== null) {
                     p = Math.max(0, Math.min(LAB_PROBLEM_MAX, p));
                 }
-                if (v !== null) {
-                    v = Math.max(0, Math.min(LAB_VIVA_MAX, v));
-                }
                 marks[rolePrefix + '_lab_final_exam_mark'] = p;
-                marks[rolePrefix + '_lab_viva_mark'] = v;
+                if (CAN_EDIT_LAB_VIVA && inpV && !inpV.disabled) {
+                    let v = optionalMarkFromInput(inpV);
+                    if (v !== null) {
+                        v = Math.max(0, Math.min(LAB_VIVA_MAX, v));
+                    }
+                    marks[rolePrefix + '_lab_viva_mark'] = v;
+                }
             } else {
                 const inpLab = row.querySelector('input[name*="[' + rolePrefix + '_lab_final_exam_mark]"]');
                 let labVal = optionalMarkFromInput(inpLab);

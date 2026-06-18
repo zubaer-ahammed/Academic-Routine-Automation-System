@@ -11021,6 +11021,9 @@ def ca_management(request):
         'lab_final_uses_viva': lab_final_uses_viva,
         'lab_final_problem_solving_max': lab_final_problem_solving_max,
         'lab_final_viva_max': lab_final_viva_max,
+        'can_edit_lab_viva': lab_final_uses_viva and (
+            is_admin or _user_can_edit_lab_viva(request.user, teacher=teacher)
+        ),
         'show_midterm_marks_tab': show_midterm_marks_tab,
         'midterm_set_max': MidtermExamMark.SET_MARKS_MAX,
         'midterm_raw_total_max': MidtermExamMark.RAW_TOTAL_MAX,
@@ -11402,6 +11405,20 @@ def _apply_midterm_q_fields(mm, marks_data):
             continue
         val = _parse_midterm_q_mark(marks_data.get(k))
         setattr(mm, f'q{i}', None if val is None else Decimal(str(val)))
+
+
+def _user_can_edit_lab_viva(user, teacher=None):
+    """
+    Lab final viva column: examination chairman, superuser, or marks-page admin
+    (staff without a teacher profile — same rule as ca_management is_admin).
+    """
+    if user.is_superuser:
+        return True
+    if teacher is None:
+        teacher = get_teacher_from_user(user)
+    if user.is_staff and not teacher:
+        return True
+    return check_teacher_permission(user, 'can_chair_examination')
 
 
 def _is_final_exam_evaluator_for_scope(teacher, semester, course, centre_id):
@@ -12356,18 +12373,19 @@ def save_final_exam_marks(request):
                                 setattr(final_mark, viv_key, None)
                             else:
                                 pr = _parse_optional_mark_float(marks_data.get(ps_key), 20.0)
-                                viv = _parse_optional_mark_float(marks_data.get(viv_key), 5.0)
                                 from decimal import Decimal
                                 setattr(
                                     final_mark,
                                     ps_key,
                                     None if pr is None else Decimal(str(max(0.0, min(pr, 20.0)))),
                                 )
-                                setattr(
-                                    final_mark,
-                                    viv_key,
-                                    None if viv is None else Decimal(str(max(0.0, min(viv, 5.0)))),
-                                )
+                                if _user_can_edit_lab_viva(request.user, get_teacher_from_user(request.user)):
+                                    viv = _parse_optional_mark_float(marks_data.get(viv_key), 5.0)
+                                    setattr(
+                                        final_mark,
+                                        viv_key,
+                                        None if viv is None else Decimal(str(max(0.0, min(viv, 5.0)))),
+                                    )
                             if not apply_assign_from_post:
                                 if lab_prefix == 'teacher1':
                                     final_mark.teacher1_evaluator = teacher

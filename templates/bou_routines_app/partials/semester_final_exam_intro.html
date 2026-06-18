@@ -3,6 +3,9 @@
                                 <div class="ca-distribution">
                                     {% if lab_final_uses_viva %}
                                     <p><strong>Lab Course Final Exam:</strong> Total {{ lab_final_exam_max|default:25 }} marks — Problem Solving (max {{ lab_final_problem_solving_max|default:20 }}) and Viva (max {{ lab_final_viva_max|default:5 }}).</p>
+                                    {% if not can_edit_lab_viva %}
+                                    <p class="mb-0"><small class="text-muted">Viva marks are entered by the <strong>Examination Chairman</strong> or an <strong>administrator</strong> only; examiners may enter Problem Solving marks.</small></p>
+                                    {% endif %}
                                     {% else %}
                                     <p><strong>Lab Course Final Exam:</strong> Maximum {{ lab_final_exam_max|default:50 }} marks</p>
                                     {% endif %}

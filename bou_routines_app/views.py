@@ -8660,25 +8660,23 @@ def export_blank_ca_marks_pdf(request):
 
 @login_required
 def export_ca_marks_excel(request):
-    """Export CA marks to Excel"""
+    """Export CA marks to Excel (same header and table layout as PDF export)."""
     try:
-        # Check permissions
         if not (request.user.is_superuser or request.user.is_staff or check_teacher_permission(request.user, 'can_manage_ca')):
             messages.error(request, "You don't have permission to export CA marks.")
             return redirect('ca-management')
-        
+
         semester_id = request.GET.get('semester')
         course_id = request.GET.get('course')
         centre_id = request.GET.get('centre')
-        
+
         if not semester_id or not course_id:
             messages.error(request, "Please select a semester and course.")
             return redirect('ca-management')
-        
+
         semester = Semester.objects.get(id=semester_id)
         course = Course.objects.get(id=course_id)
-        
-        # Get students with custom sorting
+
         students = Student.objects.filter(semesters=semester).extra(
             select={
                 'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
@@ -8686,147 +8684,163 @@ def export_ca_marks_excel(request):
             }
         ).order_by('-first_two_digits', 'last_three_digits')
         students = filter_students_queryset_by_centre(students, centre_id)
-        
-        # Get existing CA marks
-        existing_marks = CAMark.objects.filter(
-            student__in=students,
-            course=course,
-            semester=semester
-        )
-        
-        ca_marks = {}
-        for mark in existing_marks:
-            ca_marks[mark.student.id] = mark
-        
-        # Create temporary marks for students without existing marks
-        for student in students:
-            if student.id not in ca_marks:
-                temp_mark = CAMark(
-                    student=student,
-                    course=course,
-                    semester=semester
-                )
-                temp_mark.attendance_mark = temp_mark.calculate_attendance_mark()
-                ca_marks[student.id] = temp_mark
-        
-        # Create Excel file
+        ca_marks = _ca_marks_dict_for_students_course_semester(students, course, semester)
+
+        header_rows = _ca_marks_export_table_header_rows(course, semester)
+        num_cols = len(header_rows[0])
+        teacher_name, centre_name = _ca_marks_export_teacher_and_centre(semester, course, centre_id)
+
         output = io.BytesIO()
         workbook = xlsxwriter.Workbook(output)
-        worksheet = workbook.add_worksheet("CA Marks")
-        
-        # Formats
+        worksheet = workbook.add_worksheet('CA Marks')
+
         title_format = workbook.add_format({
             'bold': True,
-            'font_size': 14,
+            'font_size': 15,
             'align': 'center',
-            'valign': 'vcenter'
+            'valign': 'vcenter',
         })
-        header_format = workbook.add_format({
+        subtitle_format = workbook.add_format({
             'bold': True,
             'font_size': 11,
             'align': 'center',
             'valign': 'vcenter',
-            'bg_color': '#2c3e50',
-            'font_color': 'white',
-            'border': 1
+        })
+        normal_format = workbook.add_format({
+            'font_size': 10,
+            'align': 'center',
+            'valign': 'vcenter',
+        })
+        header_format = workbook.add_format({
+            'bold': True,
+            'font_size': 9,
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1,
+            'text_wrap': True,
         })
         cell_format = workbook.add_format({
             'align': 'center',
             'valign': 'vcenter',
-            'border': 1
+            'border': 1,
+            'font_size': 8,
         })
-        name_header_format = workbook.add_format({
+        cell_stripe_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1,
+            'font_size': 8,
+            'bg_color': '#D3D3D3',
+        })
+        id_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1,
+            'font_size': 9,
             'bold': True,
-            'font_size': 11,
-            'align': 'left',
-            'valign': 'vcenter',
-            'bg_color': '#2c3e50',
-            'font_color': 'white',
-            'border': 1,
         })
-        name_cell_format = workbook.add_format({
-            'align': 'left',
+        id_stripe_format = workbook.add_format({
+            'align': 'center',
             'valign': 'vcenter',
             'border': 1,
+            'font_size': 9,
+            'bold': True,
+            'bg_color': '#D3D3D3',
         })
-        
-        # Title
-        if course.is_lab:
-            if course.effective_lab_ca_practical2_weight:
-                headers = [
-                    'Student ID', 'Name', 'Attendance', 'Lab Assignment', 'Lab Practical 1', 'Lab Practical 2', 'Total CA'
-                ]
-            else:
-                headers = ['Student ID', 'Name', 'Attendance', 'Lab Assignment', 'Lab Practical', 'Total CA']
-        else:
-            headers = ['Student ID', 'Name', 'Attendance', 'Assignment/Presentation', 'Mid-Term Exam', 'Total CA']
-        
-        worksheet.merge_range(0, 0, 0, len(headers) - 1, f"CA Marks Report - {semester.name}", title_format)
-        worksheet.write(1, 0, f"Course: {course.code} - {course.name}", cell_format)
-        worksheet.write(1, 1, f"Course Type: {'Lab Course' if course.is_lab else 'Theory Course'}", cell_format)
-        
-        # Header row
-        row = 3
-        col = 0
-        for header in headers:
-            fmt = name_header_format if col == 1 else header_format
-            worksheet.write(row, col, header, fmt)
-            col += 1
-        
-        # Data rows
-        row = 4
-        for student in students:
-            col = 0
-            mark = ca_marks.get(student.id)
-            worksheet.write(row, col, student.id, cell_format)
-            col += 1
-            worksheet.write(row, col, student.name, name_cell_format)
-            col += 1
-            
-            if mark:
-                if course.is_lab:
-                    worksheet.write(row, col, mark.attendance_mark, cell_format)
-                    col += 1
-                    worksheet.write(row, col, mark.lab_assignment_mark, cell_format)
-                    col += 1
-                    worksheet.write(row, col, mark.lab_practical_mark, cell_format)
-                    col += 1
-                    if course.effective_lab_ca_practical2_weight:
-                        worksheet.write(row, col, mark.second_lab_practical_mark, cell_format)
-                        col += 1
-                    worksheet.write(row, col, mark.calculate_total_ca_mark(), cell_format)
-                else:
-                    worksheet.write(row, col, mark.attendance_mark, cell_format)
-                    col += 1
-                    worksheet.write(row, col, mark.assignment_mark, cell_format)
-                    col += 1
-                    worksheet.write(row, col, mark.midterm_mark, cell_format)
-                    col += 1
-                    worksheet.write(row, col, mark.calculate_total_ca_mark(), cell_format)
-            else:
-                n_zero = 5 if (course.is_lab and course.effective_lab_ca_practical2_weight) else 4
-                for _ in range(n_zero):
-                    worksheet.write(row, col, 0.00, cell_format)
-                    col += 1
-            
+        name_format = workbook.add_format({
+            'align': 'left',
+            'valign': 'vcenter',
+            'border': 1,
+            'font_size': 7,
+            'bold': True,
+        })
+        name_stripe_format = workbook.add_format({
+            'align': 'left',
+            'valign': 'vcenter',
+            'border': 1,
+            'font_size': 7,
+            'bold': True,
+            'bg_color': '#D3D3D3',
+        })
+
+        row = 0
+        last_col = max(num_cols - 1, 0)
+        worksheet.merge_range(
+            row, 0, row, last_col,
+            'B. Sc in Computer Science and Engineering Program',
+            title_format,
+        )
+        row += 1
+        session = semester.session or ''
+        if session:
+            worksheet.merge_range(row, 0, row, last_col, f'{session} Session', subtitle_format)
             row += 1
-        
-        # Set column widths
-        worksheet.set_column(0, 0, 15)  # Student ID
-        worksheet.set_column(1, 1, 30)  # Name
-        worksheet.set_column(2, len(headers) - 1, 18)  # Mark columns
-        
+        term = semester.term or ''
+        semester_full_name = semester.semester_full_name or ''
+        if term or semester_full_name:
+            worksheet.merge_range(
+                row, 0, row, last_col,
+                f'{term} Term {semester_full_name}'.strip(),
+                subtitle_format,
+            )
+            row += 1
+        worksheet.merge_range(
+            row, 0, row, last_col,
+            'Continuous Assessment (CA) Marks',
+            subtitle_format,
+        )
+        row += 1
+        if teacher_name:
+            worksheet.merge_range(
+                row, 0, row, last_col, f'Faculty: {teacher_name}', normal_format,
+            )
+            row += 1
+        if centre_name:
+            worksheet.merge_range(
+                row, 0, row, last_col, f'Study Center: {centre_name}', normal_format,
+            )
+            row += 1
+
+        table_header_start = row
+        row += len(header_rows)
+        _ca_marks_export_apply_table_header_merges(
+            worksheet, course, semester, table_header_start, header_format, header_rows
+        )
+
+        for sl_no, student in enumerate(students, start=1):
+            stripe = sl_no % 2 == 0
+            data = _ca_marks_export_student_row(
+                course, semester, sl_no, student, ca_marks.get(student.id)
+            )
+            for col, value in enumerate(data):
+                if col == 1:
+                    fmt = id_stripe_format if stripe else id_format
+                elif col == 2:
+                    fmt = name_stripe_format if stripe else name_format
+                else:
+                    fmt = cell_stripe_format if stripe else cell_format
+                worksheet.write(row, col, value, fmt)
+            row += 1
+
+        worksheet.set_column(0, 0, 6)
+        worksheet.set_column(1, 1, 12)
+        worksheet.set_column(2, 2, 22)
+        if num_cols > 3:
+            worksheet.set_column(3, num_cols - 1, 9)
+
+        _excel_apply_landscape_a4_print_setup(worksheet, row - 1, last_col)
+
         workbook.close()
         output.seek(0)
-        
+
         response = HttpResponse(
             output.read(),
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         )
         filename = f"CA_Marks_{course.code}_{semester.name}.xlsx"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
-        
+
     except Exception as e:
         return HttpResponse(f"Error generating Excel: {str(e)}", status=500)
 
@@ -10066,6 +10080,309 @@ def _ca_total_ceil_int(cam):
         return int(math.ceil(max(0.0, _ca_total_float(cam))))
     except (TypeError, ValueError, OverflowError):
         return 0
+
+
+def _excel_apply_landscape_a4_print_setup(worksheet, last_row, last_col):
+    """Landscape A4 print setup: fit all columns to one page width (like PDF)."""
+    worksheet.set_landscape()
+    worksheet.set_paper(9)  # A4
+    worksheet.set_margins(left=0.3, right=0.3, top=0.35, bottom=0.35)
+    worksheet.center_horizontally()
+    worksheet.fit_to_pages(1, 0)
+    if last_row >= 0 and last_col >= 0:
+        worksheet.print_area(0, 0, last_row, last_col)
+
+
+def _ca_marks_export_teacher_and_centre(semester, course, centre_id):
+    teacher_name = None
+    centre_name = ''
+    if centre_id:
+        try:
+            centre = Centre.objects.get(id=centre_id)
+            centre_name = centre.name
+            semester_course = SemesterCourse.objects.filter(
+                semester=semester,
+                course=course,
+                centre=centre,
+            ).select_related('teacher').first()
+            if semester_course and semester_course.teacher:
+                teacher_name = semester_course.teacher.name
+        except (Centre.DoesNotExist, ValueError, TypeError):
+            pass
+    if not centre_name:
+        first_sc = SemesterCourse.objects.filter(semester=semester).select_related('centre').first()
+        if first_sc and first_sc.centre:
+            centre_name = first_sc.centre.name
+    return teacher_name, centre_name
+
+
+def _ca_marks_export_table_header_rows(course, semester):
+    """Multi-row CA table headers matching the PDF export."""
+    if course.course_type == 'PROJECT':
+        total_ca = (
+            course.effective_project_supervisor_weight
+            + course.effective_project_evaluation_weight
+            + course.effective_project_presentation_weight
+        )
+        return [
+            [
+                'SL. No', 'Student ID', 'Name',
+                f'Project Work CA (Total: {total_ca})', '', '',
+                'Total',
+            ],
+            [
+                '', '', '',
+                f'Supervisor ({course.effective_project_supervisor_weight})',
+                f'Evaluation ({course.effective_project_evaluation_weight})',
+                f'Presentation ({course.effective_project_presentation_weight})',
+                '',
+            ],
+        ]
+
+    if course.is_lab:
+        p2w = course.effective_lab_ca_practical2_weight
+        if p2w:
+            total_ca = course.effective_lab_ca_total_marks
+            return [
+                [
+                    'SL. No', 'Student ID', 'Name',
+                    f'Lab Course CA (Total: {total_ca})', '', '', '', '', '', '',
+                    'Total',
+                ],
+                [
+                    '', '', '',
+                    f'Attendance ({course.effective_lab_ca_attendance_weight})',
+                    f'Assignment/Lab Report ({course.effective_lab_ca_assignment_weight})', '', '', '',
+                    f'Experiment/ Lab Project ({course.effective_lab_ca_practical_weight})',
+                    f'Experiment/ Lab Project ({p2w})',
+                    '',
+                ],
+                [
+                    '', '', '', '',
+                    'First', 'Second', 'Third', 'Average', '', '', '',
+                ],
+            ]
+        total_ca = (
+            course.effective_lab_ca_attendance_weight
+            + course.effective_lab_ca_assignment_weight
+            + course.effective_lab_ca_practical_weight
+        )
+        return [
+            [
+                'SL. No', 'Student ID', 'Name',
+                f'Lab Course CA (Total: {total_ca})', '', '', '', '',
+                '', 'Total',
+            ],
+            [
+                '', '', '',
+                f'Attendance ({course.effective_lab_ca_attendance_weight})',
+                f'Assignment/Lab Report ({course.effective_lab_ca_assignment_weight})', '', '', '',
+                f'Experiment/ Lab Project ({course.effective_lab_ca_practical_weight})',
+                '',
+            ],
+            [
+                '', '', '',
+                '',
+                'First', 'Second', 'Third', 'Average',
+                '', '',
+            ],
+        ]
+
+    is_old_curriculum = semester.curriculum and semester.curriculum.code == 'OLD'
+    if is_old_curriculum:
+        exam_weight = course.effective_ca_quiz_weight
+        total_ca = course.effective_ca_attendance_weight + course.effective_ca_assignment_weight + exam_weight
+        return [
+            [
+                'SL. No', 'Student ID', 'Name',
+                f'Theory Course CA (Total: {total_ca})', '', '', '', '', '', '',
+                '', 'Total',
+            ],
+            [
+                '', '', '',
+                f'Attendance ({course.effective_ca_attendance_weight})',
+                f'Assignment/Presentation ({course.effective_ca_assignment_weight})', '', '', '',
+                f'Class Test ({exam_weight})', '', '',
+                'Total',
+            ],
+            [
+                '', '', '',
+                '',
+                'First', 'Second', 'Third', 'Average',
+                'First', 'Second', 'Best',
+                'Total',
+            ],
+        ]
+
+    exam_weight = course.effective_ca_midterm_weight
+    total_ca = course.effective_ca_attendance_weight + course.effective_ca_assignment_weight + exam_weight
+    return [
+        [
+            'SL. No', 'Student ID', 'Name',
+            f'Theory Course CA (Total: {total_ca})', '', '', '', '',
+            '', 'Total',
+        ],
+        [
+            '', '', '',
+            f'Attendance ({course.effective_ca_attendance_weight})',
+            f'Assignment/Presentation ({course.effective_ca_assignment_weight})', '', '', '',
+            f'Mid-Term Exam ({exam_weight})',
+            'Total',
+        ],
+        [
+            '', '', '',
+            '',
+            'First', 'Second', 'Third', 'Average',
+            '', 'Total',
+        ],
+    ]
+
+
+def _ca_marks_export_student_row(course, semester, sl_no, student, mark):
+    """One CA marks data row matching the PDF export."""
+    if mark:
+        if course.course_type == 'PROJECT':
+            return [
+                str(sl_no), student.id, student.name.upper(),
+                _fmt_export_mark(mark.project_supervisor_mark),
+                _fmt_export_mark(mark.project_evaluation_mark),
+                _fmt_export_mark(mark.project_presentation_mark),
+                str(_ca_total_ceil_int(mark)),
+            ]
+        if course.is_lab:
+            if course.effective_lab_ca_practical2_weight:
+                return [
+                    str(sl_no), student.id, student.name.upper(),
+                    _fmt_export_mark(mark.attendance_mark),
+                    _fmt_export_mark(mark.first_lab_assignment_mark),
+                    _fmt_export_mark(mark.second_lab_assignment_mark),
+                    _fmt_export_mark(mark.third_lab_assignment_mark),
+                    _fmt_export_mark(mark.lab_assignment_mark),
+                    _fmt_export_mark(mark.lab_practical_mark),
+                    _fmt_export_mark(mark.second_lab_practical_mark),
+                    str(_ca_total_ceil_int(mark)),
+                ]
+            return [
+                str(sl_no), student.id, student.name.upper(),
+                _fmt_export_mark(mark.attendance_mark),
+                _fmt_export_mark(mark.first_lab_assignment_mark),
+                _fmt_export_mark(mark.second_lab_assignment_mark),
+                _fmt_export_mark(mark.third_lab_assignment_mark),
+                _fmt_export_mark(mark.lab_assignment_mark),
+                _fmt_export_mark(mark.lab_practical_mark),
+                str(_ca_total_ceil_int(mark)),
+            ]
+        is_old_curriculum = semester.curriculum and semester.curriculum.code == 'OLD'
+        if is_old_curriculum:
+            return [
+                str(sl_no), student.id, student.name.upper(),
+                _fmt_export_mark(mark.attendance_mark),
+                _fmt_export_mark(mark.first_assignment_mark),
+                _fmt_export_mark(mark.second_assignment_mark),
+                _fmt_export_mark(mark.third_assignment_mark),
+                _fmt_export_mark(mark.assignment_mark),
+                _fmt_export_mark(mark.first_class_test_mark),
+                _fmt_export_mark(mark.second_class_test_mark),
+                _fmt_export_mark(mark.class_test_mark),
+                str(_ca_total_ceil_int(mark)),
+            ]
+        return [
+            str(sl_no), student.id, student.name.upper(),
+            _fmt_export_mark(mark.attendance_mark),
+            _fmt_export_mark(mark.first_assignment_mark),
+            _fmt_export_mark(mark.second_assignment_mark),
+            _fmt_export_mark(mark.third_assignment_mark),
+            _fmt_export_mark(mark.assignment_mark),
+            _fmt_export_mark(mark.midterm_mark),
+            str(_ca_total_ceil_int(mark)),
+        ]
+
+    if course.course_type == 'PROJECT':
+        empty = [str(sl_no), student.id, student.name.upper(), '0.00', '0.00', '0.00', '0']
+    elif course.is_lab:
+        if course.effective_lab_ca_practical2_weight:
+            empty = [str(sl_no), student.id, student.name.upper()] + ['0.00'] * 8 + ['0']
+        else:
+            empty = [str(sl_no), student.id, student.name.upper()] + ['0.00'] * 6 + ['0']
+    elif semester.curriculum and semester.curriculum.code == 'OLD':
+        empty = [str(sl_no), student.id, student.name.upper()] + ['0.00'] * 8 + ['0']
+    else:
+        empty = [str(sl_no), student.id, student.name.upper()] + ['0.00'] * 6 + ['0']
+    return empty
+
+
+def _ca_marks_export_apply_table_header_merges(
+    worksheet, course, semester, start_row, header_fmt, header_rows
+):
+    """Apply merged header cells for the CA marks table (same layout as PDF)."""
+    num_header_rows = len(header_rows)
+
+    def cell_text(r, c):
+        if r < len(header_rows) and c < len(header_rows[r]):
+            return (header_rows[r][c] or '').replace('\n', ' ')
+        return ''
+
+    def merge(r1, c1, r2, c2):
+        worksheet.merge_range(
+            start_row + r1, c1, start_row + r2, c2, cell_text(r1, c1), header_fmt
+        )
+
+    def write(r, c):
+        text = cell_text(r, c)
+        if text:
+            worksheet.write(start_row + r, c, text, header_fmt)
+
+    last_row = num_header_rows - 1
+    merge(0, 0, last_row, 0)
+    merge(0, 1, last_row, 1)
+    merge(0, 2, last_row, 2)
+
+    if course.course_type == 'PROJECT':
+        merge(0, 3, 0, 5)
+        for c in range(3, 6):
+            write(1, c)
+        merge(0, 6, last_row, 6)
+        return
+
+    if course.is_lab:
+        if course.effective_lab_ca_practical2_weight:
+            merge(0, 3, 0, 9)
+            merge(1, 3, last_row, 3)
+            merge(1, 4, 1, 7)
+            for c in range(4, 8):
+                write(2, c)
+            merge(1, 8, last_row, 8)
+            merge(1, 9, last_row, 9)
+            merge(0, 10, last_row, 10)
+        else:
+            merge(0, 3, 0, 8)
+            merge(1, 3, last_row, 3)
+            merge(1, 4, 1, 7)
+            for c in range(4, 8):
+                write(2, c)
+            merge(1, 8, last_row, 8)
+            merge(0, 9, last_row, 9)
+        return
+
+    is_old_curriculum = semester.curriculum and semester.curriculum.code == 'OLD'
+    if is_old_curriculum:
+        merge(0, 3, 0, 10)
+        merge(1, 3, last_row, 3)
+        merge(1, 4, 1, 7)
+        for c in range(4, 8):
+            write(2, c)
+        merge(1, 8, 1, 10)
+        for c in range(8, 11):
+            write(2, c)
+        merge(0, 11, last_row, 11)
+    else:
+        merge(0, 3, 0, 8)
+        merge(1, 3, last_row, 3)
+        merge(1, 4, 1, 7)
+        for c in range(4, 8):
+            write(2, c)
+        merge(1, 8, last_row, 8)
+        merge(0, 9, last_row, 9)
 
 
 def _examiner_summary_headers_and_rows(

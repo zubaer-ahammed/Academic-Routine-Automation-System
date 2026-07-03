@@ -402,6 +402,38 @@ class SemesterCourse(models.Model):
         related_name='semester_courses_as_lab_examination_chairman',
         help_text="Examination chairman for lab course viva (per semester/course/centre)",
     )
+    lab_examination_member1 = models.ForeignKey(
+        Teacher,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='semester_courses_as_lab_examination_member1',
+        help_text="Lab viva examination member 1 (optional)",
+    )
+    lab_examination_member2 = models.ForeignKey(
+        Teacher,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='semester_courses_as_lab_examination_member2',
+        help_text="Lab viva examination member 2 (optional)",
+    )
+    lab_examination_member3 = models.ForeignKey(
+        Teacher,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='semester_courses_as_lab_examination_member3',
+        help_text="Lab viva examination member 3 (optional)",
+    )
+    lab_examination_member4 = models.ForeignKey(
+        Teacher,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='semester_courses_as_lab_examination_member4',
+        help_text="Lab viva examination member 4 (optional)",
+    )
     # Attendance-only schedule override (does NOT affect routine/calendar generation)
     attendance_midterm_override_dates = models.TextField(
         blank=True,

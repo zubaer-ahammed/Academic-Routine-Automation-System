@@ -53,7 +53,7 @@
         <li class="nav-item">
             <a class="nav-link {% if request.resolver_match.url_name == 'assign-chairman' %}active{% endif %}"
                href="{% url 'assign-chairman' %}?curriculum={{ selected_curriculum_id }}&term={{ selected_term|urlencode }}&semester={{ selected_semester_id|default:'' }}&centre={{ selected_centre_id|default:'' }}&course={{ selected_course_id|default:'' }}">
-                Chairman
+                Exam Committee
             </a>
         </li>
         {% endif %}

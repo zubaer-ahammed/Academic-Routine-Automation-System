@@ -1,6 +1,6 @@
 {% extends 'bou_routines_app/assign/base_assign.html' %}
 
-{% block assign_title %}Assign Chairman{% endblock %}
+{% block assign_title %}Assign Exam Committee{% endblock %}
 
 {% block assign_content %}
 <p class="text-muted mb-4">
@@ -14,7 +14,7 @@
 <div class="row g-3">
     <div class="col-md-6">
         <label for="assign-chairman" class="form-label">Examination Chairman</label>
-        <select id="assign-chairman" class="form-select" onchange="assignChairman(this.value)">
+        <select id="assign-chairman" class="form-select" onchange="assignLabExamRole('chairman', this.value)">
             <option value="">-- Teacher --</option>
             {% for teacher in all_teachers %}
             <option value="{{ teacher.id }}" {% if semester_course.lab_examination_chairman_id == teacher.id %}selected{% endif %}>
@@ -24,7 +24,58 @@
         </select>
     </div>
 </div>
-<p class="mt-3 mb-0"><small class="text-muted">Changes are saved immediately when you pick a teacher.</small></p>
+
+<div class="mt-4">
+    <h6 class="mb-3">Members</h6>
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label for="assign-member-1" class="form-label">Member 1</label>
+            <select id="assign-member-1" class="form-select" onchange="assignLabExamRole('member1', this.value)">
+                <option value="">-- Teacher --</option>
+                {% for teacher in all_teachers %}
+                <option value="{{ teacher.id }}" {% if semester_course.lab_examination_member1_id == teacher.id %}selected{% endif %}>
+                    {{ teacher.name }} ({{ teacher.centre.code }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-6">
+            <label for="assign-member-2" class="form-label">Member 2</label>
+            <select id="assign-member-2" class="form-select" onchange="assignLabExamRole('member2', this.value)">
+                <option value="">-- Teacher --</option>
+                {% for teacher in all_teachers %}
+                <option value="{{ teacher.id }}" {% if semester_course.lab_examination_member2_id == teacher.id %}selected{% endif %}>
+                    {{ teacher.name }} ({{ teacher.centre.code }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-6">
+            <label for="assign-member-3" class="form-label">Member 3</label>
+            <select id="assign-member-3" class="form-select" onchange="assignLabExamRole('member3', this.value)">
+                <option value="">-- Teacher --</option>
+                {% for teacher in all_teachers %}
+                <option value="{{ teacher.id }}" {% if semester_course.lab_examination_member3_id == teacher.id %}selected{% endif %}>
+                    {{ teacher.name }} ({{ teacher.centre.code }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-6">
+            <label for="assign-member-4" class="form-label">Member 4</label>
+            <select id="assign-member-4" class="form-select" onchange="assignLabExamRole('member4', this.value)">
+                <option value="">-- Teacher --</option>
+                {% for teacher in all_teachers %}
+                <option value="{{ teacher.id }}" {% if semester_course.lab_examination_member4_id == teacher.id %}selected{% endif %}>
+                    {{ teacher.name }} ({{ teacher.centre.code }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+</div>
+
+<p class="mt-3 mb-0"><small class="text-muted">Changes are saved immediately when you pick a teacher. Members can be left empty.</small></p>
 
 {% elif selected_semester and selected_centre and selected_course_id %}
 <div class="alert alert-warning mb-0">
@@ -39,8 +90,8 @@
 
 {% block assign_extra_js %}
 <script>
-function assignChairman(teacherId) {
-    if (!teacherId) {
+function assignLabExamRole(assignmentType, teacherId) {
+    if (assignmentType === 'chairman' && !teacherId) {
         return;
     }
     const semesterId = document.querySelector('input[name="semester_id"]')?.value;
@@ -61,7 +112,8 @@ function assignChairman(teacherId) {
             semester_id: semesterId,
             course_id: courseId,
             teacher_id: teacherId,
-            centre_id: centreId
+            centre_id: centreId,
+            assignment_type: assignmentType
         })
     })
     .then(response => response.json())
@@ -69,10 +121,10 @@ function assignChairman(teacherId) {
         if (data.success) {
             window.location.reload();
         } else {
-            alert('Error: ' + (data.error || 'Failed to assign chairman'));
+            alert('Error: ' + (data.error || 'Failed to save assignment'));
         }
     })
-    .catch(() => alert('An error occurred while assigning chairman.'));
+    .catch(() => alert('An error occurred while saving the assignment.'));
 }
 </script>
 {% endblock %}

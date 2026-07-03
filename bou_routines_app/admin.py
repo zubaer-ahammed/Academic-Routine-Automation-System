@@ -241,6 +241,10 @@ class SemesterCourseAdmin(admin.ModelAdmin):
         'final_exam_evaluator2',
         'final_exam_evaluator3',
         'lab_examination_chairman',
+        'lab_examination_member1',
+        'lab_examination_member2',
+        'lab_examination_member3',
+        'lab_examination_member4',
         'number_of_classes',
     )
     autocomplete_fields = (
@@ -249,6 +253,10 @@ class SemesterCourseAdmin(admin.ModelAdmin):
         'final_exam_evaluator2',
         'final_exam_evaluator3',
         'lab_examination_chairman',
+        'lab_examination_member1',
+        'lab_examination_member2',
+        'lab_examination_member3',
+        'lab_examination_member4',
     )
 
 def _sync_user_type_role(user, user_type):

@@ -12966,17 +12966,31 @@ def assign_evaluator(request):
 @login_required
 @require_POST
 def assign_chairman(request):
-    """Assign examination chairman for lab course viva (per semester/course/centre)."""
+    """Assign examination chairman or members for lab course viva (per semester/course/centre)."""
     if not user_can_assign_chairman(request.user):
         return JsonResponse({'error': 'Permission denied'}, status=403)
+
+    assignment_fields = {
+        'chairman': 'lab_examination_chairman',
+        'member1': 'lab_examination_member1',
+        'member2': 'lab_examination_member2',
+        'member3': 'lab_examination_member3',
+        'member4': 'lab_examination_member4',
+    }
 
     try:
         semester_id = request.POST.get('semester_id')
         course_id = request.POST.get('course_id')
-        teacher_id = request.POST.get('teacher_id')
+        teacher_id = (request.POST.get('teacher_id') or '').strip()
+        assignment_type = (request.POST.get('assignment_type') or 'chairman').strip().lower()
 
-        if not all([semester_id, course_id, teacher_id]):
+        if assignment_type not in assignment_fields:
+            return JsonResponse({'error': 'Invalid assignment type'}, status=400)
+
+        if not semester_id or not course_id:
             return JsonResponse({'error': 'Missing required parameters'}, status=400)
+        if assignment_type == 'chairman' and not teacher_id:
+            return JsonResponse({'error': 'Teacher is required for chairman'}, status=400)
 
         cid = (request.POST.get('centre_id') or request.POST.get('centre') or '').strip()
         if not cid:
@@ -12991,7 +13005,9 @@ def assign_chairman(request):
         if bad:
             return bad
 
-        teacher = Teacher.objects.get(id=teacher_id)
+        teacher = None
+        if teacher_id:
+            teacher = Teacher.objects.get(id=teacher_id)
 
         try:
             centre = Centre.objects.get(id=int(cid))
@@ -13007,13 +13023,26 @@ def assign_chairman(request):
                 status=400,
             )
 
-        sc.lab_examination_chairman = teacher
-        sc.save(update_fields=['lab_examination_chairman'])
+        field_name = assignment_fields[assignment_type]
+        setattr(sc, field_name, teacher)
+        sc.save(update_fields=[field_name])
+
+        labels = {
+            'chairman': 'Lab examination chairman',
+            'member1': 'Member 1',
+            'member2': 'Member 2',
+            'member3': 'Member 3',
+            'member4': 'Member 4',
+        }
+        if teacher:
+            message = f'{labels[assignment_type]} saved.'
+        else:
+            message = f'{labels[assignment_type]} cleared.'
 
         return JsonResponse({
             'success': True,
-            'message': 'Lab examination chairman saved.',
-            'teacher_name': teacher.name,
+            'message': message,
+            'teacher_name': teacher.name if teacher else '',
         })
 
     except (Semester.DoesNotExist, Course.DoesNotExist, Teacher.DoesNotExist) as e:

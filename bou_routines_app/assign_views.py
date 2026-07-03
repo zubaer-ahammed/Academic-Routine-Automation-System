@@ -262,7 +262,13 @@ def assign_chairman(request):
                     semester=context['selected_semester'],
                     course=selected_course,
                     centre=context['selected_centre'],
-                ).select_related('lab_examination_chairman').first()
+                ).select_related(
+                    'lab_examination_chairman',
+                    'lab_examination_member1',
+                    'lab_examination_member2',
+                    'lab_examination_member3',
+                    'lab_examination_member4',
+                ).first()
         except (ValueError, TypeError):
             selected_course = None
             selected_course_id = None

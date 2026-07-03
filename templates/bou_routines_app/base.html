@@ -77,7 +77,7 @@
                             <li><a class="dropdown-item" href="{% url 'assign-examiners' %}">Assign Examiners</a></li>
                             {% endif %}
                             {% if user|can_assign_chairman %}
-                            <li><a class="dropdown-item" href="{% url 'assign-chairman' %}">Assign Chairman</a></li>
+                            <li><a class="dropdown-item" href="{% url 'assign-chairman' %}">Assign Exam Committee</a></li>
                             {% endif %}
                         </ul>
                     </div>
@@ -102,7 +102,7 @@
                         <li><a class="dropdown-item" href="{% url 'assign-examiners' %}">Assign Examiners</a></li>
                         {% endif %}
                         {% if user|can_assign_chairman %}
-                        <li><a class="dropdown-item" href="{% url 'assign-chairman' %}">Assign Chairman</a></li>
+                        <li><a class="dropdown-item" href="{% url 'assign-chairman' %}">Assign Exam Committee</a></li>
                         {% endif %}
                     </ul>
                 </div>
@@ -128,7 +128,7 @@
                     {% if user|can_use_assign_menu %}
                     <a href="{% url 'assign-course-teacher' %}" class="bou-mobile-link">Assign Course Teacher</a>
                     <a href="{% url 'assign-examiners' %}" class="bou-mobile-link">Assign Examiners</a>
-                    <a href="{% url 'assign-chairman' %}" class="bou-mobile-link">Assign Chairman</a>
+                    <a href="{% url 'assign-chairman' %}" class="bou-mobile-link">Assign Exam Committee</a>
                     {% endif %}
                     <a href="{% url 'logout' %}?next={{ request.path }}" class="bou-mobile-link">Logout</a>
                 {% else %}
@@ -142,7 +142,7 @@
                 {% if user|can_use_assign_menu %}
                 <a href="{% url 'assign-course-teacher' %}" class="bou-mobile-link">Assign Course Teacher</a>
                 <a href="{% url 'assign-examiners' %}" class="bou-mobile-link">Assign Examiners</a>
-                <a href="{% url 'assign-chairman' %}" class="bou-mobile-link">Assign Chairman</a>
+                <a href="{% url 'assign-chairman' %}" class="bou-mobile-link">Assign Exam Committee</a>
                 {% endif %}
                 {% if user.is_authenticated %}
                     {% if user|has_teacher_profile %}

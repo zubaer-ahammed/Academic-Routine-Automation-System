@@ -709,15 +709,13 @@ class CAMark(models.Model):
             )
         elif self.course.is_lab:
             # Lab course: attendance + lab assignment + lab practical (+ optional second experiment)
-            second = self.second_lab_practical_mark
+            attendance = float(self.attendance_mark or 0)
+            lab_assignment = float(self.lab_assignment_mark or 0)
+            lab_practical = float(self.lab_practical_mark or 0)
+            second = float(self.second_lab_practical_mark or 0)
             if self.course.effective_lab_ca_practical2_weight:
-                return (
-                    self.attendance_mark
-                    + self.lab_assignment_mark
-                    + self.lab_practical_mark
-                    + (second or 0)
-                )
-            return self.attendance_mark + self.lab_assignment_mark + self.lab_practical_mark
+                return attendance + lab_assignment + lab_practical + second
+            return attendance + lab_assignment + lab_practical
         else:
             # Theory course: attendance + assignment + (class_test for old curriculum OR midterm for new curriculum)
             # Determine which to use based on semester's curriculum

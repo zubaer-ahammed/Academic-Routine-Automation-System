@@ -7159,6 +7159,7 @@ def export_ca_marks_pdf(request):
         
         ca_marks = {}
         for mark in existing_marks:
+            mark.attendance_mark = mark.calculate_attendance_mark()
             ca_marks[mark.student.id] = mark
         
         # Create temporary marks for students without existing marks
@@ -10039,6 +10040,7 @@ def _ca_marks_dict_for_students_course_semester(students, course, semester):
         semester=semester,
     )
     for mark in existing_marks:
+        mark.attendance_mark = mark.calculate_attendance_mark()
         ca_marks[mark.student_id] = mark
     for student in students:
         if student.id not in ca_marks:

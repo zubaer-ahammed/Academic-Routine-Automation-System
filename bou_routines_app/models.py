@@ -297,6 +297,30 @@ class Course(models.Model):
         if self.curriculum:
             return self.curriculum.project_presentation_weight
         return 0
+
+    def get_class_ratio(self, semester):
+        """
+        Ratio of actual scheduled class duration to the semester standard duration.
+        One attendance day counts as this many classes (e.g. 120 min theory = 2.0).
+        """
+        try:
+            sample_routine = NewRoutine.objects.filter(
+                course=self,
+                semester=semester,
+            ).first()
+            if sample_routine and sample_routine.start_time and sample_routine.end_time:
+                start_minutes = sample_routine.start_time.hour * 60 + sample_routine.start_time.minute
+                end_minutes = sample_routine.end_time.hour * 60 + sample_routine.end_time.minute
+                actual_duration = end_minutes - start_minutes
+                standard_duration = (
+                    semester.lab_class_duration_minutes if self.is_lab
+                    else semester.theory_class_duration_minutes
+                )
+                if standard_duration > 0 and actual_duration > 0:
+                    return actual_duration / standard_duration
+        except Exception:
+            pass
+        return 1.0
     
     def clean(self):
         """Validate that a course cannot be both lab and theory, and handle project work"""
@@ -629,7 +653,7 @@ class CAMark(models.Model):
         return f"{self.student.id} - {self.course.code} - CA: {self.total_ca_mark}"
     
     def calculate_attendance_mark(self):
-        """Calculate attendance mark based on simple percentage calculation"""
+        """Calculate attendance mark using class-ratio-adjusted attendance (same as attendance page)."""
         # Get total classes from SemesterCourse (same as attendance table)
         # Use filter().first() instead of get() since there may be multiple SemesterCourse
         # objects for the same semester/course but different centres
@@ -645,7 +669,6 @@ class CAMark(models.Model):
         except Exception:
             total_classes = 1  # Default to 1 if error occurs
         
-        # Get simple count of attended days (without filtering by NewRoutine)
         attended_days = Attendance.objects.filter(
             student=self.student,
             course=self.course,
@@ -654,13 +677,15 @@ class CAMark(models.Model):
         ).count()
         
         if total_classes > 0:
-            # Simple percentage calculation: attendance_weight * (attended_days / total_classes)
-            # Cap at max attendance weight to avoid exceeding max due to makeup/extra attendance rows.
-            attendance_weight = self.course.effective_ca_attendance_weight if not self.course.is_lab else self.course.effective_lab_ca_attendance_weight
+            class_ratio = self.course.get_class_ratio(self.semester)
+            classes_attended = attended_days * class_ratio
+            attendance_weight = (
+                self.course.effective_lab_ca_attendance_weight if self.course.is_lab
+                else self.course.effective_ca_attendance_weight
+            )
             w = float(attendance_weight or 0)
-            mark = (attended_days / total_classes) * w
-            if mark > w:
-                return w
+            fraction = min(classes_attended / total_classes, 1.0)
+            mark = fraction * w
             if mark < 0:
                 return 0
             return mark

@@ -597,6 +597,28 @@ class Attendance(models.Model):
         return f"{self.student.id} - {self.course.code} - {self.attendance_date} - {status}"
 
 
+def attendance_mark_fraction_from_percent(attendance_percent):
+    """
+    BOU class participation / attendance marks slab (Section 4.3).
+    Maps attendance percentage to the fraction of max attendance marks awarded.
+    """
+    if attendance_percent >= 90:
+        return 1.0
+    if attendance_percent >= 85:
+        return 0.9
+    if attendance_percent >= 80:
+        return 0.8
+    if attendance_percent >= 75:
+        return 0.7
+    if attendance_percent >= 70:
+        return 0.6
+    if attendance_percent >= 65:
+        return 0.5
+    if attendance_percent >= 60:
+        return 0.4
+    return 0.0
+
+
 class CAMark(models.Model):
     """
     Continuous Assessment marks for students
@@ -653,7 +675,7 @@ class CAMark(models.Model):
         return f"{self.student.id} - {self.course.code} - CA: {self.total_ca_mark}"
     
     def calculate_attendance_mark(self):
-        """Calculate attendance mark using class-ratio-adjusted attendance (same as attendance page)."""
+        """Calculate attendance mark using class-ratio-adjusted attendance and BOU slab rule."""
         # Get total classes from SemesterCourse (same as attendance table)
         # Use filter().first() instead of get() since there may be multiple SemesterCourse
         # objects for the same semester/course but different centres
@@ -684,11 +706,12 @@ class CAMark(models.Model):
                 else self.course.effective_ca_attendance_weight
             )
             w = float(attendance_weight or 0)
-            fraction = min(classes_attended / total_classes, 1.0)
-            mark = fraction * w
+            attendance_percent = min(classes_attended / total_classes, 1.0) * 100
+            mark_fraction = attendance_mark_fraction_from_percent(attendance_percent)
+            mark = mark_fraction * w
             if mark < 0:
                 return 0
-            return mark
+            return round(mark, 2)
         return 0
     
     def calculate_assignment_mark(self):

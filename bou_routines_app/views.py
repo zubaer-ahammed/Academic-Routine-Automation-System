@@ -5526,14 +5526,16 @@ def attendance_calendar(request):
                     classes_attended = round(attendance_days * class_ratio, 1)
                 else:
                     classes_attended = attendance_days
+                # Cap display at max classes (makeup/review columns can exceed SemesterCourse total)
+                display_classes_attended = min(classes_attended, number_of_classes)
                 
                 attendance_totals[student.id] = {
                     'attendance_days': attendance_days,
-                    'classes_attended': classes_attended,
+                    'classes_attended': display_classes_attended,
                     'number_of_classes': number_of_classes
                 }
                 
-                print(f"DEBUG: Student {student.id} - Attendance days: {attendance_days}, Classes attended: {classes_attended}, Total classes: {number_of_classes}")
+                print(f"DEBUG: Student {student.id} - Attendance days: {attendance_days}, Classes attended: {classes_attended} (display: {display_classes_attended}), Total classes: {number_of_classes}")
             
             # Get attendance data for the selected date if provided (for backward compatibility)
             attendance_data = {}

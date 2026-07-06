@@ -3274,9 +3274,14 @@ document.addEventListener('DOMContentLoaded', function() {
             const totalSpan = row.querySelector('.total-count');
             
             if (presentSpan) {
-                // Calculate classes attended based on class ratio (1 attendance = 1.5 classes)
                 const classRatio = parseFloat("{{ class_ratio|default:'1.0' }}");
-                const classesAttended = Math.round(checkedBoxes * classRatio * 10) / 10; // Round to 1 decimal
+                const maxClasses = totalSpan
+                    ? parseFloat(totalSpan.textContent)
+                    : checkedBoxes * classRatio;
+                const rawClasses = Math.round(checkedBoxes * classRatio * 10) / 10;
+                const classesAttended = Number.isFinite(maxClasses)
+                    ? Math.min(rawClasses, maxClasses)
+                    : rawClasses;
                 presentSpan.textContent = classesAttended;
             }
             

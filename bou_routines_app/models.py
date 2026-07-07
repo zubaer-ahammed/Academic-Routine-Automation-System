@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+import math
 
 DAYS = [
     ("Friday", "Friday"),
@@ -597,25 +598,33 @@ class Attendance(models.Model):
         return f"{self.student.id} - {self.course.code} - {self.attendance_date} - {status}"
 
 
-def attendance_mark_fraction_from_percent(attendance_percent):
+def attendance_mark_fraction_from_classes(classes_attended, total_classes):
     """
     BOU class participation / attendance marks slab (Section 4.3).
-    Maps attendance percentage to the fraction of max attendance marks awarded.
+    Each threshold uses floor(total × percent) required classes so totals match
+    the attendance table (e.g. 8/14 qualifies for the 60% slab).
     """
-    if attendance_percent >= 90:
-        return 1.0
-    if attendance_percent >= 85:
-        return 0.9
-    if attendance_percent >= 80:
-        return 0.8
-    if attendance_percent >= 75:
-        return 0.7
-    if attendance_percent >= 70:
-        return 0.6
-    if attendance_percent >= 65:
-        return 0.5
-    if attendance_percent >= 60:
-        return 0.4
+    if total_classes <= 0:
+        return 0.0
+
+    effective_classes = min(classes_attended, total_classes)
+
+    thresholds = (
+        (90, 1.0),
+        (85, 0.9),
+        (80, 0.8),
+        (75, 0.7),
+        (70, 0.6),
+        (65, 0.5),
+        (60, 0.4),
+    )
+
+    for percent_threshold, mark_fraction in thresholds:
+        required = math.floor(total_classes * percent_threshold / 100)
+        if percent_threshold > 0 and required == 0:
+            required = 1
+        if effective_classes >= required:
+            return mark_fraction
     return 0.0
 
 
@@ -706,8 +715,7 @@ class CAMark(models.Model):
                 else self.course.effective_ca_attendance_weight
             )
             w = float(attendance_weight or 0)
-            attendance_percent = min(classes_attended / total_classes, 1.0) * 100
-            mark_fraction = attendance_mark_fraction_from_percent(attendance_percent)
+            mark_fraction = attendance_mark_fraction_from_classes(classes_attended, total_classes)
             mark = mark_fraction * w
             if mark < 0:
                 return 0

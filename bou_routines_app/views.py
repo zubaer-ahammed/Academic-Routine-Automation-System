@@ -8110,7 +8110,7 @@ def export_blank_midterm_marks_pdf(request):
 
 @login_required
 def export_midterm_marks_excel(request):
-    """Export theory mid-term Q1–Q6 marks to Excel (new curriculum)."""
+    """Export theory mid-term Q1–Q6 marks to Excel (same header and table layout as PDF)."""
     try:
         semester, course, students, centre_id = _midterm_marks_export_queryset(request)
         if semester is None:
@@ -8125,89 +8125,152 @@ def export_midterm_marks_excel(request):
             )
         }
 
+        header_rows = _midterm_marks_export_table_header_rows()
+        num_cols = len(header_rows[0])
+        teacher_name, centre_name = _ca_marks_export_teacher_and_centre(semester, course, centre_id)
+
         output = io.BytesIO()
         workbook = xlsxwriter.Workbook(output)
         worksheet = workbook.add_worksheet('Mid-Term Marks')
 
         title_format = workbook.add_format({
             'bold': True,
-            'font_size': 14,
+            'font_size': 15,
+            'align': 'center',
+            'valign': 'vcenter',
+        })
+        subtitle_format = workbook.add_format({
+            'bold': True,
+            'font_size': 11,
+            'align': 'center',
+            'valign': 'vcenter',
+        })
+        normal_format = workbook.add_format({
+            'font_size': 10,
             'align': 'center',
             'valign': 'vcenter',
         })
         header_format = workbook.add_format({
             'bold': True,
-            'font_size': 11,
+            'font_size': 9,
             'align': 'center',
             'valign': 'vcenter',
-            'bg_color': '#2c3e50',
-            'font_color': 'white',
             'border': 1,
+            'text_wrap': True,
         })
         cell_format = workbook.add_format({
             'align': 'center',
             'valign': 'vcenter',
             'border': 1,
+            'font_size': 8,
         })
-        name_header_format = workbook.add_format({
+        cell_stripe_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1,
+            'font_size': 8,
+            'bg_color': '#D3D3D3',
+        })
+        id_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1,
+            'font_size': 9,
             'bold': True,
-            'font_size': 11,
-            'align': 'left',
-            'valign': 'vcenter',
-            'bg_color': '#2c3e50',
-            'font_color': 'white',
-            'border': 1,
         })
-        name_cell_format = workbook.add_format({
+        id_stripe_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1,
+            'font_size': 9,
+            'bold': True,
+            'bg_color': '#D3D3D3',
+        })
+        name_format = workbook.add_format({
             'align': 'left',
             'valign': 'vcenter',
             'border': 1,
+            'font_size': 7,
+            'bold': True,
+        })
+        name_stripe_format = workbook.add_format({
+            'align': 'left',
+            'valign': 'vcenter',
+            'border': 1,
+            'font_size': 7,
+            'bold': True,
+            'bg_color': '#D3D3D3',
         })
 
-        headers = ['Student ID', 'Name', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Total']
+        row = 0
+        last_col = max(num_cols - 1, 0)
         worksheet.merge_range(
-            0, 0, 0, len(headers) - 1,
-            f'Mid-Term Marks Report - {semester.name}',
+            row, 0, row, last_col,
+            'B. Sc in Computer Science and Engineering Program',
             title_format,
         )
-        worksheet.write(1, 0, f'Course: {course.code} - {course.name}', cell_format)
-
-        row = 3
-        for col, header in enumerate(headers):
-            fmt = name_header_format if col == 1 else header_format
-            worksheet.write(row, col, header, fmt)
-
-        row = 4
-        for student in students:
-            col = 0
-            mm = midterm_marks.get(student.id)
-            worksheet.write(row, col, student.id, cell_format)
-            col += 1
-            worksheet.write(row, col, student.name, name_cell_format)
-            col += 1
-            if mm:
-                for i in range(1, 7):
-                    val = getattr(mm, f'q{i}', None)
-                    if val is None:
-                        worksheet.write(row, col, '', cell_format)
-                    else:
-                        worksheet.write(row, col, float(val), cell_format)
-                    col += 1
-                total_display = mm.raw_total_display()
-                if total_display == '-':
-                    worksheet.write(row, col, '-', cell_format)
-                else:
-                    worksheet.write(row, col, total_display, cell_format)
-            else:
-                for _ in range(6):
-                    worksheet.write(row, col, '', cell_format)
-                    col += 1
-                worksheet.write(row, col, '-', cell_format)
+        row += 1
+        session = semester.session or ''
+        if session:
+            worksheet.merge_range(row, 0, row, last_col, f'{session} Session', subtitle_format)
+            row += 1
+        term = semester.term or ''
+        semester_full_name = semester.semester_full_name or ''
+        if term or semester_full_name:
+            worksheet.merge_range(
+                row, 0, row, last_col,
+                f'{term} Term {semester_full_name}'.strip(),
+                subtitle_format,
+            )
+            row += 1
+        course_name_display = f'{course.code} - {course.name}'
+        worksheet.merge_range(
+            row, 0, row, last_col,
+            f'Mid-Term Marks - {course_name_display}',
+            subtitle_format,
+        )
+        row += 1
+        if teacher_name:
+            worksheet.merge_range(
+                row, 0, row, last_col, f'Faculty: {teacher_name}', normal_format,
+            )
+            row += 1
+        if centre_name:
+            worksheet.merge_range(
+                row, 0, row, last_col, f'Study Center: {centre_name}', normal_format,
+            )
             row += 1
 
-        worksheet.set_column(0, 0, 15)
-        worksheet.set_column(1, 1, 30)
-        worksheet.set_column(2, len(headers) - 1, 12)
+        table_header_start = row
+        row += len(header_rows)
+        _midterm_marks_export_apply_table_header_merges(
+            worksheet, table_header_start, header_format, header_rows,
+        )
+
+        for sl_no, student in enumerate(students, start=1):
+            stripe = sl_no % 2 == 0
+            data = _midterm_marks_export_student_row(sl_no, student, midterm_marks.get(student.id))
+            for col, value in enumerate(data):
+                if col == 0:
+                    fmt = cell_stripe_format if stripe else cell_format
+                elif col == 1:
+                    fmt = id_stripe_format if stripe else id_format
+                elif col == 2:
+                    fmt = name_stripe_format if stripe else name_format
+                else:
+                    fmt = cell_stripe_format if stripe else cell_format
+                worksheet.write(row, col, value, fmt)
+            row += 1
+
+        worksheet.set_column(0, 0, 6)
+        worksheet.set_column(1, 1, 12)
+        worksheet.set_column(2, 2, 22)
+        if num_cols > 3:
+            worksheet.set_column(3, num_cols - 1, 9)
+        for hr in range(len(header_rows)):
+            worksheet.set_row(table_header_start + hr, 28)
+
+        _excel_apply_landscape_a4_print_setup(worksheet, row - 1, last_col)
 
         workbook.close()
         output.seek(0)
@@ -8222,6 +8285,71 @@ def export_midterm_marks_excel(request):
 
     except Exception as e:
         return HttpResponse(f'Error generating Excel: {str(e)}', status=500)
+
+
+def _midterm_marks_export_table_header_rows():
+    """Multi-row mid-term table headers matching the PDF export."""
+    set_max = MidtermExamMark.SET_MARKS_MAX
+    raw_max = MidtermExamMark.RAW_TOTAL_MAX
+    return [
+        [
+            'SL. No', 'Student ID', 'Name',
+            f'Theory Mid-Term Exam (total max {raw_max})', '', '', '', '', '',
+            'Total',
+        ],
+        [
+            '', '', '',
+            f'Group A\n(Any 2 of Q1–Q3, max {set_max} each)', '', '',
+            f'Group B\n(Any 1 of Q4–Q5, max {set_max})', '',
+            f'Group C\n(Q6, max {set_max})', '',
+        ],
+        ['', '', '', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', ''],
+    ]
+
+
+def _midterm_marks_export_apply_table_header_merges(
+    worksheet, start_row, header_fmt, header_rows,
+):
+    """Apply merged header cells for the mid-term marks table (same layout as PDF)."""
+    num_header_rows = len(header_rows)
+    last_row = num_header_rows - 1
+
+    def cell_text(r, c):
+        if r < len(header_rows) and c < len(header_rows[r]):
+            return header_rows[r][c] or ''
+        return ''
+
+    def merge(r1, c1, r2, c2):
+        worksheet.merge_range(
+            start_row + r1, c1, start_row + r2, c2, cell_text(r1, c1), header_fmt,
+        )
+
+    def write(r, c):
+        text = cell_text(r, c)
+        if text:
+            worksheet.write(start_row + r, c, text, header_fmt)
+
+    merge(0, 0, last_row, 0)
+    merge(0, 1, last_row, 1)
+    merge(0, 2, last_row, 2)
+    merge(0, 3, 0, 8)
+    merge(1, 3, 1, 5)
+    merge(1, 6, 1, 7)
+    write(1, 8)
+    for c in range(3, 9):
+        write(2, c)
+    merge(0, 9, last_row, 9)
+
+
+def _midterm_marks_export_student_row(sl_no, student, mm):
+    """One data row for mid-term Excel export (matches PDF)."""
+    if mm:
+        q_cells = [_fmt_export_mark(getattr(mm, f'q{i}', None), 0) for i in range(1, 7)]
+        total_cell = mm.raw_total_display()
+    else:
+        q_cells = [''] * 6
+        total_cell = '-'
+    return [sl_no, student.id, student.name.upper(), *q_cells, total_cell]
 
 
 @login_required
@@ -8982,6 +9110,320 @@ def export_ca_marks_excel(request):
     except Exception as e:
         return HttpResponse(f"Error generating Excel: {str(e)}", status=500)
 
+
+def _final_exam_lab_export_meta(course, semester):
+    """Lab final exam column maxima (matches ca_management / HTML table)."""
+    meta = {
+        'lab_final_exam_max': 50,
+        'lab_final_uses_viva': False,
+        'lab_final_problem_solving_max': 50,
+        'lab_final_viva_max': 5,
+    }
+    if not course.is_lab:
+        return meta
+    if semester.curriculum and semester.curriculum.code == 'OLD':
+        meta['lab_final_exam_max'] = 60
+    elif semester.curriculum:
+        meta['lab_final_exam_max'] = 25
+        meta['lab_final_uses_viva'] = True
+        meta['lab_final_problem_solving_max'] = 20
+    else:
+        meta['lab_final_exam_max'] = 60
+    return meta
+
+
+def _final_exam_export_examiner_name(semester, course, centre_id, teacher_role):
+    """Resolve examiner display name for final exam exports."""
+    teacher_name = None
+    sample_mark = FinalExamMark.objects.filter(course=course, semester=semester).first()
+    if sample_mark:
+        if teacher_role == 'teacher1' and sample_mark.teacher1_evaluator:
+            teacher_name = sample_mark.teacher1_evaluator.name
+        elif teacher_role == 'teacher2' and sample_mark.teacher2_evaluator:
+            teacher_name = sample_mark.teacher2_evaluator.name
+        elif teacher_role == 'teacher3' and sample_mark.teacher3_evaluator:
+            teacher_name = sample_mark.teacher3_evaluator.name
+    if not teacher_name:
+        drc_centre = Centre.objects.filter(code='DRC').first()
+        duet_centre = Centre.objects.filter(code='DUET').first()
+        if teacher_role == 'teacher1' and drc_centre:
+            sc = SemesterCourse.objects.filter(
+                semester=semester, course=course, centre=drc_centre,
+            ).select_related('teacher').first()
+            if sc and sc.teacher:
+                teacher_name = sc.teacher.name
+        elif teacher_role == 'teacher2' and duet_centre:
+            sc = SemesterCourse.objects.filter(
+                semester=semester, course=course, centre=duet_centre,
+            ).select_related('teacher').first()
+            if sc and sc.teacher:
+                teacher_name = sc.teacher.name
+        elif teacher_role == 'teacher3' and sample_mark and sample_mark.teacher3_evaluator:
+            teacher_name = sample_mark.teacher3_evaluator.name
+    return teacher_name
+
+
+def _final_exam_q_prefix(teacher_role):
+    if teacher_role == 'teacher2':
+        return 'teacher2'
+    if teacher_role == 'teacher3':
+        return 'teacher3'
+    return 'teacher1'
+
+
+def _final_exam_theory_table_header_rows():
+    set_max = 14
+    raw_max = 70
+    return [
+        [
+            'SL. No', 'Student ID', 'Name',
+            f'Theory Course Final Exam (Total: {raw_max} marks)', '', '', '', '', '', '',
+            'Total',
+        ],
+        [
+            '', '', '',
+            f'Group A\n(Any 2 of Q1–Q3, max {set_max} per set)', '', '',
+            f'Group B\n(Any 2 of Q4–Q6, max {set_max} per set)', '', '',
+            f'Group C\n(Q7, max {set_max})', '',
+        ],
+        ['', '', '', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', ''],
+    ]
+
+
+def _final_exam_lab_table_header_rows(course, semester):
+    meta = _final_exam_lab_export_meta(course, semester)
+    if meta['lab_final_uses_viva']:
+        return [
+            [
+                'SL. No', 'Student ID', 'Name',
+                f"Lab Course Final Exam (Total: {meta['lab_final_exam_max']} marks)", '', '',
+            ],
+            [
+                '', '', '',
+                f"Problem Solving\n(max {meta['lab_final_problem_solving_max']})",
+                f"Viva\n(max {meta['lab_final_viva_max']})",
+                'Total\n(this examiner)',
+            ],
+        ]
+    return [
+        ['SL. No', 'Student ID', 'Name', 'Lab Course Final Exam Mark', 'Total'],
+    ]
+
+
+def _final_exam_build_theory_student_row(sl_no, student, mark, teacher_role, *, blank=False):
+    import math
+    if blank:
+        return [str(sl_no), student.id, student.name.upper(), *([''] * 7), '']
+    if not mark:
+        return [str(sl_no), student.id, student.name.upper(), *([''] * 7), '-']
+    if getattr(mark, 'exam_absent', False):
+        return [str(sl_no), student.id, student.name.upper(), *(['AB'] * 7), 'AB']
+    prefix = _final_exam_q_prefix(teacher_role)
+    q_vals = [getattr(mark, f'{prefix}_q{i}', None) for i in range(1, 8)]
+    total_raw = getattr(mark, f'{prefix}_total', None)
+    if total_raw is not None:
+        total_cell = str(int(math.ceil(float(total_raw))))
+    else:
+        total_cell = str(int(math.ceil(sum(float(v or 0) for v in q_vals))))
+    return [
+        str(sl_no), student.id, student.name.upper(),
+        *[_fmt_export_mark(v) for v in q_vals],
+        total_cell,
+    ]
+
+
+def _final_exam_build_lab_student_row(sl_no, student, mark, teacher_role, course, semester, *, blank=False):
+    import math
+    meta = _final_exam_lab_export_meta(course, semester)
+    if blank:
+        if meta['lab_final_uses_viva']:
+            return [str(sl_no), student.id, student.name.upper(), '', '', '']
+        return [str(sl_no), student.id, student.name.upper(), '', '']
+    if not mark:
+        if meta['lab_final_uses_viva']:
+            return [str(sl_no), student.id, student.name.upper(), '', '', '-']
+        return [str(sl_no), student.id, student.name.upper(), '', '-']
+    if getattr(mark, 'exam_absent', False):
+        if meta['lab_final_uses_viva']:
+            return [str(sl_no), student.id, student.name.upper(), 'AB', 'AB', 'AB']
+        return [str(sl_no), student.id, student.name.upper(), 'AB', 'AB']
+    n = 2 if teacher_role == 'teacher2' else 1
+    if meta['lab_final_uses_viva']:
+        ps_raw = getattr(mark, f'teacher{n}_lab_final_exam_mark', None)
+        viv_raw = getattr(mark, f'teacher{n}_lab_viva_mark', None)
+        ps = float(ps_raw or 0)
+        viv = float(viv_raw or 0)
+        return [
+            str(sl_no), student.id, student.name.upper(),
+            _fmt_export_mark(ps_raw), _fmt_export_mark(viv_raw),
+            str(int(math.ceil(ps + viv))),
+        ]
+    v_raw = getattr(mark, f'teacher{n}_lab_final_exam_mark', None)
+    v = float(v_raw or 0)
+    return [
+        str(sl_no), student.id, student.name.upper(),
+        _fmt_export_mark(v_raw), str(int(math.ceil(v))),
+    ]
+
+
+def _final_exam_pdf_theory_col_widths(available_width):
+    sl_w, id_w, name_w, q_w = 40, 80, 150, 60
+    fixed = sl_w + id_w + name_w + (q_w * 7)
+    return [sl_w, id_w, name_w] + [q_w] * 7 + [max(40, available_width - fixed)]
+
+
+def _final_exam_pdf_lab_col_widths(course, semester, available_width):
+    sl_w, id_w, name_w = 40, 80, 150
+    meta = _final_exam_lab_export_meta(course, semester)
+    if meta['lab_final_uses_viva']:
+        ps_w, v_w, tot_w = 80, 60, 60
+        used = sl_w + id_w + name_w + ps_w + v_w + tot_w
+        return [sl_w, id_w, name_w, ps_w, v_w, max(40, available_width - used + tot_w)]
+    used = sl_w + id_w + name_w + 120
+    return [sl_w, id_w, name_w, 120, max(40, available_width - used)]
+
+
+def _final_exam_pdf_table_style_commands(header_row_count):
+    return [
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('ALIGN', (2, 0), (2, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('FONTNAME', (0, 0), (-1, header_row_count - 1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, header_row_count - 1), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, header_row_count - 1), 8),
+        ('TOPPADDING', (0, 0), (-1, header_row_count - 1), 8),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('FONTSIZE', (0, header_row_count), (-1, -1), 8),
+        ('FONTSIZE', (1, header_row_count), (1, -1), 9),
+        ('FONTNAME', (1, header_row_count), (1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (2, header_row_count), (2, -1), 7),
+        ('FONTNAME', (2, header_row_count), (2, -1), 'Helvetica-Bold'),
+        ('ROWBACKGROUNDS', (0, header_row_count), (-1, -1), [colors.white, colors.lightgrey]),
+    ]
+
+
+def _final_exam_pdf_theory_header_spans():
+    last = 2
+    return [
+        ('SPAN', (0, 0), (0, last)),
+        ('SPAN', (1, 0), (1, last)),
+        ('SPAN', (2, 0), (2, last)),
+        ('SPAN', (3, 0), (9, 0)),
+        ('SPAN', (3, 1), (5, 1)),
+        ('SPAN', (6, 1), (8, 1)),
+        ('SPAN', (9, 1), (9, 1)),
+        ('SPAN', (10, 0), (10, last)),
+    ]
+
+
+def _final_exam_pdf_lab_header_spans(uses_viva):
+    if not uses_viva:
+        return []
+    return [
+        ('SPAN', (0, 0), (0, 1)),
+        ('SPAN', (1, 0), (1, 1)),
+        ('SPAN', (2, 0), (2, 1)),
+        ('SPAN', (3, 0), (5, 0)),
+    ]
+
+
+def _final_exam_pdf_marks_table(
+    course, semester, students, final_exam_marks, teacher_role, available_width, *, blank=False,
+):
+    if course.is_lab:
+        header_rows = _final_exam_lab_table_header_rows(course, semester)
+        meta = _final_exam_lab_export_meta(course, semester)
+        table_data = [list(row) for row in header_rows]
+        for sl_no, student in enumerate(students, start=1):
+            mark = None if blank else final_exam_marks.get(student.id)
+            table_data.append(
+                _final_exam_build_lab_student_row(
+                    sl_no, student, mark, teacher_role, course, semester, blank=blank,
+                )
+            )
+        col_widths = _final_exam_pdf_lab_col_widths(course, semester, available_width)
+        span_cmds = _final_exam_pdf_lab_header_spans(meta['lab_final_uses_viva'])
+    else:
+        header_rows = _final_exam_theory_table_header_rows()
+        table_data = [list(row) for row in header_rows]
+        for sl_no, student in enumerate(students, start=1):
+            mark = None if blank else final_exam_marks.get(student.id)
+            table_data.append(
+                _final_exam_build_theory_student_row(
+                    sl_no, student, mark, teacher_role, blank=blank,
+                )
+            )
+        col_widths = _final_exam_pdf_theory_col_widths(available_width)
+        span_cmds = _final_exam_pdf_theory_header_spans()
+
+    header_row_count = len(header_rows)
+    table = Table(table_data, colWidths=col_widths, repeatRows=header_row_count)
+    table.setStyle(TableStyle(_final_exam_pdf_table_style_commands(header_row_count) + span_cmds))
+    return table
+
+
+def _final_exam_excel_apply_theory_header_merges(worksheet, start_row, header_fmt, header_rows):
+    last_row = len(header_rows) - 1
+
+    def cell_text(r, c):
+        if r < len(header_rows) and c < len(header_rows[r]):
+            return header_rows[r][c] or ''
+        return ''
+
+    def merge(r1, c1, r2, c2):
+        worksheet.merge_range(
+            start_row + r1, c1, start_row + r2, c2, cell_text(r1, c1), header_fmt,
+        )
+
+    def write(r, c):
+        text = cell_text(r, c)
+        if text:
+            worksheet.write(start_row + r, c, text, header_fmt)
+
+    merge(0, 0, last_row, 0)
+    merge(0, 1, last_row, 1)
+    merge(0, 2, last_row, 2)
+    merge(0, 3, 0, 9)
+    merge(1, 3, 1, 5)
+    merge(1, 6, 1, 8)
+    write(1, 9)
+    for c in range(3, 10):
+        write(2, c)
+    merge(0, 10, last_row, 10)
+
+
+def _final_exam_excel_apply_lab_header_merges(worksheet, start_row, header_fmt, header_rows, uses_viva):
+    if not uses_viva:
+        for c, text in enumerate(header_rows[0]):
+            if text:
+                worksheet.write(start_row, c, text, header_fmt)
+        return
+
+    last_row = len(header_rows) - 1
+
+    def cell_text(r, c):
+        if r < len(header_rows) and c < len(header_rows[r]):
+            return header_rows[r][c] or ''
+        return ''
+
+    def merge(r1, c1, r2, c2):
+        worksheet.merge_range(
+            start_row + r1, c1, start_row + r2, c2, cell_text(r1, c1), header_fmt,
+        )
+
+    def write(r, c):
+        text = cell_text(r, c)
+        if text:
+            worksheet.write(start_row + r, c, text, header_fmt)
+
+    merge(0, 0, last_row, 0)
+    merge(0, 1, last_row, 1)
+    merge(0, 2, last_row, 2)
+    merge(0, 3, 0, 5)
+    for c in range(3, 6):
+        write(1, c)
+
+
 @login_required
 def export_final_exam_pdf(request):
     """Export Final Exam marks to PDF"""
@@ -9125,51 +9567,7 @@ def export_final_exam_pdf(request):
         left_content.append(Spacer(1, 2))
         course_name_display = f"{course.code} - {course.name}" if course else "Course"
         left_content.append(Paragraph(f'Semester Final Marks - {course_name_display}', header_style_bold))
-        # Get evaluator name based on teacher_role
-        # First check if evaluators are manually assigned in existing marks
-        # Then fall back to SemesterCourse for automatic assignment
-        teacher_name = None
-        sample_mark = FinalExamMark.objects.filter(
-            course=course,
-            semester=semester
-        ).first()
-        
-        if sample_mark:
-            # Check for manually assigned evaluators first
-            if teacher_role == 'teacher1' and sample_mark.teacher1_evaluator:
-                teacher_name = sample_mark.teacher1_evaluator.name
-            elif teacher_role == 'teacher2' and sample_mark.teacher2_evaluator:
-                teacher_name = sample_mark.teacher2_evaluator.name
-            elif teacher_role == 'teacher3' and sample_mark.teacher3_evaluator:
-                teacher_name = sample_mark.teacher3_evaluator.name
-        
-        # If not manually assigned, get from SemesterCourse
-        if not teacher_name:
-            drc_centre = Centre.objects.filter(code='DRC').first()
-            duet_centre = Centre.objects.filter(code='DUET').first()
-            
-            if teacher_role == 'teacher1' and drc_centre:
-                # Teacher 1 (First Examiner) from DRC centre
-                drc_semester_course = SemesterCourse.objects.filter(
-                    semester=semester,
-                    course=course,
-                    centre=drc_centre
-                ).select_related('teacher').first()
-                if drc_semester_course and drc_semester_course.teacher:
-                    teacher_name = drc_semester_course.teacher.name
-            elif teacher_role == 'teacher2' and duet_centre:
-                # Teacher 2 (Second Examiner) from DUET centre
-                duet_semester_course = SemesterCourse.objects.filter(
-                    semester=semester,
-                    course=course,
-                    centre=duet_centre
-                ).select_related('teacher').first()
-                if duet_semester_course and duet_semester_course.teacher:
-                    teacher_name = duet_semester_course.teacher.name
-            elif teacher_role == 'teacher3':
-                # Teacher 3 can be manually selected, try to get from existing marks first
-                if sample_mark and sample_mark.teacher3_evaluator:
-                    teacher_name = sample_mark.teacher3_evaluator.name
+        teacher_name = _final_exam_export_examiner_name(semester, course, centre_id, teacher_role)
         
         # Only show teacher if found
         if teacher_name:
@@ -9311,128 +9709,9 @@ def export_final_exam_pdf(request):
         elements.append(left_box_table)
         elements.append(Spacer(1, 4))
         
-        styles = getSampleStyleSheet()
-        title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
-            fontSize=16,
-            textColor=colors.HexColor('#c41e3a'),
-            spaceAfter=12,
-            alignment=TA_CENTER
+        table = _final_exam_pdf_marks_table(
+            course, semester, students, final_exam_marks, teacher_role, available_width,
         )
-        
-        
-        # Build table data
-        table_data = []
-        
-        # Header row based on course type
-        if course.is_lab:
-            if semester.curriculum and semester.curriculum.code != 'OLD':
-                header = ['SL. No', 'Student ID', 'Name', 'Problem Solving', 'Viva', 'Total']
-            else:
-                header = ['SL. No', 'Student ID', 'Name', 'Lab Final Exam Mark', 'Total']
-        else:
-            header = ['SL. No', 'Student ID', 'Name', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Total']
-        table_data.append(header)
-        
-        # Data rows
-        for sl_no, student in enumerate(students, start=1):
-            mark = final_exam_marks.get(student.id)
-            if mark:
-                if getattr(mark, 'exam_absent', False):
-                    if course.is_lab:
-                        if semester.curriculum and semester.curriculum.code != 'OLD':
-                            row = [str(sl_no), student.id, student.name.upper(), 'AB', 'AB', 'AB']
-                        else:
-                            row = [str(sl_no), student.id, student.name.upper(), 'AB', 'AB']
-                    else:
-                        row = [str(sl_no), student.id, student.name.upper(), 'AB', 'AB', 'AB', 'AB', 'AB', 'AB', 'AB', 'AB', 'AB']
-                elif course.is_lab:
-                    _n = 2 if teacher_role == 'teacher2' else 1
-                    if semester.curriculum and semester.curriculum.code != 'OLD':
-                        _ps_raw = getattr(mark, f'teacher{_n}_lab_final_exam_mark', None)
-                        _viv_raw = getattr(mark, f'teacher{_n}_lab_viva_mark', None)
-                        _ps = float(_ps_raw or 0)
-                        _viv = float(_viv_raw or 0)
-                        row = [
-                            str(sl_no),
-                            student.id,
-                            student.name.upper(),
-                            _fmt_export_mark(_ps_raw),
-                            _fmt_export_mark(_viv_raw),
-                            str(int(math.ceil(_ps + _viv))),
-                        ]
-                    else:
-                        _v_raw = getattr(mark, f'teacher{_n}_lab_final_exam_mark', None)
-                        _v = float(_v_raw or 0)
-                        row = [
-                            str(sl_no),
-                            student.id,
-                            student.name.upper(),
-                            _fmt_export_mark(_v_raw),
-                            str(int(math.ceil(_v))),
-                        ]
-                else:
-                    # For theory courses, show marks based on teacher role
-                    if teacher_role == 'teacher2':
-                        q_prefix = 'teacher2'
-                    elif teacher_role == 'teacher3':
-                        q_prefix = 'teacher3'
-                    else:
-                        q_prefix = 'teacher1'
-                    q_vals = [getattr(mark, f'{q_prefix}_q{i}', None) for i in range(1, 8)]
-                    raw_total = sum(float(v or 0) for v in q_vals)
-                    row = [
-                        str(sl_no),
-                        student.id,
-                        student.name.upper(),
-                        *[_fmt_export_mark(v) for v in q_vals],
-                        str(int(math.ceil(raw_total))),
-                    ]
-            else:
-                if course.is_lab:
-                    if semester.curriculum and semester.curriculum.code != 'OLD':
-                        row = [str(sl_no), student.id, student.name.upper(), '0.00', '0.00', '0.00']
-                    else:
-                        row = [str(sl_no), student.id, student.name.upper(), '0.00', '0.00']
-                else:
-                    row = [str(sl_no), student.id, student.name.upper(), '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']
-            table_data.append(row)
-        
-        # Calculate column widths to match header/footer width
-        num_cols = len(header)
-        if course.is_lab:
-            sl_w = 40
-            if semester.curriculum and semester.curriculum.code != 'OLD':
-                ps_w, v_w, tot_w = 80, 60, 60
-                used = sl_w + 80 + 150 + ps_w + v_w + tot_w
-                col_widths = [sl_w, 80, 150, ps_w, v_w, max(40, available_width - used + tot_w)]
-            else:
-                # Lab: SL, Student ID, Name, Lab Final Exam Mark, Total
-                col_widths = [sl_w, 80, 150, 120, max(40, available_width - (sl_w + 80 + 150 + 120))]
-        else:
-            # Theory: SL, Student ID, Name, Q1-Q7, Total
-            sl_w = 40
-            fixed = sl_w + 80 + 150 + (60 * 7)
-            col_widths = [sl_w, 80, 150] + [60] * 7 + [max(40, available_width - fixed)]
-        
-        # Create table with explicit column widths
-        table = Table(table_data, colWidths=col_widths)
-        table.setStyle(TableStyle([
-            # Header styling (borders only; no background fill)
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('ALIGN', (2, 0), (2, -1), 'LEFT'),  # Name column (SL., Student ID, Name)
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 9),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('FONTSIZE', (0, 1), (-1, -1), 8),
-            # Student ID: bold + slightly larger (match Attendance export)
-            ('FONTSIZE', (1, 1), (1, -1), 9),
-            ('FONTNAME', (1, 1), (1, -1), 'Helvetica-Bold'),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
-        ]))
-        
         elements.append(table)
 
         def _draw_final_exam_marks_pdf_footer(cnv, page_num, total_pages):
@@ -9597,51 +9876,7 @@ def export_blank_final_exam_pdf(request):
         left_content.append(Spacer(1, 2))
         course_name_display = f"{course.code} - {course.name}" if course else "Course"
         left_content.append(Paragraph(f'Final Exam Marks Sheet - {course_name_display}', header_style_bold))
-        # Get evaluator name based on teacher_role
-        # First check if evaluators are manually assigned in existing marks
-        # Then fall back to SemesterCourse for automatic assignment
-        teacher_name = None
-        sample_mark = FinalExamMark.objects.filter(
-            course=course,
-            semester=semester
-        ).first()
-        
-        if sample_mark:
-            # Check for manually assigned evaluators first
-            if teacher_role == 'teacher1' and sample_mark.teacher1_evaluator:
-                teacher_name = sample_mark.teacher1_evaluator.name
-            elif teacher_role == 'teacher2' and sample_mark.teacher2_evaluator:
-                teacher_name = sample_mark.teacher2_evaluator.name
-            elif teacher_role == 'teacher3' and sample_mark.teacher3_evaluator:
-                teacher_name = sample_mark.teacher3_evaluator.name
-        
-        # If not manually assigned, get from SemesterCourse
-        if not teacher_name:
-            drc_centre = Centre.objects.filter(code='DRC').first()
-            duet_centre = Centre.objects.filter(code='DUET').first()
-            
-            if teacher_role == 'teacher1' and drc_centre:
-                # Teacher 1 (First Examiner) from DRC centre
-                drc_semester_course = SemesterCourse.objects.filter(
-                    semester=semester,
-                    course=course,
-                    centre=drc_centre
-                ).select_related('teacher').first()
-                if drc_semester_course and drc_semester_course.teacher:
-                    teacher_name = drc_semester_course.teacher.name
-            elif teacher_role == 'teacher2' and duet_centre:
-                # Teacher 2 (Second Examiner) from DUET centre
-                duet_semester_course = SemesterCourse.objects.filter(
-                    semester=semester,
-                    course=course,
-                    centre=duet_centre
-                ).select_related('teacher').first()
-                if duet_semester_course and duet_semester_course.teacher:
-                    teacher_name = duet_semester_course.teacher.name
-            elif teacher_role == 'teacher3':
-                # Teacher 3 can be manually selected, try to get from existing marks first
-                if sample_mark and sample_mark.teacher3_evaluator:
-                    teacher_name = sample_mark.teacher3_evaluator.name
+        teacher_name = _final_exam_export_examiner_name(semester, course, centre_id, teacher_role)
         
         # Only show teacher if found
         if teacher_name:
@@ -9782,67 +10017,11 @@ def export_blank_final_exam_pdf(request):
         elements.append(two_col_table)
         elements.append(Spacer(1, 4))
         
-        styles = getSampleStyleSheet()
-        title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
-            fontSize=16,
-            textColor=colors.HexColor('#c41e3a'),
-            spaceAfter=12,
-            alignment=TA_CENTER
+        elements.append(Spacer(1, 4))
+        
+        table = _final_exam_pdf_marks_table(
+            course, semester, students, {}, teacher_role, available_width, blank=True,
         )
-        
-        
-        # Build table data
-        table_data = []
-        
-        # Header row based on course type (same as regular export)
-        if course.is_lab:
-            header = ['Student ID', 'Name', 'Lab Final Exam Mark', 'Total']
-        else:
-            header = ['Student ID', 'Name', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Total']
-        table_data.append(header)
-        
-        # Data rows - only Student ID and Name filled, all other cells blank
-        for student in students:
-            if course.is_lab:
-                row = [student.id, student.name.upper(), '', '']
-            else:
-                row = [student.id, student.name.upper(), '', '', '', '', '', '', '', '']
-            table_data.append(row)
-        
-        # Calculate column widths to match header/footer width
-        num_cols = len(header)
-        if course.is_lab:
-            # Lab course: Student ID, Name, Lab Final Exam Mark, Total
-            # Fixed widths: 80 + 150 + 120 = 350
-            col_widths = [80, 150, 120, available_width - 350]
-        else:
-            # Theory course: Student ID, Name, Q1-Q7, Total
-            # Fixed widths: 80 + 150 + (60 * 7) = 650
-            col_widths = [80, 150] + [60] * 7 + [available_width - 650]
-        
-        # Create table with explicit column widths
-        table = Table(table_data, colWidths=col_widths)
-        table.setStyle(TableStyle([
-            # Header row: no background fill
-            ('BACKGROUND', (0, 0), (-1, 0), colors.white),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('ALIGN', (1, 0), (1, -1), 'LEFT'),  # Name column (Student ID, Name, …)
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 9),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('FONTSIZE', (0, 1), (-1, -1), 8),
-            ('FONTSIZE', (1, 1), (1, -1), 7),  # Smaller font for Name column
-            # Student ID: bold + slightly larger (match Attendance export)
-            ('FONTSIZE', (1, 1), (1, -1), 9),
-            ('FONTNAME', (1, 1), (1, -1), 'Helvetica-Bold'),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
-        ]))
-        
         elements.append(table)
 
         def _draw_blank_final_exam_pdf_footer(cnv, page_num, total_pages):
@@ -9889,9 +10068,8 @@ def export_blank_final_exam_pdf(request):
 
 @login_required
 def export_final_exam_excel(request):
-    """Export Final Exam marks to Excel"""
+    """Export Final Exam marks to Excel (same header and table layout as PDF)."""
     try:
-        # Check permissions
         if not (request.user.is_superuser or request.user.is_staff or check_teacher_permission(request.user, 'can_manage_final_marks')):
             messages.error(request, "You don't have permission to export Final Exam marks.")
             return redirect('ca-management')
@@ -9910,7 +10088,6 @@ def export_final_exam_excel(request):
         if course.is_lab and teacher_role == 'teacher3':
             teacher_role = 'teacher1'
         
-        # Get students with custom sorting
         students = Student.objects.filter(semesters=semester).extra(
             select={
                 'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
@@ -9919,231 +10096,164 @@ def export_final_exam_excel(request):
         ).order_by('-first_two_digits', 'last_three_digits')
         students = filter_students_queryset_by_centre(students, centre_id)
         
-        # Get existing Final Exam marks
-        existing_marks = FinalExamMark.objects.filter(
-            student__in=students,
-            course=course,
-            semester=semester
-        )
-        
-        final_exam_marks = {}
-        for mark in existing_marks:
-            final_exam_marks[mark.student.id] = mark
-        
-        # Create Excel file
+        final_exam_marks = {
+            m.student_id: m
+            for m in FinalExamMark.objects.filter(
+                student__in=students,
+                course=course,
+                semester=semester,
+            )
+        }
+
+        if course.is_lab:
+            header_rows = _final_exam_lab_table_header_rows(course, semester)
+            lab_meta = _final_exam_lab_export_meta(course, semester)
+        else:
+            header_rows = _final_exam_theory_table_header_rows()
+            lab_meta = None
+        num_cols = len(header_rows[0])
+        _, centre_name = _ca_marks_export_teacher_and_centre(semester, course, centre_id)
+        examiner_name = _final_exam_export_examiner_name(semester, course, centre_id, teacher_role)
+
         output = io.BytesIO()
         workbook = xlsxwriter.Workbook(output)
-        worksheet = workbook.add_worksheet("Final Exam Marks")
-        
-        # Formats
+        worksheet = workbook.add_worksheet('Semester Final Marks')
+
         title_format = workbook.add_format({
-            'bold': True,
-            'font_size': 14,
-            'align': 'center',
-            'valign': 'vcenter'
+            'bold': True, 'font_size': 15, 'align': 'center', 'valign': 'vcenter',
+        })
+        subtitle_format = workbook.add_format({
+            'bold': True, 'font_size': 11, 'align': 'center', 'valign': 'vcenter',
+        })
+        normal_format = workbook.add_format({
+            'font_size': 10, 'align': 'center', 'valign': 'vcenter',
         })
         header_format = workbook.add_format({
-            'bold': True,
-            'font_size': 11,
-            'align': 'center',
-            'valign': 'vcenter',
-            'bg_color': '#2c3e50',
-            'font_color': 'white',
-            'border': 1
+            'bold': True, 'font_size': 9, 'align': 'center', 'valign': 'vcenter',
+            'border': 1, 'text_wrap': True,
         })
         cell_format = workbook.add_format({
-            'align': 'center',
-            'valign': 'vcenter',
-            'border': 1
+            'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 8,
         })
-        name_header_format = workbook.add_format({
-            'bold': True,
-            'font_size': 11,
-            'align': 'left',
-            'valign': 'vcenter',
-            'bg_color': '#2c3e50',
-            'font_color': 'white',
-            'border': 1,
+        cell_stripe_format = workbook.add_format({
+            'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 8,
+            'bg_color': '#D3D3D3',
         })
-        name_cell_format = workbook.add_format({
-            'align': 'left',
-            'valign': 'vcenter',
-            'border': 1,
+        id_format = workbook.add_format({
+            'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 9, 'bold': True,
         })
-        
-        # Title
-        if course.is_lab:
-            if semester.curriculum and semester.curriculum.code != 'OLD':
-                headers = ['Student ID', 'Name', 'Problem Solving', 'Viva', 'Total', 'Notes']
-            else:
-                headers = ['Student ID', 'Name', 'Lab Final Exam Mark', 'Total', 'Notes']
-        else:
-            headers = ['Student ID', 'Name', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Total', 'Notes']
-        
-        worksheet.merge_range(0, 0, 0, len(headers) - 1, f"Final Exam Marks Report - {semester.name}", title_format)
-        worksheet.write(1, 0, f"Course: {course.code} - {course.name}", cell_format)
-        worksheet.write(1, 1, f"Course Type: {'Lab Course' if course.is_lab else 'Theory Course'}", cell_format)
-        if course.is_lab:
-            _exam_lbl = 'Internal Examiner' if teacher_role == 'teacher1' else 'External Examiner'
-            worksheet.write(1, 2, f'Examiner: {_exam_lbl}', cell_format)
-        else:
-            worksheet.write(1, 2, f"Examiner: {teacher_role.replace('teacher', 'Teacher ').title()}", cell_format)
-        
-        # Header row
-        row = 3
-        col = 0
-        for header in headers:
-            fmt = name_header_format if col == 1 else header_format
-            worksheet.write(row, col, header, fmt)
-            col += 1
-        
-        # Data rows
-        row = 4
-        for student in students:
-            col = 0
-            mark = final_exam_marks.get(student.id)
-            worksheet.write(row, col, student.id, cell_format)
-            col += 1
-            worksheet.write(row, col, student.name, name_cell_format)
-            col += 1
-            
-            if mark:
-                if getattr(mark, 'exam_absent', False):
-                    if course.is_lab:
-                        if semester.curriculum and semester.curriculum.code != 'OLD':
-                            worksheet.write(row, col, 'AB', cell_format)
-                            col += 1
-                            worksheet.write(row, col, 'AB', cell_format)
-                            col += 1
-                            worksheet.write(row, col, 'AB', cell_format)
-                            col += 1
-                        else:
-                            worksheet.write(row, col, 'AB', cell_format)
-                            col += 1
-                            worksheet.write(row, col, 'AB', cell_format)
-                            col += 1
-                        worksheet.write(row, col, mark.notes or '', cell_format)
-                    else:
-                        for _ in range(7):
-                            worksheet.write(row, col, 'AB', cell_format)
-                            col += 1
-                        worksheet.write(row, col, 'AB', cell_format)
-                        col += 1
-                        worksheet.write(row, col, mark.notes or '', cell_format)
-                elif course.is_lab:
-                    _nx = 2 if teacher_role == 'teacher2' else 1
-                    if semester.curriculum and semester.curriculum.code != 'OLD':
-                        _ps = float(getattr(mark, f'teacher{_nx}_lab_final_exam_mark') or 0)
-                        _viv = float(getattr(mark, f'teacher{_nx}_lab_viva_mark') or 0)
-                        worksheet.write(row, col, _ps, cell_format)
-                        col += 1
-                        worksheet.write(row, col, _viv, cell_format)
-                        col += 1
-                        worksheet.write(row, col, _ps + _viv, cell_format)
-                    else:
-                        _ov = float(getattr(mark, f'teacher{_nx}_lab_final_exam_mark') or 0)
-                        worksheet.write(row, col, _ov, cell_format)
-                        col += 1
-                        worksheet.write(row, col, _ov, cell_format)
-                    col += 1
-                    worksheet.write(row, col, mark.notes or '', cell_format)
-                else:
-                    # For theory courses, show marks based on teacher role
-                    if teacher_role == 'teacher1':
-                        q1 = mark.teacher1_q1 or 0
-                        q2 = mark.teacher1_q2 or 0
-                        q3 = mark.teacher1_q3 or 0
-                        q4 = mark.teacher1_q4 or 0
-                        q5 = mark.teacher1_q5 or 0
-                        q6 = mark.teacher1_q6 or 0
-                        q7 = mark.teacher1_q7 or 0
-                    elif teacher_role == 'teacher2':
-                        q1 = mark.teacher2_q1 or 0
-                        q2 = mark.teacher2_q2 or 0
-                        q3 = mark.teacher2_q3 or 0
-                        q4 = mark.teacher2_q4 or 0
-                        q5 = mark.teacher2_q5 or 0
-                        q6 = mark.teacher2_q6 or 0
-                        q7 = mark.teacher2_q7 or 0
-                    elif teacher_role == 'teacher3':
-                        q1 = mark.teacher3_q1 or 0
-                        q2 = mark.teacher3_q2 or 0
-                        q3 = mark.teacher3_q3 or 0
-                        q4 = mark.teacher3_q4 or 0
-                        q5 = mark.teacher3_q5 or 0
-                        q6 = mark.teacher3_q6 or 0
-                        q7 = mark.teacher3_q7 or 0
-                    else:
-                        # Default to teacher1
-                        q1 = mark.teacher1_q1 or 0
-                        q2 = mark.teacher1_q2 or 0
-                        q3 = mark.teacher1_q3 or 0
-                        q4 = mark.teacher1_q4 or 0
-                        q5 = mark.teacher1_q5 or 0
-                        q6 = mark.teacher1_q6 or 0
-                        q7 = mark.teacher1_q7 or 0
-                    
-                    worksheet.write(row, col, q1, cell_format)
-                    col += 1
-                    worksheet.write(row, col, q2, cell_format)
-                    col += 1
-                    worksheet.write(row, col, q3, cell_format)
-                    col += 1
-                    worksheet.write(row, col, q4, cell_format)
-                    col += 1
-                    worksheet.write(row, col, q5, cell_format)
-                    col += 1
-                    worksheet.write(row, col, q6, cell_format)
-                    col += 1
-                    worksheet.write(row, col, q7, cell_format)
-                    col += 1
-                    worksheet.write(row, col, mark.calculate_final_total(), cell_format)
-                    col += 1
-                    worksheet.write(row, col, mark.notes or '', cell_format)
-            else:
-                if course.is_lab:
-                    if semester.curriculum and semester.curriculum.code != 'OLD':
-                        worksheet.write(row, col, 0.00, cell_format)
-                        col += 1
-                        worksheet.write(row, col, 0.00, cell_format)
-                        col += 1
-                        worksheet.write(row, col, 0.00, cell_format)
-                        col += 1
-                    else:
-                        worksheet.write(row, col, 0.00, cell_format)
-                        col += 1
-                        worksheet.write(row, col, 0.00, cell_format)
-                        col += 1
-                    worksheet.write(row, col, '', cell_format)
-                else:
-                    for _ in range(7):
-                        worksheet.write(row, col, 0.00, cell_format)
-                        col += 1
-                    worksheet.write(row, col, 0.00, cell_format)
-                    col += 1
-                    worksheet.write(row, col, '', cell_format)
-            
+        id_stripe_format = workbook.add_format({
+            'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 9, 'bold': True,
+            'bg_color': '#D3D3D3',
+        })
+        name_format = workbook.add_format({
+            'align': 'left', 'valign': 'vcenter', 'border': 1, 'font_size': 7, 'bold': True,
+        })
+        name_stripe_format = workbook.add_format({
+            'align': 'left', 'valign': 'vcenter', 'border': 1, 'font_size': 7, 'bold': True,
+            'bg_color': '#D3D3D3',
+        })
+
+        row = 0
+        last_col = max(num_cols - 1, 0)
+        worksheet.merge_range(
+            row, 0, row, last_col,
+            'B. Sc in Computer Science and Engineering Program',
+            title_format,
+        )
+        row += 1
+        session = semester.session or ''
+        if session:
+            worksheet.merge_range(row, 0, row, last_col, f'{session} Session', subtitle_format)
             row += 1
-        
-        # Set column widths
-        worksheet.set_column(0, 0, 15)  # Student ID
-        worksheet.set_column(1, 1, 30)  # Name
-        worksheet.set_column(2, len(headers) - 2, 12)  # Question columns
-        worksheet.set_column(len(headers) - 1, len(headers) - 1, 20)  # Notes
-        
+        term = semester.term or ''
+        semester_full_name = semester.semester_full_name or ''
+        if term or semester_full_name:
+            worksheet.merge_range(
+                row, 0, row, last_col,
+                f'{term} Term {semester_full_name}'.strip(),
+                subtitle_format,
+            )
+            row += 1
+        course_name_display = f'{course.code} - {course.name}'
+        worksheet.merge_range(
+            row, 0, row, last_col,
+            f'Semester Final Marks - {course_name_display}',
+            subtitle_format,
+        )
+        row += 1
+        if examiner_name:
+            worksheet.merge_range(
+                row, 0, row, last_col, f'Examiner: {examiner_name}', normal_format,
+            )
+            row += 1
+        if centre_name:
+            worksheet.merge_range(
+                row, 0, row, last_col, f'Study Center: {centre_name}', normal_format,
+            )
+            row += 1
+
+        table_header_start = row
+        row += len(header_rows)
+        if course.is_lab:
+            _final_exam_excel_apply_lab_header_merges(
+                worksheet, table_header_start, header_format, header_rows,
+                lab_meta['lab_final_uses_viva'],
+            )
+        else:
+            _final_exam_excel_apply_theory_header_merges(
+                worksheet, table_header_start, header_format, header_rows,
+            )
+
+        for sl_no, student in enumerate(students, start=1):
+            stripe = sl_no % 2 == 0
+            mark = final_exam_marks.get(student.id)
+            if course.is_lab:
+                data = _final_exam_build_lab_student_row(
+                    sl_no, student, mark, teacher_role, course, semester,
+                )
+            else:
+                data = _final_exam_build_theory_student_row(
+                    sl_no, student, mark, teacher_role,
+                )
+            for col, value in enumerate(data):
+                if col == 0:
+                    fmt = cell_stripe_format if stripe else cell_format
+                elif col == 1:
+                    fmt = id_stripe_format if stripe else id_format
+                elif col == 2:
+                    fmt = name_stripe_format if stripe else name_format
+                else:
+                    fmt = cell_stripe_format if stripe else cell_format
+                worksheet.write(row, col, value, fmt)
+            row += 1
+
+        worksheet.set_column(0, 0, 6)
+        worksheet.set_column(1, 1, 12)
+        worksheet.set_column(2, 2, 22)
+        if num_cols > 3:
+            worksheet.set_column(3, num_cols - 1, 9)
+        for hr in range(len(header_rows)):
+            worksheet.set_row(table_header_start + hr, 28)
+
+        _excel_apply_landscape_a4_print_setup(worksheet, row - 1, last_col)
+
         workbook.close()
         output.seek(0)
         
         response = HttpResponse(
             output.read(),
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         )
-        filename = f"Final_Exam_Marks_{course.code}_{semester.name}.xlsx"
+        filename = f'Final_Exam_Marks_{course.code}_{semester.name}.xlsx'
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
         
     except Exception as e:
-        return HttpResponse(f"Error generating Excel: {str(e)}", status=500)
+        return HttpResponse(f'Error generating Excel: {str(e)}', status=500)
+
+
+
 
 
 def _is_ca_management_admin(request):
@@ -10687,7 +10797,7 @@ def _examiner_summary_pdf_table_header_row(course, semester, hdr_style):
 
 @login_required
 def export_final_exam_summary_excel(request):
-    """Export Final Exam Summary (admin consolidated view) to Excel."""
+    """Export Final Exam Summary to Excel (same header and table layout as PDF)."""
     try:
         if not _is_ca_management_admin(request):
             messages.error(request, "You don't have permission to export the Final Exam Summary.")
@@ -10712,53 +10822,124 @@ def export_final_exam_summary_excel(request):
         ).order_by('-first_two_digits', 'last_three_digits')
         students = filter_students_queryset_by_centre(students, centre_id)
 
-        existing_marks = FinalExamMark.objects.filter(
-            student__in=students,
-            course=course,
-            semester=semester,
-        )
-        final_exam_marks = {m.student_id: m for m in existing_marks}
+        final_exam_marks = {
+            m.student_id: m
+            for m in FinalExamMark.objects.filter(
+                student__in=students,
+                course=course,
+                semester=semester,
+            )
+        }
 
         headers, data_rows = _examiner_summary_headers_and_rows(
-            list(students), course, semester, final_exam_marks
+            list(students), course, semester, final_exam_marks, include_status=False,
         )
+        num_cols = len(headers)
+        _, centre_name = _ca_marks_export_teacher_and_centre(semester, course, centre_id)
 
         output = io.BytesIO()
         workbook = xlsxwriter.Workbook(output)
         worksheet = workbook.add_worksheet('Final Exam Summary')
 
-        title_format = workbook.add_format(
-            {'bold': True, 'font_size': 14, 'align': 'center', 'valign': 'vcenter'}
-        )
-        header_format = workbook.add_format(
-            {
-                'bold': True,
-                'font_size': 11,
-                'align': 'center',
-                'valign': 'vcenter',
-                'bg_color': '#2c3e50',
-                'font_color': 'white',
-                'border': 1,
-            }
-        )
-        cell_format = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1})
+        title_format = workbook.add_format({
+            'bold': True, 'font_size': 15, 'align': 'center', 'valign': 'vcenter',
+        })
+        subtitle_format = workbook.add_format({
+            'bold': True, 'font_size': 11, 'align': 'center', 'valign': 'vcenter',
+        })
+        normal_format = workbook.add_format({
+            'font_size': 10, 'align': 'center', 'valign': 'vcenter',
+        })
+        header_format = workbook.add_format({
+            'bold': True, 'font_size': 9, 'align': 'center', 'valign': 'vcenter',
+            'border': 1, 'text_wrap': True,
+        })
+        cell_format = workbook.add_format({
+            'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 8,
+        })
+        cell_stripe_format = workbook.add_format({
+            'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 8,
+            'bg_color': '#D3D3D3',
+        })
+        id_format = workbook.add_format({
+            'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 9, 'bold': True,
+        })
+        id_stripe_format = workbook.add_format({
+            'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 9, 'bold': True,
+            'bg_color': '#D3D3D3',
+        })
+        name_format = workbook.add_format({
+            'align': 'left', 'valign': 'vcenter', 'border': 1, 'font_size': 7, 'bold': True,
+        })
+        name_stripe_format = workbook.add_format({
+            'align': 'left', 'valign': 'vcenter', 'border': 1, 'font_size': 7, 'bold': True,
+            'bg_color': '#D3D3D3',
+        })
 
-        worksheet.merge_range(0, 0, 0, len(headers) - 1, f'Final Exam Summary — {semester.name}', title_format)
-        worksheet.write(1, 0, f'Course: {course.code} — {course.name}', cell_format)
+        row = 0
+        last_col = max(num_cols - 1, 0)
+        worksheet.merge_range(
+            row, 0, row, last_col,
+            'B. Sc in Computer Science and Engineering Program',
+            title_format,
+        )
+        row += 1
+        session = semester.session or ''
+        if session:
+            worksheet.merge_range(row, 0, row, last_col, f'{session} Session', subtitle_format)
+            row += 1
+        term = semester.term or ''
+        semester_full_name = semester.semester_full_name or ''
+        if term or semester_full_name:
+            worksheet.merge_range(
+                row, 0, row, last_col,
+                f'{term} Term {semester_full_name}'.strip(),
+                subtitle_format,
+            )
+            row += 1
+        course_name_display = f'{course.code} - {course.name}'
+        worksheet.merge_range(
+            row, 0, row, last_col,
+            f'Final Exam Summary - {course_name_display}',
+            subtitle_format,
+        )
+        row += 1
+        if centre_name:
+            worksheet.merge_range(
+                row, 0, row, last_col, f'Study Center: {centre_name}', normal_format,
+            )
+            row += 1
 
-        row = 3
-        for col, h in enumerate(headers):
-            worksheet.write(row, col, h, header_format)
-        row = 4
+        table_header_start = row
+        for col, label in enumerate(headers):
+            worksheet.write(row, col, label, header_format)
+        row += 1
+        worksheet.set_row(table_header_start, 28)
+
         for data_row in data_rows:
+            sl_no = data_row[0]
+            stripe = isinstance(sl_no, int) and sl_no % 2 == 0
             for col, val in enumerate(data_row):
-                worksheet.write(row, col, val, cell_format)
+                if col == 2 and isinstance(val, str):
+                    val = val.upper()
+                if col == 0:
+                    fmt = cell_stripe_format if stripe else cell_format
+                elif col == 1:
+                    fmt = id_stripe_format if stripe else id_format
+                elif col == 2:
+                    fmt = name_stripe_format if stripe else name_format
+                else:
+                    fmt = cell_stripe_format if stripe else cell_format
+                worksheet.write(row, col, val, fmt)
             row += 1
 
         worksheet.set_column(0, 0, 6)
-        worksheet.set_column(1, 1, 14)
-        worksheet.set_column(2, 2, 28)
-        worksheet.set_column(3, len(headers) - 1, 14)
+        worksheet.set_column(1, 1, 12)
+        worksheet.set_column(2, 2, 22)
+        if num_cols > 3:
+            worksheet.set_column(3, num_cols - 1, 9)
+
+        _excel_apply_landscape_a4_print_setup(worksheet, row - 1, last_col)
 
         workbook.close()
         output.seek(0)

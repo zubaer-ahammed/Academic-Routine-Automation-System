@@ -6982,6 +6982,7 @@ def export_attendance_excel(request):
         
         semester_id = request.GET.get('semester')
         course_id = request.GET.get('course')
+        centre_id = request.GET.get('centre')
         
         if not semester_id or not course_id:
             messages.error(request, "Please select a semester and course.")
@@ -6989,20 +6990,51 @@ def export_attendance_excel(request):
         
         semester = Semester.objects.get(id=semester_id)
         course = Course.objects.get(id=course_id)
+
+        selected_centre = None
+        teacher = get_teacher_from_user(request.user)
+        if teacher:
+            semester_course = SemesterCourse.objects.filter(
+                semester_id=semester_id,
+                course_id=course_id,
+                teacher=teacher,
+            ).first()
+            if semester_course:
+                selected_centre = semester_course.centre
+        else:
+            if centre_id:
+                try:
+                    selected_centre = Centre.objects.get(id=centre_id)
+                except Centre.DoesNotExist:
+                    pass
+            if not selected_centre:
+                semester_course = SemesterCourse.objects.filter(
+                    semester_id=semester_id,
+                    course_id=course_id,
+                ).first()
+                if semester_course:
+                    selected_centre = semester_course.centre
         
-        # Get all students and their attendance records with custom sorting
-        students = Student.objects.filter(semesters=semester).extra(
+        # Get students for the selected centre (same as PDF export)
+        students = Student.objects.filter(semesters=semester)
+        if selected_centre:
+            students = students.filter(centre=selected_centre)
+
+        students = students.extra(
             select={
                 'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
                 'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)"
             }
         ).order_by('-first_two_digits', 'last_three_digits')
         
-        # Get all attendance dates for this course
-        attendance_dates = Attendance.objects.filter(
-            course=course,
-            semester=semester
-        ).values_list('attendance_date', flat=True).distinct().order_by('attendance_date')
+        attendance_dates = _attendance_calendar_class_dates(semester, course, selected_centre)
+        if not attendance_dates:
+            attendance_dates = list(
+                Attendance.objects.filter(course=course, semester=semester)
+                .values_list('attendance_date', flat=True)
+                .distinct()
+                .order_by('attendance_date')
+            )
         
         # Create attendance matrix
         attendance_matrix = {}
@@ -7022,92 +7054,195 @@ def export_attendance_excel(request):
             for record in student_attendance:
                 attendance_matrix[student.id]['attendance'][record.attendance_date] = record.is_present
         
-        # Calculate statistics
+        # Calculate statistics (present count only for displayed date columns, same as PDF table)
         total_classes = len(attendance_dates)
         for student_id in attendance_matrix:
-            present_count = sum(1 for is_present in attendance_matrix[student_id]['attendance'].values() if is_present)
+            present_count = sum(
+                1 for date in attendance_dates
+                if attendance_matrix[student_id]['attendance'].get(date)
+            )
             attendance_matrix[student_id]['present_count'] = present_count
-            attendance_matrix[student_id]['absent_count'] = total_classes - present_count
-            attendance_matrix[student_id]['percentage'] = (present_count / total_classes * 100) if total_classes > 0 else 0
-        
-        # Create Excel file
+            attendance_matrix[student_id]['percentage'] = (
+                (present_count / total_classes * 100) if total_classes > 0 else 0
+            )
+
+        teacher_name, centre_name = _ca_marks_export_teacher_and_centre(
+            semester,
+            course,
+            selected_centre.id if selected_centre else centre_id,
+        )
+
+        num_cols = 2 + len(attendance_dates) + 2  # ID, Name, dates, Total Present, %
+
         output = io.BytesIO()
         workbook = xlsxwriter.Workbook(output)
-        worksheet = workbook.add_worksheet("Attendance")
-        
-        # Formats
+        worksheet = workbook.add_worksheet('Attendance')
+
         title_format = workbook.add_format({
             'bold': True,
-            'font_size': 14,
+            'font_size': 15,
             'align': 'center',
-            'valign': 'vcenter'
+            'valign': 'vcenter',
         })
-        header_format = workbook.add_format({
+        subtitle_format = workbook.add_format({
             'bold': True,
             'font_size': 11,
             'align': 'center',
             'valign': 'vcenter',
-            'bg_color': '#2c3e50',
-            'font_color': 'white',
-            'border': 1
+        })
+        normal_format = workbook.add_format({
+            'font_size': 10,
+            'align': 'center',
+            'valign': 'vcenter',
+        })
+        header_format = workbook.add_format({
+            'bold': True,
+            'font_size': 8,
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1,
+            'text_wrap': True,
         })
         cell_format = workbook.add_format({
             'align': 'center',
             'valign': 'vcenter',
-            'border': 1
+            'border': 1,
+            'font_size': 8,
+            'bold': True,
         })
-        percentage_format = workbook.add_format({
+        cell_stripe_format = workbook.add_format({
             'align': 'center',
             'valign': 'vcenter',
             'border': 1,
-            'num_format': '0.0%'
+            'font_size': 8,
+            'bold': True,
+            'bg_color': '#D3D3D3',
         })
-        
-        # Title
-        worksheet.merge_range(0, 0, 0, len(attendance_dates) + 4, f"Attendance Report - {semester.name}", title_format)
-        worksheet.write(1, 0, f"Course: {course.code} - {course.name}", cell_format)
-        worksheet.write(1, 1, f"Total Classes: {total_classes}", cell_format)
-        
-        # Header row
-        row = 3
+        id_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1,
+            'font_size': 9,
+            'bold': True,
+        })
+        id_stripe_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1,
+            'font_size': 9,
+            'bold': True,
+            'bg_color': '#D3D3D3',
+        })
+        name_format = workbook.add_format({
+            'align': 'left',
+            'valign': 'vcenter',
+            'border': 1,
+            'font_size': 7,
+            'bold': True,
+        })
+        name_stripe_format = workbook.add_format({
+            'align': 'left',
+            'valign': 'vcenter',
+            'border': 1,
+            'font_size': 7,
+            'bold': True,
+            'bg_color': '#D3D3D3',
+        })
+
+        row = 0
+        last_col = max(num_cols - 1, 0)
+        worksheet.merge_range(
+            row, 0, row, last_col,
+            'B. Sc in Computer Science and Engineering Program',
+            title_format,
+        )
+        row += 1
+        session = semester.session or ''
+        if session:
+            worksheet.merge_range(row, 0, row, last_col, f'{session} Session', subtitle_format)
+            row += 1
+        term = semester.term or ''
+        semester_full_name = semester.semester_full_name or ''
+        if term or semester_full_name:
+            worksheet.merge_range(
+                row, 0, row, last_col,
+                f'{term} Term {semester_full_name}'.strip(),
+                subtitle_format,
+            )
+            row += 1
+        worksheet.merge_range(row, 0, row, last_col, 'Attendance Report', subtitle_format)
+        row += 1
+        course_name_display = f'{course.code} - {course.name}'
+        worksheet.merge_range(
+            row, 0, row, last_col,
+            f'Course Code & Title: {course_name_display}',
+            normal_format,
+        )
+        row += 1
+        if teacher_name:
+            worksheet.merge_range(
+                row, 0, row, last_col, f'Faculty: {teacher_name}', normal_format,
+            )
+            row += 1
+        if centre_name:
+            worksheet.merge_range(
+                row, 0, row, last_col, f'Study Center: {centre_name}', normal_format,
+            )
+            row += 1
+
+        header_row = row
         col = 0
-        headers = ['Student ID', 'Name'] + [date.strftime('%d/%m/%Y') for date in attendance_dates] + ['Present', 'Absent', 'Percentage']
-        for header in headers:
-            worksheet.write(row, col, header, header_format)
+        worksheet.write(header_row, col, 'Student ID', header_format)
+        col += 1
+        worksheet.write(header_row, col, 'Name', header_format)
+        col += 1
+        for date in attendance_dates:
+            date_header = f"{date.strftime('%a')}\n{date.strftime('%d')}\n{date.strftime('%b')}"
+            worksheet.write(header_row, col, date_header, header_format)
             col += 1
-        
-        # Data rows
-        row = 4
+        worksheet.write(header_row, col, 'Total\nPresent', header_format)
+        col += 1
+        worksheet.write(header_row, col, '%', header_format)
+        row += 1
+
         for student in students:
+            stripe = (row - header_row) % 2 == 0
             col = 0
-            worksheet.write(row, col, student.id, cell_format)
+            worksheet.write(row, col, student.id, id_stripe_format if stripe else id_format)
             col += 1
-            worksheet.write(row, col, student.name, cell_format)
+            worksheet.write(
+                row, col, student.name.upper(), name_stripe_format if stripe else name_format,
+            )
             col += 1
-            
             for date in attendance_dates:
                 if date in attendance_matrix[student.id]['attendance']:
                     status = 'P' if attendance_matrix[student.id]['attendance'][date] else 'A'
                 else:
                     status = 'A'
-                worksheet.write(row, col, status, cell_format)
+                worksheet.write(row, col, status, cell_stripe_format if stripe else cell_format)
                 col += 1
-            
-            worksheet.write(row, col, attendance_matrix[student.id]['present_count'], cell_format)
+            worksheet.write(
+                row, col,
+                attendance_matrix[student.id]['present_count'],
+                cell_stripe_format if stripe else cell_format,
+            )
             col += 1
-            worksheet.write(row, col, attendance_matrix[student.id]['absent_count'], cell_format)
-            col += 1
-            percentage = attendance_matrix[student.id]['percentage'] / 100
-            worksheet.write(row, col, percentage, percentage_format)
+            worksheet.write(
+                row, col,
+                f"{attendance_matrix[student.id]['percentage']:.1f}%",
+                cell_stripe_format if stripe else cell_format,
+            )
             row += 1
-        
-        # Set column widths
-        worksheet.set_column(0, 0, 15)  # Student ID
-        worksheet.set_column(1, 1, 30)  # Name
-        for i in range(len(attendance_dates)):
-            worksheet.set_column(2 + i, 2 + i, 12)  # Date columns
-        worksheet.set_column(len(attendance_dates) + 2, len(attendance_dates) + 4, 12)  # Stats columns
-        
+
+        worksheet.set_column(0, 0, 12)
+        worksheet.set_column(1, 1, 22)
+        if len(attendance_dates) > 0:
+            worksheet.set_column(2, 1 + len(attendance_dates), 5)
+        worksheet.set_column(num_cols - 2, num_cols - 1, 8)
+        worksheet.set_row(header_row, 36)
+
+        _excel_apply_landscape_a4_print_setup(worksheet, row - 1, last_col)
+
         workbook.close()
         output.seek(0)
         

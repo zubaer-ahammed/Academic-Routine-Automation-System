@@ -1984,7 +1984,7 @@
                                         </li>
                                         {% endif %}
                                         <li>
-                                            <a class="dropdown-item export-link" href="{% url 'export-attendance-excel' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}" data-export-type="excel" data-url="{% url 'export-attendance-excel' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}">
+                                            <a class="dropdown-item export-link" href="{% url 'export-attendance-excel' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}" data-export-type="excel" data-url="{% url 'export-attendance-excel' %}?semester={{ selected_semester_id }}&course={{ selected_course_id }}{% if selected_centre_id %}&centre={{ selected_centre_id }}{% endif %}">
                                                 <i class="fas fa-file-excel text-success"></i> Excel
                                             </a>
                                         </li>

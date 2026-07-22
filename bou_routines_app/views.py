@@ -9190,9 +9190,21 @@ def _final_exam_theory_table_header_rows():
     ]
 
 
-def _final_exam_lab_table_header_rows(course, semester):
+def _final_exam_lab_table_header_rows(course, semester, *, blank=False):
     meta = _final_exam_lab_export_meta(course, semester)
     if meta['lab_final_uses_viva']:
+        if blank:
+            # Blank sheet: Problem Solving only (Viva/Total omitted for handwriting)
+            return [
+                [
+                    'SL. No', 'Student ID', 'Name',
+                    f"Lab Course Final Exam (Total: {meta['lab_final_exam_max']} marks)",
+                ],
+                [
+                    '', '', '',
+                    f"Problem Solving\n(max {meta['lab_final_problem_solving_max']})",
+                ],
+            ]
         return [
             [
                 'SL. No', 'Student ID', 'Name',
@@ -9204,6 +9216,10 @@ def _final_exam_lab_table_header_rows(course, semester):
                 f"Viva\n(max {meta['lab_final_viva_max']})",
                 'Total\n(this examiner)',
             ],
+        ]
+    if blank:
+        return [
+            ['SL. No', 'Student ID', 'Name', 'Lab Course Final Exam Mark'],
         ]
     return [
         ['SL. No', 'Student ID', 'Name', 'Lab Course Final Exam Mark', 'Total'],
@@ -9236,9 +9252,8 @@ def _final_exam_build_lab_student_row(sl_no, student, mark, teacher_role, course
     import math
     meta = _final_exam_lab_export_meta(course, semester)
     if blank:
-        if meta['lab_final_uses_viva']:
-            return [str(sl_no), student.id, student.name.upper(), '', '', '']
-        return [str(sl_no), student.id, student.name.upper(), '', '']
+        # Blank PDF: one empty marks column only (no Viva / Total)
+        return [str(sl_no), student.id, student.name.upper(), '']
     if not mark:
         if meta['lab_final_uses_viva']:
             return [str(sl_no), student.id, student.name.upper(), '', '', '-']
@@ -9272,9 +9287,12 @@ def _final_exam_pdf_theory_col_widths(available_width):
     return [sl_w, id_w, name_w] + [q_w] * 7 + [max(40, available_width - fixed)]
 
 
-def _final_exam_pdf_lab_col_widths(course, semester, available_width):
+def _final_exam_pdf_lab_col_widths(course, semester, available_width, *, blank=False):
     sl_w, id_w, name_w = 40, 80, 150
     meta = _final_exam_lab_export_meta(course, semester)
+    if blank:
+        used = sl_w + id_w + name_w
+        return [sl_w, id_w, name_w, max(80, available_width - used)]
     if meta['lab_final_uses_viva']:
         ps_w, v_w, tot_w = 80, 60, 60
         used = sl_w + id_w + name_w + ps_w + v_w + tot_w
@@ -9316,7 +9334,13 @@ def _final_exam_pdf_theory_header_spans():
     ]
 
 
-def _final_exam_pdf_lab_header_spans(uses_viva):
+def _final_exam_pdf_lab_header_spans(uses_viva, *, blank=False):
+    if blank and uses_viva:
+        return [
+            ('SPAN', (0, 0), (0, 1)),
+            ('SPAN', (1, 0), (1, 1)),
+            ('SPAN', (2, 0), (2, 1)),
+        ]
     if not uses_viva:
         return []
     return [
@@ -9331,7 +9355,7 @@ def _final_exam_pdf_marks_table(
     course, semester, students, final_exam_marks, teacher_role, available_width, *, blank=False,
 ):
     if course.is_lab:
-        header_rows = _final_exam_lab_table_header_rows(course, semester)
+        header_rows = _final_exam_lab_table_header_rows(course, semester, blank=blank)
         meta = _final_exam_lab_export_meta(course, semester)
         table_data = [list(row) for row in header_rows]
         for sl_no, student in enumerate(students, start=1):
@@ -9341,8 +9365,12 @@ def _final_exam_pdf_marks_table(
                     sl_no, student, mark, teacher_role, course, semester, blank=blank,
                 )
             )
-        col_widths = _final_exam_pdf_lab_col_widths(course, semester, available_width)
-        span_cmds = _final_exam_pdf_lab_header_spans(meta['lab_final_uses_viva'])
+        col_widths = _final_exam_pdf_lab_col_widths(
+            course, semester, available_width, blank=blank,
+        )
+        span_cmds = _final_exam_pdf_lab_header_spans(
+            meta['lab_final_uses_viva'], blank=blank,
+        )
     else:
         header_rows = _final_exam_theory_table_header_rows()
         table_data = [list(row) for row in header_rows]
@@ -9575,128 +9603,7 @@ def export_final_exam_pdf(request):
         if centre_name:
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
         
-        # Build header block (no Contact Person box)
-        # Get coordinator for this specific semester/centre combination
-        coordinator = None
-        if centre_id:
-            try:
-                centre_obj = Centre.objects.get(id=centre_id)
-                semester_centre_coordinator = SemesterCentreCoordinator.objects.filter(
-                    semester=semester,
-                    centre=centre_obj
-                ).select_related('program_coordinator', 'program_coordinator__teacher').first()
-                if semester_centre_coordinator:
-                    coordinator = semester_centre_coordinator.program_coordinator
-            except Centre.DoesNotExist:
-                pass
-        # Fallback: try to get centre from centre_name if centre_id not available
-        if not coordinator and centre_name:
-            try:
-                centre_obj = Centre.objects.get(name=centre_name)
-                semester_centre_coordinator = SemesterCentreCoordinator.objects.filter(
-                    semester=semester,
-                    centre=centre_obj
-                ).select_related('program_coordinator', 'program_coordinator__teacher').first()
-                if semester_centre_coordinator:
-                    coordinator = semester_centre_coordinator.program_coordinator
-            except Centre.DoesNotExist:
-                pass
-        contact_info_lines = []
-        
-        if coordinator:
-            contact_label = Paragraph(
-                'Contact Person',
-                ParagraphStyle(
-                    'ContactLabel',
-                    fontName='Helvetica-Bold',
-                    fontSize=11,
-                    alignment=0,
-                    textColor=colors.white,
-                    spaceAfter=0,
-                    spaceBefore=0,
-                    leading=14,
-                )
-            )
-            contact_label_table = Table(
-                [[contact_label]],
-                colWidths=[190],
-                hAlign='RIGHT',
-                style=TableStyle([
-                    ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-                    ('TOPPADDING', (0,0), (-1,-1), -3),
-                    ('LEFTPADDING', (0,0), (-1,-1), 0),
-                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
-                ])
-            )
-            if coordinator.teacher:
-                contact_info_lines.append(coordinator.teacher.name)
-            if coordinator.designation:
-                contact_info_lines.append(coordinator.designation)
-            if coordinator.secondary_designation:
-                contact_info_lines.append(coordinator.secondary_designation)
-            contact_info_lines.append('Bangladesh Open University')
-            if coordinator.phone:
-                contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
-            if coordinator.email:
-                contact_info_lines.append(f'email:{coordinator.email}')
-        else:
-            contact_info_lines.append('Bangladesh Open University')
-            contact_label = Paragraph(
-                'Contact Person',
-                ParagraphStyle(
-                    'ContactLabel',
-                    fontName='Helvetica-Bold',
-                    fontSize=11,
-                    alignment=0,
-                    textColor=colors.white,
-                    spaceAfter=0,
-                    spaceBefore=0,
-                    leading=14,
-                )
-            )
-            contact_label_table = Table(
-                [[contact_label]],
-                colWidths=[190],
-                hAlign='RIGHT',
-                style=TableStyle([
-                    ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-                    ('TOPPADDING', (0,0), (-1,-1), -3),
-                    ('LEFTPADDING', (0,0), (-1,-1), 0),
-                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
-                ])
-            )
-        
-        contact_info_para = Paragraph(
-            '<br/>'.join(contact_info_lines),
-            ParagraphStyle(
-                'ContactBox',
-                fontName='Helvetica',
-                fontSize=10,
-                alignment=0,
-                textColor=colors.black,
-                leftIndent=2,
-                leading=10,
-                spaceBefore=0,
-                spaceAfter=0,
-            )
-        )
-        contact_table = Table(
-            [[contact_label_table], [contact_info_para]],
-            colWidths=[190],
-            hAlign='RIGHT',
-        )
-        contact_table.setStyle(TableStyle([
-            ('BOX', (0, 0), (-1, -1), 1, colors.black),
-            ('ROUNDED', (0, 0), (-1, -1), 6),
-            ('BACKGROUND', (0, 0), (0, 0), colors.HexColor('#2c3e50')),
-            ('LEFTPADDING', (0, 0), (-1, -1), 8),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-            ('TOPPADDING', (0, 0), (0, 0), 6),
-            ('BOTTOMPADDING', (0, 0), (0, 0), 4),
-            ('TOPPADDING', (0, 1), (0, 1), 4),
-            ('BOTTOMPADDING', (0, 1), (0, 1), 6),
-        ]))
-        
+        # Header block (no Contact Person box)
         left_box_table = Table(
             [[left_content]],
             colWidths=[available_width],
@@ -9888,135 +9795,17 @@ def export_blank_final_exam_pdf(request):
         if centre_name:
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
         
-        # Build right column (contact person box) - same as regular export
-        # Get coordinator for this specific semester/centre combination
-        coordinator = None
-        if centre:
-            semester_centre_coordinator = SemesterCentreCoordinator.objects.filter(
-                semester=semester,
-                centre=centre
-            ).select_related('program_coordinator', 'program_coordinator__teacher').first()
-            if semester_centre_coordinator:
-                coordinator = semester_centre_coordinator.program_coordinator
-        contact_info_lines = []
-        
-        if coordinator:
-            contact_label = Paragraph(
-                'Contact Person',
-                ParagraphStyle(
-                    'ContactLabel',
-                    fontName='Helvetica-Bold',
-                    fontSize=11,
-                    alignment=0,
-                    textColor=colors.white,
-                    spaceAfter=0,
-                    spaceBefore=0,
-                    leading=14,
-                )
-            )
-            contact_label_table = Table(
-                [[contact_label]],
-                colWidths=[190],
-                hAlign='RIGHT',
-                style=TableStyle([
-                    ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-                    ('TOPPADDING', (0,0), (-1,-1), -3),
-                    ('LEFTPADDING', (0,0), (-1,-1), 0),
-                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
-                ])
-            )
-            if coordinator.teacher:
-                contact_info_lines.append(coordinator.teacher.name)
-            if coordinator.designation:
-                contact_info_lines.append(coordinator.designation)
-            if coordinator.secondary_designation:
-                contact_info_lines.append(coordinator.secondary_designation)
-            contact_info_lines.append('Bangladesh Open University')
-            if coordinator.phone:
-                contact_info_lines.append(f'Phone/Whatsapp: {coordinator.phone}')
-            if coordinator.email:
-                contact_info_lines.append(f'email:{coordinator.email}')
-        else:
-            contact_info_lines.append('Bangladesh Open University')
-            contact_label = Paragraph(
-                'Contact Person',
-                ParagraphStyle(
-                    'ContactLabel',
-                    fontName='Helvetica-Bold',
-                    fontSize=11,
-                    alignment=0,
-                    textColor=colors.white,
-                    spaceAfter=0,
-                    spaceBefore=0,
-                    leading=14,
-                )
-            )
-            contact_label_table = Table(
-                [[contact_label]],
-                colWidths=[190],
-                hAlign='RIGHT',
-                style=TableStyle([
-                    ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-                    ('TOPPADDING', (0,0), (-1,-1), -3),
-                    ('LEFTPADDING', (0,0), (-1,-1), 0),
-                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
-                ])
-            )
-        
-        contact_info_para = Paragraph(
-            '<br/>'.join(contact_info_lines),
-            ParagraphStyle(
-                'ContactBox',
-                fontName='Helvetica',
-                fontSize=10,
-                alignment=0,
-                textColor=colors.black,
-                leftIndent=2,
-                leading=10,
-                spaceBefore=0,
-                spaceAfter=0,
-            )
-        )
-        contact_table = Table(
-            [[contact_label_table], [contact_info_para]],
-            colWidths=[190],
-            hAlign='RIGHT',
-        )
-        contact_table.setStyle(TableStyle([
-            ('BOX', (0, 0), (-1, -1), 1, colors.black),
-            ('ROUNDED', (0, 0), (-1, -1), 6),
-            ('BACKGROUND', (0, 0), (0, 0), colors.HexColor('#2c3e50')),
-            ('LEFTPADDING', (0, 0), (-1, -1), 8),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-            ('TOPPADDING', (0, 0), (0, 0), 6),
-            ('BOTTOMPADDING', (0, 0), (0, 0), 4),
-            ('TOPPADDING', (0, 1), (0, 1), 4),
-            ('BOTTOMPADDING', (0, 1), (0, 1), 6),
-        ]))
-        
+        # Header block (no Contact Person box) — same layout as filled Final Exam PDF
         left_box_table = Table(
             [[left_content]],
-            colWidths=[available_width-190],
-            hAlign='LEFT',
+            colWidths=[available_width],
+            hAlign='CENTER',
             style=TableStyle([
-                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ])
         )
-        two_col_table = Table(
-            [[left_box_table, contact_table]],
-            colWidths=[available_width-190, 190],
-            hAlign='LEFT'
-        )
-        two_col_table.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (0, 0), 'MIDDLE'),
-            ('VALIGN', (1, 0), (1, 0), 'MIDDLE'),
-            ('ALIGN', (0, 0), (0, 0), 'CENTER'),
-            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-        ]))
         elements.append(Spacer(1, 4))
-        elements.append(two_col_table)
-        elements.append(Spacer(1, 4))
-        
+        elements.append(left_box_table)
         elements.append(Spacer(1, 4))
         
         table = _final_exam_pdf_marks_table(

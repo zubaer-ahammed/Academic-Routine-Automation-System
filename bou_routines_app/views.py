@@ -9176,7 +9176,7 @@ def _final_exam_theory_table_header_rows():
     raw_max = 70
     return [
         [
-            'SL. No', 'Student ID', 'Name',
+            'SL.\nNo', 'Student ID', 'Name',
             f'Theory Course Final Exam (Total: {raw_max} marks)', '', '', '', '', '', '',
             'Total',
         ],
@@ -9197,7 +9197,7 @@ def _final_exam_lab_table_header_rows(course, semester, *, blank=False):
             # Blank sheet: Problem Solving only (Viva/Total omitted for handwriting)
             return [
                 [
-                    'SL. No', 'Student ID', 'Name',
+                    'SL.\nNo', 'Student ID', 'Name',
                     f"Lab Course Final Exam (Total: {meta['lab_final_exam_max']} marks)",
                 ],
                 [
@@ -9207,7 +9207,7 @@ def _final_exam_lab_table_header_rows(course, semester, *, blank=False):
             ]
         return [
             [
-                'SL. No', 'Student ID', 'Name',
+                'SL.\nNo', 'Student ID', 'Name',
                 f"Lab Course Final Exam (Total: {meta['lab_final_exam_max']} marks)", '', '',
             ],
             [
@@ -9219,10 +9219,10 @@ def _final_exam_lab_table_header_rows(course, semester, *, blank=False):
         ]
     if blank:
         return [
-            ['SL. No', 'Student ID', 'Name', 'Lab Course Final Exam Mark'],
+            ['SL.\nNo', 'Student ID', 'Name', 'Lab Course Final Exam Mark'],
         ]
     return [
-        ['SL. No', 'Student ID', 'Name', 'Lab Course Final Exam Mark', 'Total'],
+        ['SL.\nNo', 'Student ID', 'Name', 'Lab Course Final Exam Mark', 'Total'],
     ]
 
 
@@ -9282,23 +9282,30 @@ def _final_exam_build_lab_student_row(sl_no, student, mark, teacher_role, course
 
 
 def _final_exam_pdf_theory_col_widths(available_width):
-    sl_w, id_w, name_w, q_w = 40, 80, 150, 60
-    fixed = sl_w + id_w + name_w + (q_w * 7)
-    return [sl_w, id_w, name_w] + [q_w] * 7 + [max(40, available_width - fixed)]
+    """Column widths scaled for portrait A4 (11 columns); Name gets more room."""
+    sl_w, id_w, name_w = 24, 64, 105
+    remaining = max(28 * 8, available_width - sl_w - id_w - name_w)
+    mark_w = remaining / 8.0
+    return [sl_w, id_w, name_w] + [mark_w] * 8
 
 
 def _final_exam_pdf_lab_col_widths(course, semester, available_width, *, blank=False):
-    sl_w, id_w, name_w = 40, 80, 150
+    """Portrait A4: wide Name; narrower Problem Solving / Viva / Total."""
+    sl_w, id_w, name_w = 24, 70, 175
     meta = _final_exam_lab_export_meta(course, semester)
     if blank:
         used = sl_w + id_w + name_w
         return [sl_w, id_w, name_w, max(80, available_width - used)]
     if meta['lab_final_uses_viva']:
-        ps_w, v_w, tot_w = 80, 60, 60
-        used = sl_w + id_w + name_w + ps_w + v_w + tot_w
-        return [sl_w, id_w, name_w, ps_w, v_w, max(40, available_width - used + tot_w)]
-    used = sl_w + id_w + name_w + 120
-    return [sl_w, id_w, name_w, 120, max(40, available_width - used)]
+        rest = max(130.0, available_width - sl_w - id_w - name_w)
+        # Keep mark columns compact so Name can stay wide
+        ps_w = max(48.0, rest * 0.38)
+        viv_w = max(40.0, rest * 0.28)
+        tot_w = max(40.0, rest - ps_w - viv_w)
+        return [sl_w, id_w, name_w, ps_w, viv_w, tot_w]
+    used = sl_w + id_w + name_w
+    mark_w = max(55, (available_width - used) / 2.0)
+    return [sl_w, id_w, name_w, mark_w, mark_w]
 
 
 def _final_exam_pdf_table_style_commands(header_row_count):
@@ -9506,13 +9513,13 @@ def export_final_exam_pdf(request):
         for mark in existing_marks:
             final_exam_marks[mark.student.id] = mark
         
-        _fe_lm = 54
-        _fe_rm = 54
+        _fe_lm = 40
+        _fe_rm = 40
         _fe_tm = 34
         _fe_bm = 90
 
-        # Get page width and calculate available width
-        page_width, page_height = landscape(A4)
+        # Portrait A4
+        page_width, page_height = A4
         available_width = page_width - _fe_lm - _fe_rm
 
         elements = []
@@ -9622,16 +9629,17 @@ def export_final_exam_pdf(request):
         elements.append(table)
 
         def _draw_final_exam_marks_pdf_footer(cnv, page_num, total_pages):
-            pw, _ph = landscape(A4)
+            pw, _ph = A4
             left_x = _fe_lm
             right_x_end = pw - _fe_rm
-            right_x = right_x_end - 250
+            sig_w = min(180, (right_x_end - left_x - 40) / 2.0)
+            right_x = right_x_end - sig_w
             footer_y_line = 48
             footer_y_text = 34
             cnv.saveState()
             cnv.setLineWidth(1)
             cnv.setStrokeColor(colors.black)
-            cnv.line(left_x, footer_y_line, left_x + 250, footer_y_line)
+            cnv.line(left_x, footer_y_line, left_x + sig_w, footer_y_line)
             cnv.line(right_x, footer_y_line, right_x_end, footer_y_line)
             cnv.setFont('Helvetica', 10)
             cnv.drawString(left_x, footer_y_text, 'Internal Examiner')
@@ -9646,7 +9654,7 @@ def export_final_exam_pdf(request):
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(
             buffer,
-            pagesize=landscape(A4),
+            pagesize=A4,
             rightMargin=_fe_rm,
             leftMargin=_fe_lm,
             topMargin=_fe_tm,
@@ -9693,11 +9701,11 @@ def export_blank_final_exam_pdf(request):
         ).order_by('-first_two_digits', 'last_three_digits')
         students = filter_students_queryset_by_centre(students, centre_id)
 
-        _bfe_lm = 54
-        _bfe_rm = 54
+        _bfe_lm = 40
+        _bfe_rm = 40
         _bfe_tm = 34
         _bfe_bm = 90
-        page_width, page_height = landscape(A4)
+        page_width, page_height = A4
         available_width = page_width - _bfe_lm - _bfe_rm
 
         elements = []
@@ -9783,11 +9791,7 @@ def export_blank_final_exam_pdf(request):
         left_content.append(Spacer(1, 2))
         course_name_display = f"{course.code} - {course.name}" if course else "Course"
         left_content.append(Paragraph(f'Final Exam Marks Sheet - {course_name_display}', header_style_bold))
-        teacher_name = _final_exam_export_examiner_name(semester, course, centre_id, teacher_role)
-        
-        # Only show teacher if found
-        if teacher_name:
-            left_content.append(Paragraph(f'<b>Examiner:</b> {teacher_name}', header_style_normal))
+        # Blank sheet: omit Examiner line (filled PDF still shows it)
         if not centre_name:
             first_sc = SemesterCourse.objects.filter(semester=semester).select_related('centre').first()
             if first_sc and first_sc.centre:
@@ -9795,7 +9799,7 @@ def export_blank_final_exam_pdf(request):
         if centre_name:
             left_content.append(Paragraph(f'<b>Study Center:</b> {centre_name}', header_style_normal))
         
-        # Header block (no Contact Person box) — same layout as filled Final Exam PDF
+        # Header block (no Contact Person / Examiner) — blank Final Exam PDF
         left_box_table = Table(
             [[left_content]],
             colWidths=[available_width],
@@ -9814,16 +9818,17 @@ def export_blank_final_exam_pdf(request):
         elements.append(table)
 
         def _draw_blank_final_exam_pdf_footer(cnv, page_num, total_pages):
-            pw, _ph = landscape(A4)
+            pw, _ph = A4
             left_x = _bfe_lm
             right_x_end = pw - _bfe_rm
-            right_x = right_x_end - 250
+            sig_w = min(180, (right_x_end - left_x - 40) / 2.0)
+            right_x = right_x_end - sig_w
             footer_y_line = 48
             footer_y_text = 34
             cnv.saveState()
             cnv.setLineWidth(1)
             cnv.setStrokeColor(colors.black)
-            cnv.line(left_x, footer_y_line, left_x + 250, footer_y_line)
+            cnv.line(left_x, footer_y_line, left_x + sig_w, footer_y_line)
             cnv.line(right_x, footer_y_line, right_x_end, footer_y_line)
             cnv.setFont('Helvetica', 10)
             cnv.drawString(left_x, footer_y_text, 'Internal Examiner')
@@ -9838,7 +9843,7 @@ def export_blank_final_exam_pdf(request):
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(
             buffer,
-            pagesize=landscape(A4),
+            pagesize=A4,
             rightMargin=_bfe_rm,
             leftMargin=_bfe_lm,
             topMargin=_bfe_tm,
@@ -10017,15 +10022,15 @@ def export_final_exam_excel(request):
                 worksheet.write(row, col, value, fmt)
             row += 1
 
-        worksheet.set_column(0, 0, 6)
+        worksheet.set_column(0, 0, 5)
         worksheet.set_column(1, 1, 12)
-        worksheet.set_column(2, 2, 22)
+        worksheet.set_column(2, 2, 28)
         if num_cols > 3:
-            worksheet.set_column(3, num_cols - 1, 9)
+            worksheet.set_column(3, num_cols - 1, 8)
         for hr in range(len(header_rows)):
             worksheet.set_row(table_header_start + hr, 28)
 
-        _excel_apply_landscape_a4_print_setup(worksheet, row - 1, last_col)
+        _excel_apply_portrait_a4_print_setup(worksheet, row - 1, last_col)
 
         workbook.close()
         output.seek(0)
@@ -10123,6 +10128,17 @@ def _ca_total_ceil_int(cam):
 def _excel_apply_landscape_a4_print_setup(worksheet, last_row, last_col):
     """Landscape A4 print setup: fit all columns to one page width (like PDF)."""
     worksheet.set_landscape()
+    worksheet.set_paper(9)  # A4
+    worksheet.set_margins(left=0.3, right=0.3, top=0.35, bottom=0.35)
+    worksheet.center_horizontally()
+    worksheet.fit_to_pages(1, 0)
+    if last_row >= 0 and last_col >= 0:
+        worksheet.print_area(0, 0, last_row, last_col)
+
+
+def _excel_apply_portrait_a4_print_setup(worksheet, last_row, last_col):
+    """Portrait A4 print setup: fit all columns to one page width (like PDF)."""
+    worksheet.set_portrait()
     worksheet.set_paper(9)  # A4
     worksheet.set_margins(left=0.3, right=0.3, top=0.35, bottom=0.35)
     worksheet.center_horizontally()

@@ -11792,7 +11792,8 @@ def ca_management(request):
             # Add effective teacher to context for template use
             context['course_teacher'] = course_teacher
             
-            # Examiners: SemesterCourse.final_exam_evaluator1–3 (canonical), then FinalExamMark, then course teacher
+            # Examiners: SemesterCourse.final_exam_evaluator1–3 (canonical), then FinalExamMark,
+            # then lab → selected centre course teacher (Internal only); theory → DRC/DUET teachers.
             centre_for_evaluators = centre_id or selected_centre_id
             if centre_for_evaluators:
                 try:
@@ -11827,28 +11828,34 @@ def ca_management(request):
                 if not teacher3_evaluator_obj and sample_mark.teacher3_evaluator:
                     teacher3_evaluator_obj = sample_mark.teacher3_evaluator
 
-            drc_centre = Centre.objects.filter(code='DRC').first()
-            duet_centre = Centre.objects.filter(code='DUET').first()
+            if course.is_lab:
+                # Lab: default Internal Examiner to this offering's course teacher; leave External unset
+                if not teacher1_evaluator_obj and course_teacher:
+                    teacher1_evaluator_obj = course_teacher
+            else:
+                # Theory: First examiner ← DRC course teacher; Second ← DUET course teacher
+                drc_centre = Centre.objects.filter(code='DRC').first()
+                duet_centre = Centre.objects.filter(code='DUET').first()
 
-            if not teacher1_evaluator_obj and drc_centre:
-                drc_semester_course = SemesterCourse.objects.filter(
-                    semester=semester,
-                    course=course,
-                    centre=drc_centre,
-                ).select_related('teacher').first()
+                if not teacher1_evaluator_obj and drc_centre:
+                    drc_semester_course = SemesterCourse.objects.filter(
+                        semester=semester,
+                        course=course,
+                        centre=drc_centre,
+                    ).select_related('teacher').first()
 
-                if drc_semester_course and drc_semester_course.teacher:
-                    teacher1_evaluator_obj = drc_semester_course.teacher
+                    if drc_semester_course and drc_semester_course.teacher:
+                        teacher1_evaluator_obj = drc_semester_course.teacher
 
-            if not teacher2_evaluator_obj and duet_centre:
-                duet_semester_course = SemesterCourse.objects.filter(
-                    semester=semester,
-                    course=course,
-                    centre=duet_centre,
-                ).select_related('teacher').first()
+                if not teacher2_evaluator_obj and duet_centre:
+                    duet_semester_course = SemesterCourse.objects.filter(
+                        semester=semester,
+                        course=course,
+                        centre=duet_centre,
+                    ).select_related('teacher').first()
 
-                if duet_semester_course and duet_semester_course.teacher:
-                    teacher2_evaluator_obj = duet_semester_course.teacher
+                    if duet_semester_course and duet_semester_course.teacher:
+                        teacher2_evaluator_obj = duet_semester_course.teacher
             
         except (Semester.DoesNotExist, Course.DoesNotExist):
             pass

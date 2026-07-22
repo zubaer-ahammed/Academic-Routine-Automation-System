@@ -13294,7 +13294,11 @@ def assign_evaluator(request):
 @require_POST
 def assign_chairman(request):
     """Assign examination chairman or members for lab course viva (per semester/course/centre)."""
-    if not user_can_assign_chairman(request.user):
+    # Marks page shows this UI to admins who can assign examiners; allow the same here.
+    if not (
+        user_can_assign_chairman(request.user)
+        or user_can_assign_examiners(request.user)
+    ):
         return JsonResponse({'error': 'Permission denied'}, status=403)
 
     assignment_fields = {

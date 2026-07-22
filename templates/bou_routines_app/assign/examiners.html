@@ -18,7 +18,7 @@
 <div class="row g-3">
     <div class="col-md-6">
         <label for="assign-teacher1" class="form-label">Internal Examiner</label>
-        <select id="assign-teacher1" class="form-select" onchange="assignExaminer(1, this.value)">
+        <select id="assign-teacher1" class="form-select teacher-select" data-placeholder="Search for a teacher..." onchange="assignExaminer(1, this.value)">
             <option value="">-- Teacher --</option>
             {% for teacher in all_teachers %}
             <option value="{{ teacher.id }}" {% if semester_course.final_exam_evaluator1_id == teacher.id %}selected{% endif %}>
@@ -29,7 +29,7 @@
     </div>
     <div class="col-md-6">
         <label for="assign-teacher2" class="form-label">External Examiner</label>
-        <select id="assign-teacher2" class="form-select" onchange="assignExaminer(2, this.value)">
+        <select id="assign-teacher2" class="form-select teacher-select" data-placeholder="Search for a teacher..." onchange="assignExaminer(2, this.value)">
             <option value="">-- Teacher --</option>
             {% for teacher in all_teachers %}
             <option value="{{ teacher.id }}" {% if semester_course.final_exam_evaluator2_id == teacher.id %}selected{% endif %}>
@@ -43,7 +43,7 @@
 <div class="row g-3">
     <div class="col-md-4">
         <label for="assign-teacher1" class="form-label">First Examiner</label>
-        <select id="assign-teacher1" class="form-select" onchange="assignExaminer(1, this.value)">
+        <select id="assign-teacher1" class="form-select teacher-select" data-placeholder="Search for a teacher..." onchange="assignExaminer(1, this.value)">
             <option value="">-- Teacher --</option>
             {% for teacher in all_teachers %}
             <option value="{{ teacher.id }}" {% if semester_course.final_exam_evaluator1_id == teacher.id %}selected{% endif %}>
@@ -54,7 +54,7 @@
     </div>
     <div class="col-md-4">
         <label for="assign-teacher2" class="form-label">Second Examiner</label>
-        <select id="assign-teacher2" class="form-select" onchange="assignExaminer(2, this.value)">
+        <select id="assign-teacher2" class="form-select teacher-select" data-placeholder="Search for a teacher..." onchange="assignExaminer(2, this.value)">
             <option value="">-- Teacher --</option>
             {% for teacher in all_teachers %}
             <option value="{{ teacher.id }}" {% if semester_course.final_exam_evaluator2_id == teacher.id %}selected{% endif %}>
@@ -65,7 +65,7 @@
     </div>
     <div class="col-md-4">
         <label for="assign-teacher3" class="form-label">Third Examiner</label>
-        <select id="assign-teacher3" class="form-select" onchange="assignExaminer(3, this.value)">
+        <select id="assign-teacher3" class="form-select teacher-select" data-placeholder="Search for a teacher..." onchange="assignExaminer(3, this.value)">
             <option value="">-- Teacher --</option>
             {% for teacher in all_teachers %}
             <option value="{{ teacher.id }}" {% if semester_course.final_exam_evaluator3_id == teacher.id %}selected{% endif %}>

@@ -4330,7 +4330,11 @@ function assignExaminer(examinerNumber, teacherId) {
 }
 
 function assignChairman(teacherId) {
+    teacherId = (teacherId || '').toString().trim();
     if (!teacherId) {
+        return;
+    }
+    if (window._assignChairmanInFlight) {
         return;
     }
 
@@ -4343,10 +4347,18 @@ function assignChairman(teacherId) {
         alert('Please choose a study centre first.');
         return;
     }
+    if (!scope.csrfToken) {
+        alert('Missing security token. Please reload the page and try again.');
+        return;
+    }
 
+    window._assignChairmanInFlight = true;
     const select = document.getElementById('assign-chairman');
     if (select) {
         select.disabled = true;
+        if (window.jQuery && jQuery.fn.select2 && jQuery(select).hasClass('select2-hidden-accessible')) {
+            jQuery(select).prop('disabled', true);
+        }
     }
 
     fetch('{% url "assign-chairman-api" %}', {
@@ -4362,9 +4374,13 @@ function assignChairman(teacherId) {
             course_id: scope.courseId,
             teacher_id: teacherId,
             centre_id: scope.centreId,
+            assignment_type: 'chairman',
         })
     })
-    .then(response => response.json().then(data => ({ ok: response.ok, data })))
+    .then(response => response.json().then(data => ({ ok: response.ok, data })).catch(() => ({
+        ok: false,
+        data: { error: 'Invalid response from server (HTTP ' + response.status + ')' },
+    })))
     .then(({ ok, data }) => {
         if (ok && data.success) {
             reloadMarksPagePreservingFinalExamTab();
@@ -4374,25 +4390,33 @@ function assignChairman(teacherId) {
     })
     .catch((error) => {
         console.error('Error:', error);
+        window._assignChairmanInFlight = false;
         alert('Error: ' + (error.message || 'An error occurred while assigning chairman.'));
         if (select) {
             select.disabled = false;
+            if (window.jQuery && jQuery.fn.select2 && jQuery(select).hasClass('select2-hidden-accessible')) {
+                jQuery(select).prop('disabled', false);
+            }
         }
     });
 }
 
-document.addEventListener('DOMContentLoaded', function () {
-    const chairmanSelect = document.getElementById('assign-chairman');
-    if (chairmanSelect) {
-        chairmanSelect.dataset.lastValue = chairmanSelect.value || '';
-        chairmanSelect.addEventListener('change', function () {
-            const teacherId = this.value;
-            if (!teacherId) {
-                return;
-            }
-            assignChairman(teacherId);
-        });
+// Marks page scripts load before jQuery; bind Select2 after it is available.
+(function bindChairmanSelect2WhenReady() {
+    if (!window.jQuery) {
+        setTimeout(bindChairmanSelect2WhenReady, 40);
+        return;
     }
-});
+    jQuery(function () {
+        jQuery(document)
+            .off('select2:select.bouChairman')
+            .on('select2:select.bouChairman', '#assign-chairman', function (e) {
+                var id = (e.params && e.params.data && e.params.data.id) || this.value;
+                if (id) {
+                    assignChairman(id);
+                }
+            });
+    });
+})();
 </script>
 {% endblock %}

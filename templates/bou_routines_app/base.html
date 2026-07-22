@@ -8,8 +8,20 @@
     <title>{% block title %}BOUSST{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="{% static 'global.css' %}?ver=1.0.26">
     <style>
+        .select2-container--bootstrap-5 {
+            width: 100% !important;
+        }
+        .select2-container--bootstrap-5 .select2-selection {
+            min-height: calc(1.5em + 0.75rem + 2px);
+        }
+        .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered {
+            line-height: 1.5;
+            padding-left: 0.75rem;
+        }
         html, body {
             height: 100% !important;
         }
@@ -176,11 +188,60 @@
         </div>
     </footer>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             // Set the current year in the footer
             var yearSpan = document.getElementById('currentYear');
             if (yearSpan) yearSpan.textContent = new Date().getFullYear();
+        });
+
+        // Searchable teacher dropdowns (Select2) — mark selects with class "teacher-select"
+        window.initTeacherSelect2 = function (root) {
+            if (!window.jQuery || !jQuery.fn.select2) {
+                return;
+            }
+            var $root = root ? jQuery(root) : jQuery(document);
+            $root.find('select.teacher-select').each(function () {
+                var $el = jQuery(this);
+                if ($el.hasClass('select2-hidden-accessible')) {
+                    $el.select2('destroy');
+                }
+                var placeholder = $el.data('placeholder') || 'Search for a teacher...';
+                $el.select2({
+                    theme: 'bootstrap-5',
+                    placeholder: placeholder,
+                    allowClear: !$el.prop('required'),
+                    minimumResultsForSearch: 0,
+                    width: '100%',
+                    dropdownParent: $el.parent(),
+                    language: {
+                        noResults: function () { return 'No teachers found'; },
+                        searching: function () { return 'Searching...'; }
+                    }
+                });
+                // Select2 does not reliably fire the HTML onchange attribute; invoke it explicitly.
+                $el.off('select2:select.bouTeacher select2:clear.bouTeacher')
+                    .on('select2:select.bouTeacher', function () {
+                        if (typeof this.onchange === 'function') {
+                            this.onchange();
+                        }
+                    })
+                    .on('select2:clear.bouTeacher', function () {
+                        if (typeof this.onchange === 'function') {
+                            this.onchange();
+                        }
+                    });
+            });
+        };
+
+        jQuery(function () {
+            window.initTeacherSelect2(document);
+            // Re-init when Bootstrap collapses open (width is wrong while hidden)
+            jQuery(document).on('shown.bs.collapse', function (e) {
+                window.initTeacherSelect2(e.target);
+            });
         });
     </script>
     {% block extra_js %}{% endblock %}

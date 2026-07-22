@@ -31,7 +31,7 @@
                         <div class="small text-muted">{{ sc.course.name }}</div>
                     </td>
                     <td>
-                        <select name="teacher_{{ sc.id }}" class="form-select form-select-sm">
+                        <select name="teacher_{{ sc.id }}" class="form-select form-select-sm teacher-select" data-placeholder="Search for a teacher...">
                             <option value="">-- Teacher --</option>
                             {% for teacher in teachers %}
                             <option value="{{ teacher.id }}" {% if sc.teacher_id == teacher.id %}selected{% endif %}>

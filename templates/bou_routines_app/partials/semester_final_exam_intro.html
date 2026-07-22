@@ -42,7 +42,7 @@
                                             <div class="row g-2 mx-0 w-100 mt-1">
                                                 <div class="col-md-6">
                                                     <label for="assign-teacher1" class="form-label">Internal Examiner:</label>
-                                                    <select id="assign-teacher1" class="form-control" onchange="assignExaminer(1, this.value)">
+                                                    <select id="assign-teacher1" class="form-control teacher-select" data-placeholder="Search for a teacher..." onchange="assignExaminer(1, this.value)">
                                                         <option value="">-- Teacher --</option>
                                                         {% for teacher in all_teachers %}
                                                         <option value="{{ teacher.id }}" {% if teacher1_evaluator and teacher1_evaluator.id == teacher.id %}selected{% endif %}>
@@ -53,7 +53,7 @@
                                                 </div>
                                                 <div class="col-md-6">
                                                     <label for="assign-teacher2" class="form-label">External Examiner:</label>
-                                                    <select id="assign-teacher2" class="form-control" onchange="assignExaminer(2, this.value)">
+                                                    <select id="assign-teacher2" class="form-control teacher-select" data-placeholder="Search for a teacher..." onchange="assignExaminer(2, this.value)">
                                                         <option value="">-- Teacher --</option>
                                                         {% for teacher in all_teachers %}
                                                         <option value="{{ teacher.id }}" {% if teacher2_evaluator and teacher2_evaluator.id == teacher.id %}selected{% endif %}>
@@ -100,7 +100,7 @@
                                                     <div class="row g-2 mx-0 w-100 mt-1">
                                                         <div class="col-md-6">
                                                             <label for="assign-chairman" class="form-label">Examination Chairman:</label>
-                                                            <select id="assign-chairman" class="form-control">
+                                                            <select id="assign-chairman" class="form-control teacher-select" data-placeholder="Search for a teacher..." onchange="assignChairman(this.value)">
                                                                 <option value="">-- Teacher --</option>
                                                                 {% for teacher in all_teachers %}
                                                                 <option value="{{ teacher.id }}" {% if lab_chairman and lab_chairman.id == teacher.id %}selected{% endif %}>
@@ -170,7 +170,7 @@
                                             <div class="row g-2 mx-0 w-100 mt-1">
                                                 <div class="col-md-4">
                                                     <label for="assign-teacher1" class="form-label">First Examiner:</label>
-                                                    <select id="assign-teacher1" class="form-control" onchange="assignExaminer(1, this.value)">
+                                                    <select id="assign-teacher1" class="form-control teacher-select" data-placeholder="Search for a teacher..." onchange="assignExaminer(1, this.value)">
                                                         <option value="">-- Teacher --</option>
                                                         {% for teacher in all_teachers %}
                                                         <option value="{{ teacher.id }}" {% if teacher1_evaluator and teacher1_evaluator.id == teacher.id %}selected{% endif %}>
@@ -181,7 +181,7 @@
                                                 </div>
                                                 <div class="col-md-4">
                                                     <label for="assign-teacher2" class="form-label">Second Examiner:</label>
-                                                    <select id="assign-teacher2" class="form-control" onchange="assignExaminer(2, this.value)">
+                                                    <select id="assign-teacher2" class="form-control teacher-select" data-placeholder="Search for a teacher..." onchange="assignExaminer(2, this.value)">
                                                         <option value="">-- Teacher --</option>
                                                         {% for teacher in all_teachers %}
                                                         <option value="{{ teacher.id }}" {% if teacher2_evaluator and teacher2_evaluator.id == teacher.id %}selected{% endif %}>
@@ -192,7 +192,7 @@
                                                 </div>
                                                 <div class="col-md-4">
                                                     <label for="assign-teacher3" class="form-label">Third Examiner:</label>
-                                                    <select id="assign-teacher3" class="form-control" onchange="assignExaminer(3, this.value)">
+                                                    <select id="assign-teacher3" class="form-control teacher-select" data-placeholder="Search for a teacher..." onchange="assignExaminer(3, this.value)">
                                                         <option value="">-- Teacher --</option>
                                                         {% for teacher in all_teachers %}
                                                         <option value="{{ teacher.id }}" {% if teacher3_evaluator and teacher3_evaluator.id == teacher.id %}selected{% endif %}>

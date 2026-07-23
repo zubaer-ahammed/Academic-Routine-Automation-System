@@ -9177,9 +9177,9 @@ def _final_exam_theory_table_header_rows():
         ],
         [
             '', '', '',
-            f'Group A\n(Any 2 of Q1–Q3, max {set_max} per set)', '', '',
-            f'Group B\n(Any 2 of Q4–Q6, max {set_max} per set)', '', '',
-            f'Group C\n(Q7, max {set_max})', '',
+            f'Group A\n(Any 2 of Q1–Q3,\nmax {set_max} per set)', '', '',
+            f'Group B\n(Any 2 of Q4–Q6,\nmax {set_max} per set)', '', '',
+            f'Group C\n(Q7,\nmax {set_max})', '',
         ],
         ['', '', '', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', ''],
     ]
@@ -9273,11 +9273,13 @@ def _final_exam_build_lab_student_row(sl_no, student, mark, teacher_role, course
 
 
 def _final_exam_pdf_theory_col_widths(available_width):
-    """Column widths scaled for portrait A4 (11 columns); Name gets more room."""
-    sl_w, id_w, name_w = 24, 64, 105
-    remaining = max(28 * 8, available_width - sl_w - id_w - name_w)
-    mark_w = remaining / 8.0
-    return [sl_w, id_w, name_w] + [mark_w] * 8
+    """Portrait A4: compact Q1–Q7/Total so Name can stay wide."""
+    sl_w, id_w = 22, 66
+    q_w = 32
+    tot_w = 32
+    used = sl_w + id_w + (q_w * 7) + tot_w
+    name_w = max(95, available_width - used)
+    return [sl_w, id_w, name_w] + [q_w] * 7 + [tot_w]
 
 
 def _final_exam_pdf_lab_col_widths(course, semester, available_width, *, blank=False):
@@ -9312,8 +9314,11 @@ def _final_exam_pdf_table_style_commands(header_row_count):
         ('FONTSIZE', (0, header_row_count), (-1, -1), 8),
         ('FONTSIZE', (1, header_row_count), (1, -1), 9),
         ('FONTNAME', (1, header_row_count), (1, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (2, header_row_count), (2, -1), 7),
+        ('FONTSIZE', (2, header_row_count), (2, -1), 8),
         ('FONTNAME', (2, header_row_count), (2, -1), 'Helvetica-Bold'),
+        # Compact student rows (filled + blank Semester Final PDFs)
+        ('TOPPADDING', (0, header_row_count), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, header_row_count), (-1, -1), 1),
     ]
 
 
@@ -9375,7 +9380,13 @@ def _final_exam_pdf_marks_table(
                 )
             )
         col_widths = _final_exam_pdf_theory_col_widths(available_width)
-        span_cmds = _final_exam_pdf_theory_header_spans()
+        span_cmds = _final_exam_pdf_theory_header_spans() + [
+            # Group A/B/C: wrap "max …" on its own line without growing header height
+            ('FONTSIZE', (3, 1), (9, 1), 7.5),
+            ('LEADING', (3, 1), (9, 1), 8.5),
+            ('TOPPADDING', (3, 1), (9, 1), 2),
+            ('BOTTOMPADDING', (3, 1), (9, 1), 2),
+        ]
 
     header_row_count = len(header_rows)
     table = Table(table_data, colWidths=col_widths, repeatRows=header_row_count)

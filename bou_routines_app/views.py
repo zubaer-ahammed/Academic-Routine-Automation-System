@@ -6525,7 +6525,7 @@ def export_attendance_pdf(request):
             ('TOPPADDING', (0, 0), (-1, 0), 4),
             # Increase row height for header to accommodate vertical date text
             ('ROWHEIGHT', (0, 0), (-1, 0), 40),  # Reduced height for header row
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
             ('FONTSIZE', (0, 1), (0, -1), 9),  # Larger font for Student ID column (bold)
             ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),  # Bold for Student ID
@@ -6535,7 +6535,6 @@ def export_attendance_pdf(request):
             ('VALIGN', (1, 1), (1, -1), 'MIDDLE'),  # Explicitly set vertical center for Name column
             ('FONTSIZE', (2, 1), (-1, -1), 7),  # Regular font size for other columns
             ('FONTNAME', (2, 1), (-1, -1), 'Helvetica-Bold'),  # Bold for all other columns (attendance marks, Present, %)
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
             ('LEFTPADDING', (0, 0), (-1, -1), 4),
             ('RIGHTPADDING', (0, 0), (-1, -1), 4),
             # Reduce padding for Student ID and Name columns to make them compact
@@ -6902,7 +6901,7 @@ def export_blank_attendance_pdf(request):
             ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
             ('TOPPADDING', (0, 0), (-1, 0), 4),
             ('ROWHEIGHT', (0, 0), (-1, 0), 40),  # Reduced height for header row
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
             ('FONTSIZE', (0, 1), (0, -1), 9),  # Larger font for Student ID column (bold)
             ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),  # Bold for Student ID
@@ -6912,7 +6911,6 @@ def export_blank_attendance_pdf(request):
             ('VALIGN', (1, 1), (1, -1), 'MIDDLE'),  # Explicitly set vertical center for Name column
             ('FONTSIZE', (2, 1), (-1, -1), 7),  # Regular font size for other columns
             ('FONTNAME', (2, 1), (-1, -1), 'Helvetica-Bold'),  # Bold for all other columns (attendance marks, Present, %)
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
             ('LEFTPADDING', (0, 0), (-1, -1), 4),
             ('RIGHTPADDING', (0, 0), (-1, -1), 4),
             # Reduce padding for Student ID and Name columns to make them compact
@@ -7699,7 +7697,6 @@ def export_ca_marks_pdf(request):
             # Name: bold, compact
             ('FONTSIZE', (2, header_rows), (2, -1), 7),
             ('FONTNAME', (2, header_rows), (2, -1), 'Helvetica-Bold'),
-            ('ROWBACKGROUNDS', (0, header_rows), (-1, -1), [colors.white, colors.lightgrey]),
         ]
         
         # Add cell spans for headers
@@ -8054,7 +8051,6 @@ def _build_midterm_marks_pdf_response(semester, course, students, centre_id, mid
         ('FONTNAME', (1, header_rows), (1, -1), 'Helvetica-Bold'),
         ('FONTSIZE', (2, header_rows), (2, -1), 7),
         ('FONTNAME', (2, header_rows), (2, -1), 'Helvetica-Bold'),
-        ('ROWBACKGROUNDS', (0, header_rows), (-1, -1), [colors.white, colors.lightgrey]),
         ('SPAN', (0, 0), (0, 2)),
         ('SPAN', (1, 0), (1, 2)),
         ('SPAN', (2, 0), (2, 2)),
@@ -8815,7 +8811,6 @@ def export_blank_ca_marks_pdf(request):
             # Name: bold, compact
             ('FONTSIZE', (2, header_rows), (2, -1), 7),
             ('FONTNAME', (2, header_rows), (2, -1), 'Helvetica-Bold'),
-            ('ROWBACKGROUNDS', (0, header_rows), (-1, -1), [colors.white, colors.lightgrey]),
         ]
         
         # Add cell spans for headers (same as regular export)
@@ -9194,14 +9189,10 @@ def _final_exam_lab_table_header_rows(course, semester, *, blank=False):
     meta = _final_exam_lab_export_meta(course, semester)
     if meta['lab_final_uses_viva']:
         if blank:
-            # Blank sheet: Problem Solving only (Viva/Total omitted for handwriting)
+            # Blank sheet: Problem Solving only (no Lab Course Final Exam super-header)
             return [
                 [
                     'SL.\nNo', 'Student ID', 'Name',
-                    f"Lab Course Final Exam (Total: {meta['lab_final_exam_max']} marks)",
-                ],
-                [
-                    '', '', '',
                     f"Problem Solving\n(max {meta['lab_final_problem_solving_max']})",
                 ],
             ]
@@ -9214,7 +9205,7 @@ def _final_exam_lab_table_header_rows(course, semester, *, blank=False):
                 '', '', '',
                 f"Problem Solving\n(max {meta['lab_final_problem_solving_max']})",
                 f"Viva\n(max {meta['lab_final_viva_max']})",
-                'Total\n(this examiner)',
+                'Total',
             ],
         ]
     if blank:
@@ -9323,7 +9314,6 @@ def _final_exam_pdf_table_style_commands(header_row_count):
         ('FONTNAME', (1, header_row_count), (1, -1), 'Helvetica-Bold'),
         ('FONTSIZE', (2, header_row_count), (2, -1), 7),
         ('FONTNAME', (2, header_row_count), (2, -1), 'Helvetica-Bold'),
-        ('ROWBACKGROUNDS', (0, header_row_count), (-1, -1), [colors.white, colors.lightgrey]),
     ]
 
 
@@ -9342,12 +9332,8 @@ def _final_exam_pdf_theory_header_spans():
 
 
 def _final_exam_pdf_lab_header_spans(uses_viva, *, blank=False):
-    if blank and uses_viva:
-        return [
-            ('SPAN', (0, 0), (0, 1)),
-            ('SPAN', (1, 0), (1, 1)),
-            ('SPAN', (2, 0), (2, 1)),
-        ]
+    if blank:
+        return []
     if not uses_viva:
         return []
     return [
@@ -10766,7 +10752,7 @@ def export_final_exam_summary_pdf(request):
     """
     Export Final Exam Summary (admin consolidated view) to PDF.
     Matches Semester Final Marks PDF layout (banner, study center, table borders,
-    zebra rows, chairman signature + page numbers) but omits the Examiner line.
+    chairman signature + page numbers) but omits the Examiner line.
     """
     try:
         if not _is_ca_management_admin(request):
@@ -10963,7 +10949,6 @@ def export_final_exam_summary_pdf(request):
                     ('FONTSIZE', (1, 1), (1, -1), 9),
                     ('FONTNAME', (1, 1), (1, -1), 'Helvetica-Bold'),
                     ('ALIGN', (2, 0), (2, -1), 'LEFT'),
-                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
                 ]
             )
         )

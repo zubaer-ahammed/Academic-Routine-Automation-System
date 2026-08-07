@@ -5800,7 +5800,16 @@ def get_courses_for_semester(request):
     
     # Filter by teacher if provided
     if teacher:
-        semester_courses = semester_courses.filter(teacher=teacher)
+        if for_marks:
+            # Marks: course teachers and assigned final-exam examiners
+            semester_courses = semester_courses.filter(
+                Q(teacher=teacher)
+                | Q(final_exam_evaluator1=teacher)
+                | Q(final_exam_evaluator2=teacher)
+                | Q(final_exam_evaluator3=teacher)
+            )
+        else:
+            semester_courses = semester_courses.filter(teacher=teacher)
     
     # Get unique courses from semester courses
     course_ids = semester_courses.values_list('course_id', flat=True).distinct()
@@ -7275,6 +7284,9 @@ def export_ca_marks_pdf(request):
         
         semester = Semester.objects.get(id=semester_id)
         course = Course.objects.get(id=course_id)
+        if not _user_can_edit_ca_and_midterm(request, semester, course, centre_id):
+            messages.error(request, "Only the course teacher can export CA marks for this course.")
+            return redirect('ca-management')
         
         # Get students with custom sorting
         students = Student.objects.filter(semesters=semester).extra(
@@ -7832,6 +7844,10 @@ def _midterm_marks_export_queryset(request, *, staff_only=False):
         course = Course.objects.get(id=course_id)
     except (Semester.DoesNotExist, Course.DoesNotExist):
         messages.error(request, 'Invalid semester or course.')
+        return None, None, None, None
+
+    if not staff_only and not _user_can_edit_ca_and_midterm(request, semester, course, centre_id):
+        messages.error(request, 'Only the course teacher can export Mid-Term marks for this course.')
         return None, None, None, None
 
     if course.is_lab or course.course_type == 'PROJECT':
@@ -8937,6 +8953,9 @@ def export_ca_marks_excel(request):
 
         semester = Semester.objects.get(id=semester_id)
         course = Course.objects.get(id=course_id)
+        if not _user_can_edit_ca_and_midterm(request, semester, course, centre_id):
+            messages.error(request, "Only the course teacher can export CA marks for this course.")
+            return redirect('ca-management')
 
         students = Student.objects.filter(semesters=semester).extra(
             select={
@@ -11290,16 +11309,27 @@ def ca_management(request):
     courses_queryset = Course.objects.none()
     if semester_id:
         if teacher:
-            # Teacher can only see their own courses (filter through SemesterCourse)
+            # Course teachers and assigned final-exam examiners (same scope as get_courses_for_semester for_marks)
+            sc_qs = SemesterCourse.objects.filter(semester_id=semester_id).filter(
+                Q(teacher=teacher)
+                | Q(final_exam_evaluator1=teacher)
+                | Q(final_exam_evaluator2=teacher)
+                | Q(final_exam_evaluator3=teacher)
+            )
+            if selected_centre_id:
+                sc_qs = sc_qs.filter(centre_id=selected_centre_id)
             courses_queryset = Course.objects.filter(
-                semestercourse__semester_id=semester_id,
-                semestercourse__teacher=teacher
-            ).distinct()
+                id__in=sc_qs.values_list('course_id', flat=True).distinct()
+            )
         else:
             # Admin users can see all courses in the selected semester
             courses_queryset = Course.objects.filter(
                 semestercourse__semester_id=semester_id
             ).distinct()
+            if selected_centre_id:
+                courses_queryset = courses_queryset.filter(
+                    semestercourse__centre_id=selected_centre_id
+                ).distinct()
     
     # Get students for the selected course and semester
     students = Student.objects.none()
@@ -11495,6 +11525,17 @@ def ca_management(request):
         and selected_semester.curriculum.code != 'OLD'
     )
 
+    # Examiner-only (not the course teacher): CA / Mid-Term hidden; Semester Final only.
+    # Course teacher (with or without examiner role) and admins keep CA / Mid-Term.
+    can_edit_ca_and_midterm = bool(is_admin)
+    if not can_edit_ca_and_midterm and teacher and selected_semester and selected_course:
+        can_edit_ca_and_midterm = _is_course_teacher_for_scope(
+            teacher, selected_semester, selected_course, selected_centre_id,
+        )
+    show_ca_marks_tab = bool(can_edit_ca_and_midterm and semester_id and course_id and students)
+    if not can_edit_ca_and_midterm:
+        show_midterm_marks_tab = False
+
     if course_id:
         try:
             _c_sel = Course.objects.get(id=int(course_id))
@@ -11544,6 +11585,8 @@ def ca_management(request):
             )
         ),
         'show_midterm_marks_tab': show_midterm_marks_tab,
+        'show_ca_marks_tab': show_ca_marks_tab,
+        'can_edit_ca_and_midterm': can_edit_ca_and_midterm,
         'midterm_set_max': MidtermExamMark.SET_MARKS_MAX,
         'midterm_raw_total_max': MidtermExamMark.RAW_TOTAL_MAX,
     }
@@ -11966,6 +12009,23 @@ def _user_can_edit_lab_viva(user, teacher=None, semester=None, course=None, cent
     return check_teacher_permission(user, 'can_chair_examination')
 
 
+def _is_course_teacher_for_scope(teacher, semester, course, centre_id):
+    """True if this teacher is SemesterCourse.teacher for the given offering."""
+    if not teacher or not semester or not course:
+        return False
+    qs = SemesterCourse.objects.filter(
+        semester=semester,
+        course=course,
+        teacher=teacher,
+    )
+    if centre_id not in (None, ''):
+        try:
+            qs = qs.filter(centre_id=int(centre_id))
+        except (ValueError, TypeError):
+            pass
+    return qs.exists()
+
+
 def _is_final_exam_evaluator_for_scope(teacher, semester, course, centre_id):
     """
     True if this teacher may use the Semester Final tab in CA management (non-admins).
@@ -12012,6 +12072,30 @@ def _is_final_exam_evaluator_for_scope(teacher, semester, course, centre_id):
     return False
 
 
+def _reject_if_not_course_teacher_for_ca_midterm(request, semester, course, centre_id):
+    """
+    Examiner-only teachers may enter Semester Final marks, but not CA / Mid-Term.
+    Admins always allowed. Course teachers (including those who are also examiners) allowed.
+    """
+    if _user_can_edit_ca_and_midterm(request, semester, course, centre_id):
+        return None
+    return JsonResponse(
+        {'error': 'Only the course teacher can manage CA and Mid-Term marks for this course.'},
+        status=403,
+    )
+
+
+def _user_can_edit_ca_and_midterm(request, semester, course, centre_id):
+    teacher_user = get_teacher_from_user(request.user)
+    is_admin = request.user.is_superuser or (request.user.is_staff and not teacher_user)
+    if is_admin:
+        return True
+    return bool(
+        teacher_user
+        and _is_course_teacher_for_scope(teacher_user, semester, course, centre_id)
+    )
+
+
 def _reject_old_curriculum_for_marks_json(semester, course=None):
     """Marks UI is new-curriculum only; block API saves for OLD scope."""
     if getattr(semester, 'curriculum', None) and semester.curriculum.code == 'OLD':
@@ -12045,6 +12129,13 @@ def save_ca_marks(request):
         bad = _reject_old_curriculum_for_marks_json(semester, course)
         if bad:
             return bad
+
+        centre_id_for_perm = request.POST.get('centre_id')
+        denied = _reject_if_not_course_teacher_for_ca_midterm(
+            request, semester, course, centre_id_for_perm,
+        )
+        if denied:
+            return denied
         
         # Get teacher
         teacher = None
@@ -12367,6 +12458,13 @@ def save_midterm_marks(request):
             return JsonResponse({'error': 'Mid-term marks apply only to theory courses'}, status=400)
         if not semester.curriculum or semester.curriculum.code == 'OLD':
             return JsonResponse({'error': 'Mid-term marks apply only to new curriculum semesters'}, status=400)
+
+        centre_id_for_perm = request.POST.get('centre_id')
+        denied = _reject_if_not_course_teacher_for_ca_midterm(
+            request, semester, course, centre_id_for_perm,
+        )
+        if denied:
+            return denied
 
         teacher = None
         if hasattr(request.user, 'teacher'):

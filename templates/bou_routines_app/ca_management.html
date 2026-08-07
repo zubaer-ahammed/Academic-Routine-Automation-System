@@ -1602,11 +1602,13 @@
                     {% if students %}
                         <!-- Tabs for CA Marks and Final Exam -->
                         <ul class="nav nav-tabs mb-1" id="marksTabs" role="tablist">
+                            {% if show_ca_marks_tab %}
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link active" id="ca-marks-tab" data-bs-toggle="tab" data-bs-target="#ca-marks" type="button" role="tab" aria-controls="ca-marks" aria-selected="true">
                                     <i class="fas fa-table"></i> CA Marks
                                 </button>
                             </li>
+                            {% endif %}
                             {% if show_midterm_marks_tab %}
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link" id="midterm-marks-tab" data-bs-toggle="tab" data-bs-target="#midterm-marks" type="button" role="tab" aria-controls="midterm-marks" aria-selected="false">
@@ -1616,7 +1618,7 @@
                             {% endif %}
                             {% if show_final_exam_tab %}
                             <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="final-exam-tab" data-bs-toggle="tab" data-bs-target="#final-exam" type="button" role="tab" aria-controls="final-exam" aria-selected="false">
+                                <button class="nav-link{% if not show_ca_marks_tab %} active{% endif %}" id="final-exam-tab" data-bs-toggle="tab" data-bs-target="#final-exam" type="button" role="tab" aria-controls="final-exam" aria-selected="{% if not show_ca_marks_tab %}true{% else %}false{% endif %}">
                                     <i class="fas fa-file-alt"></i> Semester Final Marks
                                 </button>
                             </li>
@@ -1632,6 +1634,7 @@
 
                         <div class="tab-content" id="marksTabsContent">
                             <!-- CA Marks Tab -->
+                            {% if show_ca_marks_tab %}
                             <div class="tab-pane fade show active" id="ca-marks" role="tabpanel" aria-labelledby="ca-marks-tab">
                         <div class="ca-table-section">
                                     <div class="table-header d-flex justify-content-between align-items-center">
@@ -1985,6 +1988,7 @@
                             </div>
                                 </div>
                             </div>
+                            {% endif %}
 
                             {% if show_midterm_marks_tab %}
                             <div class="tab-pane fade" id="midterm-marks" role="tabpanel" aria-labelledby="midterm-marks-tab">
@@ -1996,7 +2000,7 @@
 
                             <!-- Final Exam Tab -->
                             {% if show_final_exam_tab %}
-                            <div class="tab-pane fade" id="final-exam" role="tabpanel" aria-labelledby="final-exam-tab">
+                            <div class="tab-pane fade{% if not show_ca_marks_tab %} show active{% endif %}" id="final-exam" role="tabpanel" aria-labelledby="final-exam-tab">
                                 <div class="final-exam-section">
                             {% if is_admin %}
                             <ul class="nav nav-pills mb-1 flex-wrap gap-1 semester-final-subnav" id="semesterFinalSubTab" role="tablist">
@@ -2246,7 +2250,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Get tab parameter from URL
     const urlParams = new URLSearchParams(window.location.search);
-    const activeTab = urlParams.get('tab');
+    let activeTab = urlParams.get('tab');
+    const showCaMarksTab = {% if show_ca_marks_tab %}true{% else %}false{% endif %};
+    const showFinalExamTab = {% if show_final_exam_tab %}true{% else %}false{% endif %};
+    // Examiner-only: default to Semester Final Marks (CA / Mid-Term are hidden)
+    if (!activeTab && !showCaMarksTab && showFinalExamTab) {
+        activeTab = 'final-exam';
+    }
     
     // If tab parameter exists, activate that tab
     if (activeTab === 'midterm-marks') {
@@ -2262,10 +2272,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const u0 = new URL(window.location);
             u0.searchParams.delete('tab');
             window.history.replaceState({}, '', u0);
-        } else if (caMarksTab && caMarksPane && midtermTab && midtermPane) {
-            caMarksTab.classList.remove('active');
-            caMarksTab.setAttribute('aria-selected', 'false');
-            caMarksPane.classList.remove('show', 'active');
+        } else if (midtermTab && midtermPane) {
+            if (caMarksTab && caMarksPane) {
+                caMarksTab.classList.remove('active');
+                caMarksTab.setAttribute('aria-selected', 'false');
+                caMarksPane.classList.remove('show', 'active');
+            }
             if (finalExamTab && finalExamPane) {
                 finalExamTab.classList.remove('active');
                 finalExamTab.setAttribute('aria-selected', 'false');
@@ -2290,10 +2302,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const summaryTab = document.getElementById('examiner-summary-tab');
         const summaryPane = document.getElementById('examiner-summary');
         
-        if (caMarksTab && caMarksPane && finalExamTab && finalExamPane) {
-            caMarksTab.classList.remove('active');
-            caMarksTab.setAttribute('aria-selected', 'false');
-            caMarksPane.classList.remove('show', 'active');
+        if (finalExamTab && finalExamPane) {
+            if (caMarksTab && caMarksPane) {
+                caMarksTab.classList.remove('active');
+                caMarksTab.setAttribute('aria-selected', 'false');
+                caMarksPane.classList.remove('show', 'active');
+            }
             if (midtermTab && midtermPane) {
                 midtermTab.classList.remove('active');
                 midtermTab.setAttribute('aria-selected', 'false');
@@ -2321,10 +2335,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const u = new URL(window.location);
             u.searchParams.delete('tab');
             window.history.replaceState({}, '', u);
-        } else if (caMarksTab && caMarksPane && summaryTab && summaryPane) {
-            caMarksTab.classList.remove('active');
-            caMarksTab.setAttribute('aria-selected', 'false');
-            caMarksPane.classList.remove('show', 'active');
+        } else if (summaryTab && summaryPane) {
+            if (caMarksTab && caMarksPane) {
+                caMarksTab.classList.remove('active');
+                caMarksTab.setAttribute('aria-selected', 'false');
+                caMarksPane.classList.remove('show', 'active');
+            }
             if (midtermTab && midtermPane) {
                 midtermTab.classList.remove('active');
                 midtermTab.setAttribute('aria-selected', 'false');

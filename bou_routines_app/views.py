@@ -11907,13 +11907,23 @@ def _apply_theory_final_exam_q_fields(final_mark, teacher_role, marks_data):
     Apply Q1..Q7 from marks_data to the right teacher_* fields.
     Only updates a column when the key is present so sparse requests never wipe
     other questions (e.g. mid-edit auto-save with only one Q filled in).
+
+    If a full row POST sets all seven Qs to 0, treat as unset (NULL). That pattern
+    is legacy UI/default fill, not a valid entry under group rules (at most five
+    questions can be entered).
     """
     prefix = {'teacher1': 'teacher1', 'teacher2': 'teacher2', 'teacher3': 'teacher3'}.get(teacher_role, 'teacher1')
+    parsed = {}
     for i in range(1, 8):
         k = f'q{i}'
         if k not in marks_data:
             continue
-        val = _parse_final_exam_q_mark(marks_data.get(k))
+        parsed[i] = _parse_final_exam_q_mark(marks_data.get(k))
+    if len(parsed) == 7 and all(v == 0 for v in parsed.values()):
+        for i in range(1, 8):
+            setattr(final_mark, f'{prefix}_q{i}', None)
+        return
+    for i, val in parsed.items():
         setattr(final_mark, f'{prefix}_q{i}', val)
 
 

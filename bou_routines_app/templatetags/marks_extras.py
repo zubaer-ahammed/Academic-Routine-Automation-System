@@ -19,7 +19,12 @@ def final_exam_q_value(final_mark, teacher_role, q_index):
         prefix = 'teacher3'
     else:
         prefix = 'teacher1'
-    val = getattr(final_mark, f'{prefix}_q{int(q_index)}', None)
+    vals = [getattr(final_mark, f'{prefix}_q{i}', None) for i in range(1, 8)]
+    # Legacy/default fill wrote 0 in every Q for unused examiner columns — show blank.
+    # Intentional marks never set all seven to 0 (group rules allow at most five entered).
+    if vals and all(v is not None and float(v) == 0 for v in vals):
+        return ''
+    val = vals[int(q_index) - 1] if 1 <= int(q_index) <= 7 else None
     if val is None:
         return ''
     return str(int(float(val)))

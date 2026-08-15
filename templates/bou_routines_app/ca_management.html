@@ -685,7 +685,10 @@
 
     .header-buttons {
         display: flex;
+        flex-wrap: wrap;
         gap: 10px;
+        justify-content: flex-end;
+        align-items: center;
     }
 
     .header-buttons .btn {
@@ -719,6 +722,19 @@
     
     .header-buttons .btn-outline-primary:hover {
         background: #007bff;
+        color: white;
+        transform: translateY(-1px);
+    }
+
+    .header-buttons .btn-outline-secondary {
+        border: 2px solid #6c757d;
+        color: #6c757d;
+        background: transparent;
+        padding: 10px 20px;
+    }
+
+    .header-buttons .btn-outline-secondary:hover {
+        background: #6c757d;
         color: white;
         transform: translateY(-1px);
     }
@@ -1436,6 +1452,25 @@
                         <a href="{% url 'ca-management' %}?{% if selected_centre_id %}centre={{ selected_centre_id }}&{% endif %}{% if selected_semester_id %}semester={{ selected_semester_id }}&{% endif %}{% if selected_course_id %}course={{ selected_course_id }}&{% endif %}{% if selected_term %}term={{ selected_term|urlencode }}&{% endif %}{% if selected_session %}session={{ selected_session|urlencode }}{% endif %}" class="btn btn-primary">
                             <i class="fas fa-chart-line"></i> Marks Distribution
                         </a>
+                        {% if is_admin and selected_semester_id and selected_centre_id %}
+                        <div class="dropdown d-inline-block">
+                            <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="exportTabulationDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-table"></i> Tabulation Sheet
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="exportTabulationDropdown">
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'export-tabulation-pdf' %}?semester={{ selected_semester_id }}&centre={{ selected_centre_id }}{% if selected_session %}&session={{ selected_session|urlencode }}{% endif %}">
+                                        <i class="fas fa-file-pdf text-danger"></i> PDF
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'export-tabulation-excel' %}?semester={{ selected_semester_id }}&centre={{ selected_centre_id }}{% if selected_session %}&session={{ selected_session|urlencode }}{% endif %}">
+                                        <i class="fas fa-file-excel text-success"></i> Excel
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
 

@@ -2,6 +2,7 @@ from django.urls import path
 from . import views
 from . import assign_views
 from . import impersonation_views
+from . import tabulation_views
 
 urlpatterns = [
     path('', views.attendance_calendar, name='home'),
@@ -54,6 +55,8 @@ urlpatterns = [
     path('marks/export-final-exam-excel/', views.export_final_exam_excel, name='export-final-exam-excel'),
     path('marks/export-final-exam-summary-pdf/', views.export_final_exam_summary_pdf, name='export-final-exam-summary-pdf'),
     path('marks/export-final-exam-summary-excel/', views.export_final_exam_summary_excel, name='export-final-exam-summary-excel'),
+    path('marks/export-tabulation-pdf/', tabulation_views.export_tabulation_pdf, name='export-tabulation-pdf'),
+    path('marks/export-tabulation-excel/', tabulation_views.export_tabulation_excel, name='export-tabulation-excel'),
     path('marks/assign-evaluator/', views.assign_evaluator, name='assign-evaluator'),
     path('marks/assign-chairman/', views.assign_chairman, name='assign-chairman-api'),
 

@@ -102,9 +102,8 @@ def _assign_filter_context(request):
             reverse=True,
         )
 
-    teachers = Teacher.objects.all().order_by('name')
-    if selected_centre:
-        teachers = teachers.filter(centre=selected_centre)
+    # Teacher pickers list all centres (e.g. DRC + DUET); Study Centre only scopes courses/offerings.
+    teachers = Teacher.objects.select_related('centre').order_by('name')
 
     return {
         'curricula': curricula,

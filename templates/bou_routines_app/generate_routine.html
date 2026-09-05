@@ -1973,13 +1973,13 @@
                 }
                 
                 if (isEmptyCell) {
-                    // Creating new entry
-                    ajaxData['date'] = cell.data('date');
-                    ajaxData['day'] = cell.data('day');
-                    ajaxData['time_slot'] = cell.data('time-slot');
+                    // Creating new entry — prefer attributes (authoritative) over jQuery .data() cache
+                    ajaxData['date'] = cell.attr('data-date') || cell.data('date');
+                    ajaxData['day'] = cell.attr('data-day') || cell.data('day');
+                    ajaxData['time_slot'] = cell.attr('data-time-slot') || cell.data('time-slot');
                     ajaxData['semester_id'] = $('#semester').val();
-                    ajaxData['start_time'] = cell.data('start-time');
-                    ajaxData['end_time'] = cell.data('end-time');
+                    ajaxData['start_time'] = cell.attr('data-start-time') || cell.data('start-time');
+                    ajaxData['end_time'] = cell.attr('data-end-time') || cell.data('end-time');
                 } else {
                     // Updating existing entry
                     ajaxData['routine_id'] = routineId;
@@ -2116,27 +2116,35 @@
                             // Get date from the first td's data-date attribute (correct format)
                             const date = cell.closest('tr').find('td:first').attr('data-date');
                             const day = cell.closest('tr').find('td:nth-child(2)').text();
-                            const timeSlot = cell.index() - 2; // -2 for date/day columns
 
-                            // Get time information from the table header
+                            // Resolve times from header using colspan-aware column index
                             const ths = document.querySelectorAll('.generate-routine-table thead tr:nth-child(2) th');
-                            const th = ths[timeSlot + 2]; // +2 to skip date/day columns
-                            let startTime = '';
-                            let endTime = '';
-                            if (th) {
-                                startTime = th.getAttribute('data-start-time') || '';
-                                endTime = th.getAttribute('data-end-time') || '';
+                            let col = 0;
+                            const trEl = cell.closest('tr')[0];
+                            for (const sibling of trEl.children) {
+                                if (sibling === cell[0]) break;
+                                if (sibling.cellIndex < 2) continue;
+                                col += parseInt(sibling.getAttribute('colspan') || '1', 10);
                             }
+                            const th = ths[col + 2];
+                            let startTime = th ? (th.getAttribute('data-start-time') || '') : '';
+                            let endTime = th ? (th.getAttribute('data-end-time') || '') : '';
                             
                             cell.removeClass('course-cell bg-primary text-white').addClass('empty-cell');
                             cell.removeAttr('data-routine-id data-course-id');
                             cell.attr({
                                 'data-date': date,
                                 'data-day': day,
-                                'data-time-slot': timeSlot,
+                                'data-time-slot': col,
                                 'data-start-time': startTime,
                                 'data-end-time': endTime
                             });
+                            // Keep jQuery data cache in sync with attributes (save-course reads .data())
+                            cell.data('date', date);
+                            cell.data('day', day);
+                            cell.data('time-slot', col);
+                            cell.data('start-time', startTime);
+                            cell.data('end-time', endTime);
                             cell.css('background-color', '#f8f9fa');
                             
                             // Update the display
@@ -2182,9 +2190,8 @@
                 });
             });
 
-            // Get all time slot headers (skip first two th for date/day)
+            // Parse time-slot header labels into data-start-time / data-end-time
             const ths = document.querySelectorAll('.generate-routine-table thead tr:nth-child(2) th');
-            // Add data-start-time and data-end-time to each time slot header by parsing the label
             ths.forEach(function(th, idx) {
                 if (idx < 2) return; // skip date/day columns
                 const label = th.textContent.trim();
@@ -2194,15 +2201,31 @@
                     th.setAttribute('data-end-time', match[2]);
                 }
             });
-            // For each empty cell, set start/end time from header if missing
+
+            // Map an empty cell to the correct header column, accounting for colspan
+            // of earlier cells (cell index ≠ column index when courses span multiple slots).
+            function headerTimesForEmptyCell(td) {
+                const tr = td.closest('tr');
+                if (!tr) return { startTime: '', endTime: '' };
+                let col = 0; // 0-based index among Class Hour columns
+                for (const sibling of tr.children) {
+                    if (sibling === td) break;
+                    // Skip Date + Day columns
+                    if (sibling.cellIndex < 2) continue;
+                    col += parseInt(sibling.getAttribute('colspan') || '1', 10);
+                }
+                const th = ths[col + 2]; // +2 for date/day header cells
+                return {
+                    startTime: th ? (th.getAttribute('data-start-time') || '') : '',
+                    endTime: th ? (th.getAttribute('data-end-time') || '') : '',
+                };
+            }
+
             document.querySelectorAll('.empty-cell').forEach(function(td) {
-                const slotIdx = parseInt(td.getAttribute('data-time-slot'), 10);
-                const th = ths[slotIdx + 2]; // +2 to skip date/day columns
-                if (th) {
-                    if (!td.getAttribute('data-start-time') || !td.getAttribute('data-end-time')) {
-                        td.setAttribute('data-start-time', th.getAttribute('data-start-time'));
-                        td.setAttribute('data-end-time', th.getAttribute('data-end-time'));
-                    }
+                if (!td.getAttribute('data-start-time') || !td.getAttribute('data-end-time')) {
+                    const times = headerTimesForEmptyCell(td);
+                    if (times.startTime) td.setAttribute('data-start-time', times.startTime);
+                    if (times.endTime) td.setAttribute('data-end-time', times.endTime);
                 }
             });
         });

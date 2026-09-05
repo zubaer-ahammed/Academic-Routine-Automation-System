@@ -777,7 +777,14 @@ def generate_routine(request):
                                     found = True
                                     break
                             if not found:
-                                row_cells.append({'content': '', 'colspan': 1, 'is_lunch_break': False})
+                                # Keep slot times so "Click to add course" saves into the correct window
+                                row_cells.append({
+                                    'content': '',
+                                    'colspan': 1,
+                                    'is_lunch_break': False,
+                                    'start_time': slot_start,
+                                    'end_time': slot_end,
+                                })
                                 slot_idx += 1
                         routine_table_rows.append({'date': date, 'day': day, 'cells': row_cells})
 
@@ -1461,9 +1468,22 @@ def generate_routine(request):
                     if not found:
                         # If this is a makeup/reserved date, show 'Reserved Class'
                         if date in makeup_dates:
-                            row_cells.append({'content': 'Review Class', 'colspan': 1, 'is_makeup_class': True})
+                            row_cells.append({
+                                'content': 'Review Class',
+                                'colspan': 1,
+                                'is_makeup_class': True,
+                                'start_time': slot_start,
+                                'end_time': slot_end,
+                            })
                         else:
-                            row_cells.append({'content': '', 'colspan': 1, 'is_lunch_break': False})
+                            # Keep slot times so "Click to add course" saves into the correct window
+                            row_cells.append({
+                                'content': '',
+                                'colspan': 1,
+                                'is_lunch_break': False,
+                                'start_time': slot_start,
+                                'end_time': slot_end,
+                            })
                         slot_idx += 1
                 routine_table_rows.append({'date': date, 'day': day, 'cells': row_cells})
 
@@ -2770,7 +2790,14 @@ def download_routines(request):
                             found = True
                             break
                     if not found:
-                        row_cells.append({'content': '', 'colspan': 1, 'is_lunch_break': False})
+                        # Keep slot times so "Click to add course" saves into the correct window
+                        row_cells.append({
+                            'content': '',
+                            'colspan': 1,
+                            'is_lunch_break': False,
+                            'start_time': slot_start,
+                            'end_time': slot_end,
+                        })
                         slot_idx += 1
                 routine_table_rows.append({'date': date, 'day': day, 'cells': row_cells})
             

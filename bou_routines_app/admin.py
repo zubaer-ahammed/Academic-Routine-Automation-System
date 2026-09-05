@@ -904,8 +904,14 @@ class SemesterAdmin(admin.ModelAdmin):
             'fields': ('lunch_break_start', 'lunch_break_end', 'start_date', 'end_date')
         }),
         ('Dates', {
-            'fields': ('holidays', 'makeup_dates'),
-            'description': 'Comma-separated dates in YYYY-MM-DD format'
+            'fields': (
+                'holidays',
+                'makeup_dates',
+                'mid_term_exam_dates',
+                'cse_tech_carnival_date',
+                'cultural_fest_date',
+            ),
+            'description': 'Holidays/makeup/mid-term: comma-separated YYYY-MM-DD. Carnival/Fest: single dates (New curriculum).'
         }),
     )
 

@@ -330,6 +330,22 @@
                 <input type="hidden" name="makeup_date_list" id="makeup_date_list">
             </div>
 
+            {% if selected_curriculum and selected_curriculum.code != 'OLD' %}
+            <div class="mb-3" id="newCurriculumSpecialEventsSection">
+                <label class="form-label">Special Events <small class="text-muted">(New curriculum — after makeup/review; SEFE starts 1 week after the latest of these)</small></label>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label for="cse_tech_carnival_date" class="form-label small mb-1">CSE Tech Carnival</label>
+                        <input type="text" name="cse_tech_carnival_date" id="cse_tech_carnival_date" class="form-control" placeholder="Select date" value="{% if selected_semester and selected_semester.cse_tech_carnival_date %}{{ selected_semester.cse_tech_carnival_date|date:'Y-m-d' }}{% endif %}">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="cultural_fest_date" class="form-label small mb-1">Cultural Fest</label>
+                        <input type="text" name="cultural_fest_date" id="cultural_fest_date" class="form-control" placeholder="Select date" value="{% if selected_semester and selected_semester.cultural_fest_date %}{{ selected_semester.cultural_fest_date|date:'Y-m-d' }}{% endif %}">
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
             <div class="mb-3" id="lunchBreakSection">
                 <label class="form-label">Lunch Break</label>
                 <div class="row">
@@ -514,6 +530,8 @@
                                         {% if cell.content %}
                                             {% if cell.is_mid_term_exam %}
                                                 <td colspan="{{ cell.colspan }}" class="bg-info text-white text-center align-middle fw-bold">{{ cell.content }}</td>
+                                            {% elif cell.is_special_event %}
+                                                <td colspan="{{ cell.colspan }}" class="bg-light text-center align-middle fw-bold border">{{ cell.content }}</td>
                                             {% elif cell.is_lunch_break %}
                                                 <td colspan="{{ cell.colspan }}" class="bg-warning bg-opacity-25 text-center align-middle fw-bold">{{ cell.content }}</td>
                                             {% else %}
@@ -912,6 +930,14 @@
                     });
                 }
             });
+
+            // New curriculum special events (single dates after makeup)
+            if ($('#cse_tech_carnival_date').length) {
+                $('#cse_tech_carnival_date').flatpickr({ dateFormat: 'Y-m-d', allowInput: true });
+            }
+            if ($('#cultural_fest_date').length) {
+                $('#cultural_fest_date').flatpickr({ dateFormat: 'Y-m-d', allowInput: true });
+            }
 
             // Allow removing individual makeup dates by clicking on the x icon
             $(document).on('click', '#selectedMakeupDates .badge .bi-x-circle', function(e) {
@@ -1400,6 +1426,24 @@
                                 // Clear the hidden input and visual display
                                 $('#mid_term_exam_date_list').val('');
                                 $('#selectedMidTermExamDates').empty();
+                            }
+
+                            // New curriculum: CSE Tech Carnival / Cultural Fest
+                            const carnivalPicker = $('#cse_tech_carnival_date')[0] && $('#cse_tech_carnival_date')[0]._flatpickr;
+                            if (carnivalPicker) {
+                                if (data.cse_tech_carnival_date) {
+                                    carnivalPicker.setDate(data.cse_tech_carnival_date, true);
+                                } else {
+                                    carnivalPicker.clear();
+                                }
+                            }
+                            const festPicker = $('#cultural_fest_date')[0] && $('#cultural_fest_date')[0]._flatpickr;
+                            if (festPicker) {
+                                if (data.cultural_fest_date) {
+                                    festPicker.setDate(data.cultural_fest_date, true);
+                                } else {
+                                    festPicker.clear();
+                                }
                             }
 
                             // Fetch and display existing routines for this semester

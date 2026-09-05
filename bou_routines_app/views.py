@@ -190,6 +190,18 @@ def _default_new_curriculum(curricula_qs):
     return c, (c.id if c else None)
 
 
+def _new_curriculum_special_event_labels(semester):
+    """CSE Tech Carnival / Cultural Fest labels keyed by date (New curriculum only)."""
+    labels = {}
+    if not semester or not semester.curriculum or semester.curriculum.code == 'OLD':
+        return labels
+    if semester.cse_tech_carnival_date:
+        labels[semester.cse_tech_carnival_date] = 'CSE Tech Carnival'
+    if semester.cultural_fest_date:
+        labels[semester.cultural_fest_date] = 'Cultural Fest'
+    return labels
+
+
 # Marks / attendance filters: prefer this term when present (GET default, no explicit `term=`).
 _MARKS_ATTENDANCE_DEFAULT_TERM_CANDIDATES = ("251 Term", "251")
 
@@ -632,6 +644,24 @@ def generate_routine(request):
                                 if not date_already_exists:
                                     unique_dates.append((makeup_date, day_name))
 
+                    # New curriculum special events for existing routines display
+                    if selected_semester.curriculum and selected_semester.curriculum.code != 'OLD':
+                        for special_date in (
+                            selected_semester.cse_tech_carnival_date,
+                            selected_semester.cultural_fest_date,
+                        ):
+                            if not special_date:
+                                continue
+                            day_name = special_date.strftime('%A')
+                            if day_name not in ['Friday', 'Saturday']:
+                                continue
+                            date_str = special_date.strftime('%Y-%m-%d')
+                            date_already_exists = any(
+                                date[0].strftime('%Y-%m-%d') == date_str for date in unique_dates
+                            )
+                            if not date_already_exists:
+                                unique_dates.append((special_date, day_name))
+
                     # Add mid-term exam dates to unique_dates for existing routines display (only for new curriculum)
                     if selected_semester.mid_term_exam_dates and selected_semester.curriculum and selected_semester.curriculum.code != 'OLD':
                         mid_term_exam_dates = [
@@ -735,6 +765,17 @@ def generate_routine(request):
                             row_cells.append({'content': 'Mid-Term Exam', 'colspan': total_colspan, 'is_mid_term_exam': True})
                             routine_table_rows.append({'date': date, 'day': day, 'cells': row_cells})
                             continue  # Skip the rest of the loop for this date
+
+                        special_labels = _new_curriculum_special_event_labels(selected_semester)
+                        if date in special_labels:
+                            total_colspan = len(slot_ranges) or 1
+                            row_cells.append({
+                                'content': special_labels[date],
+                                'colspan': total_colspan,
+                                'is_special_event': True,
+                            })
+                            routine_table_rows.append({'date': date, 'day': day, 'cells': row_cells})
+                            continue
                         
                         routines = routines_by_date.get((date, day), [])
                         routines_for_row = routines.copy()
@@ -898,6 +939,30 @@ def generate_routine(request):
                 elif mid_term_exam_dates == '':
                     # Clear mid-term exam dates if empty string is sent
                     selected_semester.mid_term_exam_dates = None
+
+                # New curriculum special events (after makeup; push SEFE)
+                carnival_raw = (request.POST.get('cse_tech_carnival_date') or '').strip()
+                if carnival_raw:
+                    try:
+                        selected_semester.cse_tech_carnival_date = datetime.strptime(
+                            carnival_raw, "%Y-%m-%d"
+                        ).date()
+                    except ValueError:
+                        messages.error(request, "Invalid CSE Tech Carnival date.")
+                elif 'cse_tech_carnival_date' in request.POST:
+                    selected_semester.cse_tech_carnival_date = None
+
+                fest_raw = (request.POST.get('cultural_fest_date') or '').strip()
+                if fest_raw:
+                    try:
+                        selected_semester.cultural_fest_date = datetime.strptime(
+                            fest_raw, "%Y-%m-%d"
+                        ).date()
+                    except ValueError:
+                        messages.error(request, "Invalid Cultural Fest date.")
+                elif 'cultural_fest_date' in request.POST:
+                    selected_semester.cultural_fest_date = None
+
                 selected_semester.save()
                 #messages.success(request, f"Updated lunch break for {selected_semester.name} to {lunch_break_start} - {lunch_break_end}")
             except Exception as e:
@@ -1227,6 +1292,12 @@ def generate_routine(request):
 
             # Build a set of makeup/reserve dates
             makeup_dates_set = set(makeup_dates)
+            # New curriculum special events — no classes scheduled on these dates
+            if selected_semester.curriculum and selected_semester.curriculum.code != 'OLD':
+                if selected_semester.cse_tech_carnival_date:
+                    makeup_dates_set.add(selected_semester.cse_tech_carnival_date)
+                if selected_semester.cultural_fest_date:
+                    makeup_dates_set.add(selected_semester.cultural_fest_date)
             # Build a set of holiday dates
             holiday_dates_set = set(holiday_dates)
             # Build a set of mid-term exam dates
@@ -1340,8 +1411,25 @@ def generate_routine(request):
                             if not date_already_exists:
                                 unique_dates.append((mid_term_date, day_name))
 
-                # Sort again after adding makeup and mid-term exam dates
-                unique_dates.sort(key=lambda x: x[0])
+            # New curriculum: CSE Tech Carnival / Cultural Fest rows (after makeup)
+            if selected_semester.curriculum and selected_semester.curriculum.code != 'OLD':
+                for special_date in (
+                    selected_semester.cse_tech_carnival_date,
+                    selected_semester.cultural_fest_date,
+                ):
+                    if not special_date:
+                        continue
+                    day_name = special_date.strftime('%A')
+                    if day_name not in ['Friday', 'Saturday']:
+                        continue
+                    date_str = special_date.strftime('%Y-%m-%d')
+                    date_already_exists = any(
+                        date[0].strftime('%Y-%m-%d') == date_str for date in unique_dates
+                    )
+                    if not date_already_exists:
+                        unique_dates.append((special_date, day_name))
+
+            unique_dates.sort(key=lambda x: x[0])
 
             # --- NEW: Build merged time slot structure ---
             # 1. Collect all unique time boundaries (start and end times)
@@ -1419,6 +1507,17 @@ def generate_routine(request):
                     row_cells.append({'content': 'Mid-Term Exam', 'colspan': total_colspan, 'is_mid_term_exam': True})
                     routine_table_rows.append({'date': date, 'day': day, 'cells': row_cells})
                     continue  # Skip the rest of the loop for this date
+
+                special_labels = _new_curriculum_special_event_labels(selected_semester)
+                if date in special_labels:
+                    total_colspan = len(slot_ranges) or 1
+                    row_cells.append({
+                        'content': special_labels[date],
+                        'colspan': total_colspan,
+                        'is_special_event': True,
+                    })
+                    routine_table_rows.append({'date': date, 'day': day, 'cells': row_cells})
+                    continue
                 
                 # Use filtered slot_ranges
                 # For this date, get all routines (by start/end)
@@ -1616,6 +1715,10 @@ def generate_routine(request):
             "routine_table_rows": routine_table_rows,
             "time_slot_labels": time_slot_labels,
             "makeup_dates": makeup_dates,  # <-- Add this line
+            "special_event_labels": (
+                _new_curriculum_special_event_labels(selected_semester)
+                if selected_semester else {}
+            ),
         })
 
     # Include the selected semester ID if available in POST
@@ -2002,6 +2105,14 @@ def get_semester_courses(request):
                     'holidays': holidays_info,
                     'makeup_dates': makeup_dates_info,
                     'mid_term_exam_dates': mid_term_exam_dates_info,
+                    'cse_tech_carnival_date': (
+                        semester.cse_tech_carnival_date.strftime('%Y-%m-%d')
+                        if semester.cse_tech_carnival_date else None
+                    ),
+                    'cultural_fest_date': (
+                        semester.cultural_fest_date.strftime('%Y-%m-%d')
+                        if semester.cultural_fest_date else None
+                    ),
                     'semester_data': semester_data
                 })
             except Semester.DoesNotExist:
@@ -2499,9 +2610,16 @@ def export_to_excel(request, semester_id):
                 for date in selected_semester.makeup_dates.split(',')
                 if date.strip()
             ]
-        # Build a dict for quick lookup of routines by date
         routines_by_date = {date: day for date, day in unique_dates_days}
         all_dates = set(routines_by_date.keys()) | set(makeup_dates)
+        special_event_labels = {}
+        if selected_semester.curriculum and selected_semester.curriculum.code != 'OLD':
+            if selected_semester.cse_tech_carnival_date:
+                all_dates.add(selected_semester.cse_tech_carnival_date)
+                special_event_labels[selected_semester.cse_tech_carnival_date] = 'CSE Tech Carnival'
+            if selected_semester.cultural_fest_date:
+                all_dates.add(selected_semester.cultural_fest_date)
+                special_event_labels[selected_semester.cultural_fest_date] = 'Cultural Fest'
         sorted_dates = sorted(all_dates)
         # Write data with merging
         row = 3
@@ -2510,6 +2628,19 @@ def export_to_excel(request, semester_id):
             is_even_row = (date_idx % 2 == 1)
             worksheet.write(row, 0, date, date_format if not is_even_row else even_row_bg_format)
             worksheet.write(row, 1, day, cell_format if not is_even_row else even_row_bg_format)
+
+            if date in special_event_labels:
+                label = special_event_labels[date]
+                if len(slot_ranges) > 1:
+                    worksheet.merge_range(
+                        row, 2, row, 1 + len(slot_ranges),
+                        label,
+                        cell_format if not is_even_row else even_row_bg_format,
+                    )
+                elif len(slot_ranges) == 1:
+                    worksheet.write(row, 2, label, cell_format if not is_even_row else even_row_bg_format)
+                row += 1
+                continue
             # Build routines for this row
             routines_for_row = []
             for r in routines:
@@ -3217,6 +3348,14 @@ def export_to_pdf(request, semester_id):
             ]
         day_by_date = {date: day for date, day in unique_dates_days}
         all_dates = set(day_by_date.keys()) | set(makeup_dates) | set(mid_term_exam_dates)
+        special_event_labels = {}
+        if selected_semester.curriculum and selected_semester.curriculum.code != 'OLD':
+            if selected_semester.cse_tech_carnival_date:
+                all_dates.add(selected_semester.cse_tech_carnival_date)
+                special_event_labels[selected_semester.cse_tech_carnival_date] = 'CSE Tech Carnival'
+            if selected_semester.cultural_fest_date:
+                all_dates.add(selected_semester.cultural_fest_date)
+                special_event_labels[selected_semester.cultural_fest_date] = 'Cultural Fest'
         sorted_dates = sorted(all_dates)
 
         for row_idx, date in enumerate(sorted_dates, start=1):
@@ -3246,6 +3385,25 @@ def export_to_pdf(request, semester_id):
                     span_commands.append(('SPAN', (2, row_idx), (1 + len(slot_ranges), row_idx)))
                 table_data.append(row)
                 continue  # Skip the rest of the loop for this date
+
+            if date in special_event_labels:
+                special_content = Paragraph(special_event_labels[date], ParagraphStyle(
+                    'SpecialEvent',
+                    fontName='Helvetica-Bold',
+                    fontSize=10,
+                    alignment=TA_CENTER,
+                    textColor=colors.black,
+                    leading=12,
+                    spaceBefore=0,
+                    spaceAfter=0,
+                ))
+                row.append(special_content)
+                for _ in range(len(slot_ranges) - 1):
+                    row.append(None)
+                if len(slot_ranges) > 0:
+                    span_commands.append(('SPAN', (2, row_idx), (1 + len(slot_ranges), row_idx)))
+                table_data.append(row)
+                continue
             # Build routines_for_row: all routines for this date, plus lunch break if present
             routines_for_row = []
             for r in routines:
@@ -3707,6 +3865,8 @@ def export_academic_calendar_pdf(request, semester_id):
             'final_exam': colors.HexColor('#D3D3D3'),  # Light Gray
             'holiday': colors.HexColor('#FF6B6B'),  # Red
             'makeup_class': colors.HexColor('#FFFF99'),  # Light Yellow
+            'cse_tech_carnival': colors.HexColor('#D8BFD8'),  # Thistle
+            'cultural_fest': colors.HexColor('#FFDAB9'),  # Peach
             'tutorial': colors.HexColor('#DDA0DD'),  # Plum
         }
 
@@ -4075,13 +4235,33 @@ def export_academic_calendar_pdf(request, semester_id):
                         add_event_to_calendar(makeup_date, 'makeup_class', 'Review Class')
                         if latest_makeup_date is None or makeup_date > latest_makeup_date:
                             latest_makeup_date = makeup_date
-                
-                # Set Tentative Semester Final Exam date - mark 4 weeks starting from the first exam week
+
+                # New curriculum: CSE Tech Carnival / Cultural Fest after makeup; push SEFE
+                sefe_anchor_dates = []
                 if latest_makeup_date:
-                    # If there are makeup classes, final exam is 1 week after the latest makeup date
-                    final_exam_week = latest_makeup_date + timedelta(weeks=1)
+                    sefe_anchor_dates.append(latest_makeup_date)
+                if is_new_curriculum:
+                    if selected_semester.cse_tech_carnival_date:
+                        add_event_to_calendar(
+                            selected_semester.cse_tech_carnival_date,
+                            'cse_tech_carnival',
+                            'CSE Tech Carnival',
+                        )
+                        sefe_anchor_dates.append(selected_semester.cse_tech_carnival_date)
+                    if selected_semester.cultural_fest_date:
+                        add_event_to_calendar(
+                            selected_semester.cultural_fest_date,
+                            'cultural_fest',
+                            'Cultural Fest',
+                        )
+                        sefe_anchor_dates.append(selected_semester.cultural_fest_date)
+
+                # Set Tentative Semester Final Exam date - mark 4 weeks starting from the first exam week
+                if sefe_anchor_dates:
+                    # 1 week after the latest of makeup / carnival / cultural fest
+                    final_exam_week = max(sefe_anchor_dates) + timedelta(weeks=1)
                 else:
-                    # If no makeup classes, final exam is 1 week after semester end
+                    # If no makeup/special events, final exam is 1 week after semester end
                     final_exam_week = semester_end + timedelta(weeks=1)
                 
                 # Calculate the end of the 4-week final exam period
@@ -4244,6 +4424,10 @@ def export_academic_calendar_pdf(request, semester_id):
                                     friday_str += ' (SEFE)'
                                 elif event_type == 'makeup_class':
                                     friday_str += ' (RC)'
+                                elif event_type == 'cse_tech_carnival':
+                                    friday_str += ' (CTC)'
+                                elif event_type == 'cultural_fest':
+                                    friday_str += ' (CF)'
                                 # Skip holiday type here since we already checked above
                     
                     if saturday_day:
@@ -4275,6 +4459,10 @@ def export_academic_calendar_pdf(request, semester_id):
                                     saturday_str += ' (SEFE)'
                                 elif event_type == 'makeup_class':
                                     saturday_str += ' (RC)'
+                                elif event_type == 'cse_tech_carnival':
+                                    saturday_str += ' (CTC)'
+                                elif event_type == 'cultural_fest':
+                                    saturday_str += ' (CF)'
                                 # Skip holiday type here since we already checked above
                     
                     week_data.extend([friday_str, saturday_str])
@@ -4765,80 +4953,64 @@ def export_academic_calendar_pdf(request, semester_id):
         
         # Check if this is new curriculum for legend
         is_new_curriculum_legend = selected_semester.curriculum and selected_semester.curriculum.code != 'OLD'
-        
+        # New curriculum has more legend items (CTC/CF) — use a smaller font so labels fit.
+        # Old curriculum keeps the original size 9.
+        legend_fs = 7.5 if is_new_curriculum_legend else 9
+
+        def _legend_box(label, bg_color, font_size=legend_fs):
+            return Table([[label]], style=TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), bg_color),
+                ('FONTSIZE', (0, 0), (-1, -1), font_size),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('BOX', (0, 0), (-1, -1), 1, colors.black),
+                ('LEFTPADDING', (0, 0), (-1, -1), 1 if is_new_curriculum_legend else 2),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 1 if is_new_curriculum_legend else 2),
+                ('TOPPADDING', (0, 0), (-1, -1), 2),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ]))
+
         # Create single-row legend with all items
         legend_data = [[
-            Table([['First Day of Classes (FDC)']], style=TableStyle([
-                ('BACKGROUND', (0,0), (-1,-1), colors_dict['semester_begin']),
-                ('FONTSIZE', (0,0), (-1,-1), 9),
-                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                ('BOX', (0,0), (-1,-1), 1, colors.black),
-            ])),
+            _legend_box('First Day of Classes (FDC)', colors_dict['semester_begin']),
         ]]
-        
+
         # Add Class Test or Mid-Term Exam based on curriculum
         if is_new_curriculum_legend:
-            legend_data[0].append(Table([['Mid-Term Exam (MT)']], style=TableStyle([
-                ('BACKGROUND', (0,0), (-1,-1), colors_dict['mid_term_exam']),
-                ('FONTSIZE', (0,0), (-1,-1), 9),
-                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                ('BOX', (0,0), (-1,-1), 1, colors.black),
-            ])))
+            legend_data[0].append(_legend_box('Mid-Term Exam (MT)', colors_dict['mid_term_exam']))
         else:
-            legend_data[0].append(Table([['Class Test (CT)']], style=TableStyle([
-                ('BACKGROUND', (0,0), (-1,-1), colors_dict['class_test']),
-                ('FONTSIZE', (0,0), (-1,-1), 9),
-                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                ('BOX', (0,0), (-1,-1), 1, colors.black),
-            ])))
-        
+            legend_data[0].append(_legend_box('Class Test (CT)', colors_dict['class_test']))
+
         # Continue with the rest of the legend
         legend_data[0].extend([
-            Table([['Assignment (Assn.)']], style=TableStyle([
-                ('BACKGROUND', (0,0), (-1,-1), colors_dict['assignment']),
-                ('FONTSIZE', (0,0), (-1,-1), 9),
-                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                ('BOX', (0,0), (-1,-1), 1, colors.black),
-            ])),
-            Table([['Last Day of Classes (LDC)']], style=TableStyle([
-                ('BACKGROUND', (0,0), (-1,-1), colors_dict['semester_end']),
-                ('FONTSIZE', (0,0), (-1,-1), 9),
-                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                ('BOX', (0,0), (-1,-1), 1, colors.black),
-            ])),
-            Table([['Semester-end Final Examination (SEFE)']], style=TableStyle([
-                ('BACKGROUND', (0,0), (-1,-1), colors_dict['final_exam']),
-                ('FONTSIZE', (0,0), (-1,-1), 9),
-                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                ('BOX', (0,0), (-1,-1), 1, colors.black),
-            ])),
-            Table([['Review Class (RC)']], style=TableStyle([
-                ('BACKGROUND', (0,0), (-1,-1), colors_dict['makeup_class']),
-                ('FONTSIZE', (0,0), (-1,-1), 9),
-                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                ('BOX', (0,0), (-1,-1), 1, colors.black),
-            ])),
+            _legend_box('Assignment (Assn.)', colors_dict['assignment']),
+            _legend_box('Last Day of Classes (LDC)', colors_dict['semester_end']),
+            _legend_box('Semester-end Final Examination (SEFE)', colors_dict['final_exam']),
+            _legend_box('Review Class (RC)', colors_dict['makeup_class']),
         ])
+
+        if is_new_curriculum_legend:
+            legend_data[0].extend([
+                _legend_box('CSE Tech Carnival (CTC)', colors_dict['cse_tech_carnival']),
+                _legend_box('Cultural Fest (CF)', colors_dict['cultural_fest']),
+            ])
         
-        # Calculate column widths to match calendar width - 6 columns now (Holiday removed)
-        # Use proportional widths: smaller for short items, larger for "Semester-end Final Examination (SEFE)"
-        # Widths: FDC, MT/CT, Assn., LDC, SEFE, RC
+        # Calculate column widths to match calendar width
+        # Widths: FDC, MT/CT, Assn., LDC, SEFE, RC [, CTC, CF for new]
         base_width = calendar_width / 10
         legend_col_widths = [
             base_width * 1.25,  # First Day of Classes (FDC)
-            base_width * 1.0,  # Mid-Term Exam (MT) or Class Test (CT) - reduced
-            base_width * 1.0,  # Assignment (Assn.) - reduced
+            base_width * 1.0,  # Mid-Term Exam (MT) or Class Test (CT)
+            base_width * 1.0,  # Assignment (Assn.)
             base_width * 1.2,  # Last Day of Classes (LDC)
-            base_width * 1.8,  # Semester-end Final Examination (SEFE) - increased
+            base_width * 1.8,  # Semester-end Final Examination (SEFE)
             base_width * 0.9,  # Review Class (RC)
         ]
+        if is_new_curriculum_legend:
+            legend_col_widths.extend([
+                base_width * 1.1,  # CSE Tech Carnival (CTC)
+                base_width * 0.9,  # Cultural Fest (CF)
+            ])
         # Normalize to match calendar width
         total_width = sum(legend_col_widths)
         legend_col_widths = [w * calendar_width / total_width for w in legend_col_widths]

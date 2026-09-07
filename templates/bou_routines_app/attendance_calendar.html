@@ -2485,14 +2485,16 @@ function loadStudentSessionsSelect(semesterId, preserveSession) {
                            (o) => o.value === String(semId)
                        );
                    }
-                   function reloadCoursesIfSemesterValid(semId) {
-                       if (semId && semesterOptionExists(semId)) {
-                           loadCoursesForSemester(String(semId));
-                       }
-                   }
                    const activeSemesterId = preserveSemesterId
                        ? String(preserveSemesterId)
                        : (semesterSelect.value || '');
+                   const preserveCourseId = window.__bouPreserveCourseId || null;
+                   window.__bouPreserveCourseId = undefined;
+                   function reloadCoursesIfSemesterValid(semId) {
+                       if (semId && semesterOptionExists(semId)) {
+                           loadCoursesForSemester(String(semId), preserveCourseId);
+                       }
+                   }
                    if (preserveSemesterId) {
                        setTimeout(function() {
                            if (semesterOptionExists(preserveSemesterId)) {
@@ -2524,6 +2526,7 @@ function loadSemestersForCentre(centreId) {
     const semesterSelect = document.getElementById('semester');
     const courseSelect = document.getElementById('course');
     const prevSem = semesterSelect ? semesterSelect.value : '';
+    window.__bouPreserveCourseId = courseSelect ? courseSelect.value : '';
 
     if (courseSelect) {
         courseSelect.innerHTML = '<option value="">-- Course --</option>';
@@ -2543,7 +2546,7 @@ function loadSemestersForCentre(centreId) {
 }
 
 // Function to load courses for a selected semester
-function loadCoursesForSemester(semesterId) {
+function loadCoursesForSemester(semesterId, preserveCourseId = null) {
     const centreSelect = document.getElementById('centre');
     const courseSelect = document.getElementById('course');
     const centreId = centreSelect ? centreSelect.value : '';
@@ -2579,9 +2582,18 @@ function loadCoursesForSemester(semesterId) {
                 const option = document.createElement('option');
                 option.value = course.id;
                 option.textContent = course.display_name;
+                if (preserveCourseId && String(preserveCourseId) === String(course.id)) {
+                    option.selected = true;
+                }
                 courseSelect.appendChild(option);
             });
+            if (preserveCourseId) {
+                courseSelect.value = String(preserveCourseId);
+            }
             loadStudentSessionsSelect(String(semesterId), '');
+            if (courseSelect.value && !window.__bouAttendanceInitializing) {
+                loadStudentsForCourse();
+            }
         })
         .catch(error => {
             console.error('Error loading courses:', error);
@@ -2591,6 +2603,9 @@ function loadCoursesForSemester(semesterId) {
 
 // Function to load students when course is selected
 function loadStudentsForCourse() {
+    if (window.__bouAttendanceInitializing) {
+        return;
+    }
     const centreSelect = document.getElementById('centre');
     const semesterSelect = document.getElementById('semester');
     const courseSelect = document.getElementById('course');
@@ -2620,7 +2635,13 @@ function loadStudentsForCourse() {
         } else {
             url.searchParams.delete('session');
         }
-        window.location.href = url.pathname + url.search;
+        const next = url.pathname + url.search;
+        const current = window.location.pathname + window.location.search;
+        if (next === current) {
+            window.location.reload();
+        } else {
+            window.location.href = next;
+        }
     }
 }
 
@@ -2639,6 +2660,7 @@ document.addEventListener('DOMContentLoaded', function() {
     window.__bouPreserveStudentSession = urlParamsInit.get('session') || '';
 
     let isInitializing = true;
+    window.__bouAttendanceInitializing = true;
 
     function reloadSemestersFromFilters() {
         const cid = curriculumInput ? curriculumInput.value : '';
@@ -2674,6 +2696,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     setTimeout(function() {
         isInitializing = false;
+        window.__bouAttendanceInitializing = false;
     }, 0);
 });
 

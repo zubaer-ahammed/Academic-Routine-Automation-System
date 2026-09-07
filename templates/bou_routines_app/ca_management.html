@@ -2518,17 +2518,25 @@ function loadSemestersForCurriculum(curriculumId, preserveSemesterId = null, cen
             
             // If preserveSemesterId was provided, ensure it's selected
             // Use a small timeout to ensure DOM is ready
+            const preserveCourseId = window.__bouPreserveCourseId || null;
+            window.__bouPreserveCourseId = undefined;
             if (preserveSemesterId) {
                 setTimeout(function() {
                     semesterSelect.value = preserveSemesterId;
                     const pv = window.__bouPreserveStudentSession;
                     window.__bouPreserveStudentSession = undefined;
                     loadStudentSessionsSelect(String(preserveSemesterId), pv);
+                    if (!window.__bouMarksInitializing) {
+                        loadCoursesForSemester(String(preserveSemesterId), preserveCourseId);
+                    }
                 }, 50);
             } else {
                 const pv = window.__bouPreserveStudentSession;
                 window.__bouPreserveStudentSession = undefined;
                 loadStudentSessionsSelect(semesterSelect.value || '', pv);
+                if (semesterSelect.value && !window.__bouMarksInitializing) {
+                    loadCoursesForSemester(String(semesterSelect.value), preserveCourseId);
+                }
             }
         })
         .catch(error => {
@@ -2543,12 +2551,14 @@ function loadSemestersForCentre(centreId) {
     const curriculumId = curriculumInput ? curriculumInput.value : '';
     const semesterSelect = document.getElementById('semester');
     const courseSelect = document.getElementById('course');
+    const prevSem = semesterSelect ? semesterSelect.value : '';
+    window.__bouPreserveCourseId = courseSelect ? courseSelect.value : '';
     
     // Clear courses when centre changes
     courseSelect.innerHTML = '<option value="">-- Course --</option>';
     
     if (curriculumId) {
-        loadSemestersForCurriculum(curriculumId, null, centreId);
+        loadSemestersForCurriculum(curriculumId, prevSem || null, centreId);
     } else {
         // Clear semesters and courses if no curriculum selected
         semesterSelect.innerHTML = '<option value="">-- Semester --</option>';
@@ -2620,7 +2630,7 @@ function loadStudentsForCourse(skipUrlUpdate = false) {
     const courseId = courseSelect ? courseSelect.value : '';
     
     // Reload once centre, semester, and course are chosen (term / session are optional).
-    if (centreId && semesterId && courseId && !skipUrlUpdate) {
+    if (centreId && semesterId && courseId && !skipUrlUpdate && !window.__bouMarksInitializing) {
         updateUrlParams(centreId, semesterId, courseId);
     }
 }
@@ -2659,12 +2669,16 @@ function updateUrlParams(centreId, semesterId, courseId, skipReload = false) {
     }
     
     const newUrl = url.toString();
-    // Only reload if URL actually changed and skipReload is false
-    if (newUrl !== currentUrl && !skipReload) {
+    if (skipReload) {
+        if (newUrl !== currentUrl) {
+            window.history.replaceState({}, '', newUrl);
+        }
+        return;
+    }
+    if (newUrl !== currentUrl) {
         window.location.href = newUrl;
-    } else if (newUrl !== currentUrl) {
-        // Update URL without reloading
-        window.history.replaceState({}, '', newUrl);
+    } else {
+        window.location.reload();
     }
 }
 
@@ -3140,61 +3154,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const crs = courseSelect ? courseSelect.value : '';
             if (sem && crs) {
                 loadStudentsForCourse();
-            }
-        });
-    }
-    
-    if (centreSelect) {
-        centreSelect.addEventListener('change', function() {
-            const centreId = this.value;
-            const curId = curriculumInput ? curriculumInput.value : '';
-            const semesterId = semesterSelect ? semesterSelect.value : '';
-            const courseId = courseSelect ? courseSelect.value : '';
-
-            if (centreId && semesterId && courseId && !isInitializing) {
-                updateUrlParams(centreId, semesterId, courseId);
-                return;
-            }
-            
-            // Always update URL with centre parameter
-            const url = new URL(window.location.href);
-            if (centreId) {
-                url.searchParams.set('centre', centreId);
-            } else {
-                url.searchParams.delete('centre');
-            }
-            url.searchParams.delete('curriculum');
-            if (semesterId) {
-                url.searchParams.set('semester', semesterId);
-            }
-            if (courseId) {
-                url.searchParams.set('course', courseId);
-            }
-            if (termSelect && termSelect.value) {
-                url.searchParams.set('term', termSelect.value);
-            } else {
-                url.searchParams.delete('term');
-            }
-            if (sessionSelect && sessionSelect.value) {
-                url.searchParams.set('session', sessionSelect.value);
-            } else {
-                url.searchParams.delete('session');
-            }
-            window.history.replaceState({}, '', url.toString());
-            
-            if (curId) {
-                loadSemestersForCentre(centreId);
-            } else {
-                if (semesterSelect) {
-                    semesterSelect.innerHTML = '<option value="">-- Semester --</option>';
-                }
-                if (courseSelect) {
-                    courseSelect.innerHTML = '<option value="">-- Course --</option>';
-                }
-            }
-            
-            if (curId && semesterId && courseId && !isInitializing) {
-                updateUrlParams(centreId, semesterId, courseId);
             }
         });
     }

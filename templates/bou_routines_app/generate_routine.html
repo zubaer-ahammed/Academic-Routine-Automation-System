@@ -536,8 +536,12 @@
                                                 <td colspan="{{ cell.colspan }}" class="bg-warning bg-opacity-25 text-center align-middle fw-bold">{{ cell.content }}</td>
                                             {% else %}
                                                 <td colspan="{{ cell.colspan }}" class="bg-primary text-white text-center align-middle course-cell" 
-                                                    data-routine-id="{{ cell.content.routine_id }}" 
+                                                    {% if cell.content.routine_id %}data-routine-id="{{ cell.content.routine_id }}"{% endif %}
                                                     data-course-id="{{ cell.content.course_id }}"
+                                                    data-date="{{ row.date|date:'Y-m-d' }}"
+                                                    data-day="{{ row.day }}"
+                                                    data-start-time="{{ cell.content.start_time }}"
+                                                    data-end-time="{{ cell.content.end_time }}"
                                                     style="cursor: pointer; position: relative;">
                                                     <span style="position: absolute; top: 2px; right: 4px; z-index: 2; cursor: pointer; opacity: 0.8; color: #1E1E1E;" title="Edit course">
                                                       <!-- Pen SVG icon -->
@@ -1987,6 +1991,10 @@
                 });
             });
 
+            function isValidRoutineId(value) {
+                return value !== undefined && value !== null && value !== '' && value !== 'None' && !isNaN(Number(value));
+            }
+
             $(document).on('click', '.save-course', function() {
                 const cell = $(this).closest('.course-cell, .empty-cell');
                 const isEmptyCell = cell.hasClass('empty-cell');
@@ -2015,15 +2023,24 @@
                 if (centreId) {
                     ajaxData['centre_id'] = centreId;
                 }
+
+                const $row = cell.closest('tr');
+                const slotDate = cell.data('date') || $row.find('td:first').attr('data-date');
+                const slotDay = cell.data('day') || $.trim($row.find('td:nth-child(2)').text());
+                const startTime = cell.data('start-time') || cell.attr('data-start-time');
+                const endTime = cell.data('end-time') || cell.attr('data-end-time');
                 
-                if (isEmptyCell) {
-                    // Creating new entry — prefer attributes (authoritative) over jQuery .data() cache
-                    ajaxData['date'] = cell.attr('data-date') || cell.data('date');
-                    ajaxData['day'] = cell.attr('data-day') || cell.data('day');
-                    ajaxData['time_slot'] = cell.attr('data-time-slot') || cell.data('time-slot');
+                if (isEmptyCell || !isValidRoutineId(routineId)) {
+                    // Creating a new entry, or updating a cell that has no saved routine id
+                    ajaxData['date'] = slotDate;
+                    ajaxData['day'] = slotDay;
+                    ajaxData['time_slot'] = cell.data('time-slot');
                     ajaxData['semester_id'] = $('#semester').val();
-                    ajaxData['start_time'] = cell.attr('data-start-time') || cell.data('start-time');
-                    ajaxData['end_time'] = cell.attr('data-end-time') || cell.data('end-time');
+                    ajaxData['start_time'] = startTime;
+                    ajaxData['end_time'] = endTime;
+                    if (!isEmptyCell && cell.data('course-id')) {
+                        ajaxData['original_course_id'] = cell.data('course-id');
+                    }
                 } else {
                     // Updating existing entry
                     ajaxData['routine_id'] = routineId;
@@ -2036,11 +2053,14 @@
                     data: ajaxData,
                     success: function(response) {
                         if (response.success) {
+                            if (response.routine_id) {
+                                cell.data('routine-id', response.routine_id);
+                                cell.attr('data-routine-id', response.routine_id);
+                            }
                             if (isEmptyCell) {
                                 // Convert empty cell to course cell
                                 cell.removeClass('empty-cell').addClass('course-cell bg-primary text-white');
-                                cell.removeAttr('data-date data-day data-time-slot');
-                                cell.data('routine-id', response.routine_id);
+                                cell.removeAttr('data-time-slot');
                                 cell.data('course-id', newCourseId);
 
                                 // Update the display with icons and content
@@ -2132,8 +2152,8 @@
                 const cell = $(this).closest('.course-cell');
                 const routineId = cell.data('routine-id');
                 
-                if (!routineId) {
-                    alert('No routine entry found to remove.');
+                if (!isValidRoutineId(routineId)) {
+                    alert('No routine entry found to remove. Refresh the page and try again.');
                     return;
                 }
                 

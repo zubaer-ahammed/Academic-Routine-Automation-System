@@ -808,10 +808,13 @@ def generate_routine(request):
                                         content = {
                                             'course_code': r['course_code'],
                                             'teacher': 'Supervisor' if r['course_code'] == 'CSE4246' else r['teacher'],
+                                            'start_time': r.get('start_time'),
+                                            'end_time': r.get('end_time'),
                                         }
-                                        if 'id' in r and 'course_id' in r:
-                                            content['routine_id'] = r['id']
+                                        if r.get('course_id'):
                                             content['course_id'] = r['course_id']
+                                        if r.get('id'):
+                                            content['routine_id'] = r['id']
                                         cell = {'content': content, 'colspan': colspan, 'is_lunch_break': False}
                                     row_cells.append(cell)
                                     slot_idx += colspan
@@ -1329,7 +1332,7 @@ def generate_routine(request):
                 for d in valid_dates:
                     if sessions_scheduled >= sessions_needed:
                         break
-                    NewRoutine.objects.create(
+                    new_routine = NewRoutine.objects.create(
                         semester=selected_semester,
                         course=limit['course'],
                         start_time=datetime.strptime(limit['start_time'], "%H:%M").time(),
@@ -1352,7 +1355,7 @@ def generate_routine(request):
                         teacher_name = limit['semester_course'].teacher.name
                     
                     generated_routines.append({
-                        'id': None,
+                        'id': new_routine.id,
                         'course_id': limit['course'].id,
                         'date': d,
                         'day': limit['day'],
@@ -1555,10 +1558,13 @@ def generate_routine(request):
                                 content = {
                                     'course_code': r['course_code'],
                                     'teacher': 'Supervisor' if r['course_code'] == 'CSE4246' else r['teacher'],
+                                    'start_time': r.get('start_time'),
+                                    'end_time': r.get('end_time'),
                                 }
-                                if 'id' in r and 'course_id' in r:
-                                    content['routine_id'] = r['id']
+                                if r.get('course_id'):
                                     content['course_id'] = r['course_id']
+                                if r.get('id'):
+                                    content['routine_id'] = r['id']
                                 cell = {'content': content, 'colspan': colspan, 'is_lunch_break': False}
                             row_cells.append(cell)
                             slot_idx += colspan
@@ -2274,8 +2280,8 @@ def update_routine_course(request):
     """Update a routine's course or create a new routine entry via AJAX"""
     if request.method == 'POST':
         try:
-            routine_id = request.POST.get('routine_id')
-            new_course_id = request.POST.get('course_id')
+            routine_id = _parse_optional_pk(request.POST.get('routine_id'))
+            new_course_id = _parse_optional_pk(request.POST.get('course_id'))
             
             if not new_course_id:
                 return JsonResponse({"error": "Missing course_id"}, status=400)
@@ -2319,8 +2325,7 @@ def update_routine_course(request):
                         if semester_course:
                             teacher = semester_course.effective_teacher
                     
-                    teacher_name = teacher.name if teacher else 'N/A'
-                    teacher_short_name = teacher.short_name if teacher and teacher.short_name else teacher_name
+                    teacher_name, teacher_short_name = _routine_teacher_payload(new_course, teacher)
                     
                     # Return updated course information
                     return JsonResponse({
@@ -2333,15 +2338,14 @@ def update_routine_course(request):
                 except NewRoutine.DoesNotExist:
                     return JsonResponse({"error": "Routine not found"}, status=404)
             else:
-                # Creating new routine entry
+                # Creating new routine entry (or updating a slot whose routine_id was missing)
                 date_str = request.POST.get('date')
                 day = request.POST.get('day')
-                time_slot = request.POST.get('time_slot')
-                semester_id = request.POST.get('semester_id')
+                semester_id = _parse_optional_pk(request.POST.get('semester_id'))
                 start_time_str = request.POST.get('start_time')
                 end_time_str = request.POST.get('end_time')
                 
-                if not all([date_str, day, time_slot, semester_id, start_time_str, end_time_str]):
+                if not all([date_str, day, semester_id, start_time_str, end_time_str]):
                     return JsonResponse({"error": "Missing required fields for new routine"}, status=400)
                 
                 try:
@@ -2369,15 +2373,33 @@ def update_routine_course(request):
                         if semester_course:
                             selected_centre = semester_course.centre
                     
-                    # Create new routine entry
-                    new_routine = NewRoutine.objects.create(
+                    original_course_id = _parse_optional_pk(request.POST.get('original_course_id'))
+                    slot_query = NewRoutine.objects.filter(
                         semester=semester,
-                        course=new_course,
                         class_date=class_date,
                         day=day,
                         start_time=start_time,
-                        end_time=end_time
+                        end_time=end_time,
                     )
+                    existing_routine = None
+                    if original_course_id:
+                        existing_routine = slot_query.filter(course_id=original_course_id).first()
+                    if not existing_routine:
+                        existing_routine = slot_query.first()
+
+                    if existing_routine:
+                        existing_routine.course = new_course
+                        existing_routine.save()
+                        new_routine = existing_routine
+                    else:
+                        new_routine = NewRoutine.objects.create(
+                            semester=semester,
+                            course=new_course,
+                            class_date=class_date,
+                            day=day,
+                            start_time=start_time,
+                            end_time=end_time
+                        )
                     
                     # Get teacher from SemesterCourse
                     teacher = None
@@ -2399,8 +2421,7 @@ def update_routine_course(request):
                         if semester_course:
                             teacher = semester_course.effective_teacher
                     
-                    teacher_name = teacher.name if teacher else 'N/A'
-                    teacher_short_name = teacher.short_name if teacher and teacher.short_name else teacher_name
+                    teacher_name, teacher_short_name = _routine_teacher_payload(new_course, teacher)
                     
                     # Return new routine information
                     return JsonResponse({
@@ -2429,7 +2450,7 @@ def remove_routine_course(request):
     """Remove a routine entry via AJAX"""
     if request.method == 'POST':
         try:
-            routine_id = request.POST.get('routine_id')
+            routine_id = _parse_optional_pk(request.POST.get('routine_id'))
             
             if not routine_id:
                 return JsonResponse({"error": "Missing routine_id"}, status=400)
@@ -2451,6 +2472,30 @@ def remove_routine_course(request):
             return JsonResponse({"error": str(e)}, status=400)
     
     return JsonResponse({"error": "Invalid request method"}, status=405)
+
+
+def _centre_filename_prefix(centre):
+    """Prefix download filenames with the study centre short code (e.g. DRC_, DUET_)."""
+    code = (getattr(centre, 'code', None) or '').strip()
+    return f'{code}_' if code else ''
+
+
+def _parse_optional_pk(value):
+    """Parse a primary key from request data; treat None/'None'/blank as missing."""
+    if value in (None, '', 'None', 'null', 'undefined'):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _routine_teacher_payload(course, teacher):
+    if course and course.code == 'CSE4246':
+        return 'Supervisor', 'Supervisor'
+    teacher_name = teacher.name if teacher else 'N/A'
+    teacher_short_name = teacher.short_name if teacher and teacher.short_name else teacher_name
+    return teacher_name, teacher_short_name
 
 @login_required
 def export_to_excel(request, semester_id):
@@ -2737,7 +2782,7 @@ def export_to_excel(request, semester_id):
         # Prepare the response
         output.seek(0)
         response = HttpResponse(output.read(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        response['Content-Disposition'] = f'attachment; filename="{selected_semester.name}_Routine.xlsx"'
+        response['Content-Disposition'] = f'attachment; filename="{_centre_filename_prefix(centre)}{selected_semester.name}_Routine.xlsx"'
         return response
 
     except Exception as e:
@@ -2876,6 +2921,8 @@ def download_routines(request):
                 for r in latest_routines:
                     if r.class_date == date and r.day == day:
                         routines_for_row.append({
+                            'id': r.id,
+                            'course_id': r.course.id,
                             'course_code': r.course.code,
                             'teacher': 'Supervisor' if r.course.code == 'CSE4246' else (r.teacher.short_name if r.teacher and r.teacher.short_name else (r.teacher.name if r.teacher else 'N/A')),
                             'start_time': r.start_time.strftime('%H:%M'),
@@ -2911,10 +2958,13 @@ def download_routines(request):
                                 content = {
                                     'course_code': r['course_code'],
                                     'teacher': 'Supervisor' if r['course_code'] == 'CSE4246' else r['teacher'],
+                                    'start_time': r.get('start_time'),
+                                    'end_time': r.get('end_time'),
                                 }
-                                if 'id' in r and 'course_id' in r:
-                                    content['routine_id'] = r['id']
+                                if r.get('course_id'):
                                     content['course_id'] = r['course_id']
+                                if r.get('id'):
+                                    content['routine_id'] = r['id']
                                 cell = {'content': content, 'colspan': colspan, 'is_lunch_break': False}
                             row_cells.append(cell)
                             slot_idx += colspan
@@ -3784,7 +3834,7 @@ def export_to_pdf(request, semester_id):
         buffer.seek(0)
         #response = FileResponse(buffer, content_type='application/pdf')
         response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="{selected_semester.name}_Routine.pdf"'
+        response['Content-Disposition'] = f'attachment; filename="{_centre_filename_prefix(centre)}{selected_semester.name}_Routine.pdf"'
         return response
 
     except Exception as e:
@@ -5093,7 +5143,7 @@ def export_academic_calendar_pdf(request, semester_id):
         doc.build(elements)
         buffer.seek(0)
         response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="{selected_semester.name}_Academic_Calendar.pdf"'
+        response['Content-Disposition'] = f'attachment; filename="{_centre_filename_prefix(centre)}{selected_semester.name}_Academic_Calendar.pdf"'
         return response
     except Exception as e:
         return HttpResponse(f"Error generating Academic Calendar PDF: {str(e)}", status=500)
@@ -6000,12 +6050,9 @@ def get_courses_for_semester(request):
     # Filter by teacher if provided
     if teacher:
         if for_marks:
-            # Marks: course teachers and assigned final-exam examiners
+            # Marks: teacher/examiner at any centre of this semester (then centre filter above)
             semester_courses = semester_courses.filter(
-                Q(teacher=teacher)
-                | Q(final_exam_evaluator1=teacher)
-                | Q(final_exam_evaluator2=teacher)
-                | Q(final_exam_evaluator3=teacher)
+                course_id__in=_teacher_marks_accessible_course_ids(teacher, semester_id)
             )
         else:
             semester_courses = semester_courses.filter(teacher=teacher)
@@ -11509,11 +11556,9 @@ def ca_management(request):
     if semester_id:
         if teacher:
             # Course teachers and assigned final-exam examiners (same scope as get_courses_for_semester for_marks)
-            sc_qs = SemesterCourse.objects.filter(semester_id=semester_id).filter(
-                Q(teacher=teacher)
-                | Q(final_exam_evaluator1=teacher)
-                | Q(final_exam_evaluator2=teacher)
-                | Q(final_exam_evaluator3=teacher)
+            sc_qs = SemesterCourse.objects.filter(
+                semester_id=semester_id,
+                course_id__in=_teacher_marks_accessible_course_ids(teacher, semester_id),
             )
             if selected_centre_id:
                 sc_qs = sc_qs.filter(centre_id=selected_centre_id)
@@ -11887,31 +11932,9 @@ def ca_management(request):
     show_final_exam_tab = is_admin
     
     if not show_final_exam_tab and teacher and selected_semester and selected_course:
-        if selected_centre_id:
-            sc_tab = SemesterCourse.objects.filter(
-                semester=selected_semester,
-                course=selected_course,
-                centre_id=selected_centre_id,
-            ).first()
-            if sc_tab and (
-                sc_tab.final_exam_evaluator1 == teacher
-                or sc_tab.final_exam_evaluator2 == teacher
-                or sc_tab.final_exam_evaluator3 == teacher
-            ):
-                show_final_exam_tab = True
-
-        if not show_final_exam_tab:
-            sample_mark = final_exam_mark_sample_for_scope(
-                selected_course, selected_semester, selected_centre_id
-            )
-
-            if sample_mark and (
-                sample_mark.teacher1_evaluator == teacher
-                or sample_mark.teacher2_evaluator == teacher
-                or sample_mark.teacher3_evaluator == teacher
-            ):
-                show_final_exam_tab = True
-
+        show_final_exam_tab = _is_final_exam_evaluator_for_scope(
+            teacher, selected_semester, selected_course, selected_centre_id
+        )
         if not show_final_exam_tab:
             if teacher1_evaluator_obj and teacher1_evaluator_obj == teacher:
                 show_final_exam_tab = True
@@ -12192,6 +12215,27 @@ def _user_can_edit_lab_viva(user, teacher=None, semester=None, course=None, cent
     return check_teacher_permission(user, 'can_chair_examination')
 
 
+def _teacher_marks_accessible_course_ids(teacher, semester_id):
+    """
+    Course IDs this teacher may open on the Marks page for a semester.
+
+    Includes offerings where they are the course teacher or an assigned
+    final-exam examiner at any study centre. The selected-centre filter is
+    applied separately so a DRC teacher/examiner can open the same course
+    at DUET (Semester Final only — CA / Mid-Term stay centre-scoped).
+    """
+    if not teacher or not semester_id:
+        return []
+    return list(
+        SemesterCourse.objects.filter(semester_id=semester_id).filter(
+            Q(teacher=teacher)
+            | Q(final_exam_evaluator1=teacher)
+            | Q(final_exam_evaluator2=teacher)
+            | Q(final_exam_evaluator3=teacher)
+        ).values_list('course_id', flat=True).distinct()
+    )
+
+
 def _is_course_teacher_for_scope(teacher, semester, course, centre_id):
     """True if this teacher is SemesterCourse.teacher for the given offering."""
     if not teacher or not semester or not course:
@@ -12213,6 +12257,9 @@ def _is_final_exam_evaluator_for_scope(teacher, semester, course, centre_id):
     """
     True if this teacher may use the Semester Final tab in CA management (non-admins).
     Kept in sync with show_final_exam_tab in ca_management.
+
+    Course teacher or assigned examiner at any centre of this offering may enter
+    Semester Final for the other centre as well (typical DRC/DUET examiner pair).
     """
     if not teacher or not semester or not course:
         return False
@@ -12231,6 +12278,13 @@ def _is_final_exam_evaluator_for_scope(teacher, semester, course, centre_id):
                 return True
         except (ValueError, TypeError):
             pass
+    if SemesterCourse.objects.filter(semester=semester, course=course).filter(
+        Q(teacher=teacher)
+        | Q(final_exam_evaluator1=teacher)
+        | Q(final_exam_evaluator2=teacher)
+        | Q(final_exam_evaluator3=teacher)
+    ).exists():
+        return True
     sample_mark = final_exam_mark_sample_for_scope(course, semester, centre_id)
     if sample_mark and (
         sample_mark.teacher1_evaluator == teacher
@@ -12238,20 +12292,6 @@ def _is_final_exam_evaluator_for_scope(teacher, semester, course, centre_id):
         or sample_mark.teacher3_evaluator == teacher
     ):
         return True
-    drc_centre = Centre.objects.filter(code='DRC').first()
-    if drc_centre:
-        drc_sc = SemesterCourse.objects.filter(
-            semester=semester, course=course, centre=drc_centre
-        ).select_related('teacher').first()
-        if drc_sc and drc_sc.teacher == teacher:
-            return True
-    duet_centre = Centre.objects.filter(code='DUET').first()
-    if duet_centre:
-        duet_sc = SemesterCourse.objects.filter(
-            semester=semester, course=course, centre=duet_centre
-        ).select_related('teacher').first()
-        if duet_sc and duet_sc.teacher == teacher:
-            return True
     return False
 
 

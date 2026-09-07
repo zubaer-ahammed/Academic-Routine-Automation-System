@@ -2599,6 +2599,9 @@ function loadCoursesForSemester(semesterId, preserveCourseId = null) {
                 courseSelect.value = preserveCourseId;
             }
             loadStudentSessionsSelect(String(semesterId), '');
+            if (courseSelect.value && !window.__bouMarksInitializing) {
+                loadStudentsForCourse();
+            }
         })
         .catch(error => {
             console.error('Error loading courses:', error);
@@ -2608,18 +2611,16 @@ function loadCoursesForSemester(semesterId, preserveCourseId = null) {
 
 // Function to update URL parameters and reload page
 function loadStudentsForCourse(skipUrlUpdate = false) {
-    const curriculumInput = document.getElementById('curriculum');
     const centreSelect = document.getElementById('centre');
     const semesterSelect = document.getElementById('semester');
     const courseSelect = document.getElementById('course');
     
-    const curriculumId = curriculumInput ? curriculumInput.value : '';
     const centreId = centreSelect ? centreSelect.value : '';
     const semesterId = semesterSelect ? semesterSelect.value : '';
     const courseId = courseSelect ? courseSelect.value : '';
     
-    // Only reload if we have all required selections and not skipping URL update
-    if (curriculumId && semesterId && courseId && !skipUrlUpdate) {
+    // Reload once centre, semester, and course are chosen (term / session are optional).
+    if (centreId && semesterId && courseId && !skipUrlUpdate) {
         updateUrlParams(centreId, semesterId, courseId);
     }
 }
@@ -3094,6 +3095,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Flag to prevent change events from triggering reloads during initialization
     let isInitializing = true;
+    window.__bouMarksInitializing = true;
     
     const curriculumInput = document.getElementById('curriculum');
     const centreSelect = document.getElementById('centre');
@@ -3148,6 +3150,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const curId = curriculumInput ? curriculumInput.value : '';
             const semesterId = semesterSelect ? semesterSelect.value : '';
             const courseId = courseSelect ? courseSelect.value : '';
+
+            if (centreId && semesterId && courseId && !isInitializing) {
+                updateUrlParams(centreId, semesterId, courseId);
+                return;
+            }
             
             // Always update URL with centre parameter
             const url = new URL(window.location.href);
@@ -3268,6 +3275,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 loadStudentsForCourse(true);
                 // Mark initialization as complete after everything is loaded
                 isInitializing = false;
+                window.__bouMarksInitializing = false;
             }, 500);
         }, 500);
     } else if (semesterId) {
@@ -3275,10 +3283,12 @@ document.addEventListener('DOMContentLoaded', function() {
         setTimeout(function() {
         loadCoursesForSemester(semesterId);
             isInitializing = false;
+            window.__bouMarksInitializing = false;
         }, 500);
     } else {
         // No URL parameters, initialization complete
         isInitializing = false;
+        window.__bouMarksInitializing = false;
     }
 });
 

@@ -272,7 +272,7 @@
                         </div>
                         <div class="download-buttons">
                             <div class="routine-buttons">
-                                <a href="{% url 'export-to-excel' semester_data.semester.id %}" class="btn btn-success btn-sm">
+                                <a href="{% url 'export-to-excel' semester_data.semester.id %}{% if semester_data.centre_id %}?centre={{ semester_data.centre_id }}{% endif %}" class="btn btn-success btn-sm">
                                     <i class="bi bi-file-earmark-excel"></i> Excel
                                 </a>
                                 <a href="{% url 'export-to-pdf' semester_data.semester.id %}?teacher_short_name_newline={% if semester_data.semester.teacher_short_name_newline %}1{% else %}0{% endif %}&hide_teacher_name_in_pdf={% if semester_data.semester.hide_teacher_name_in_pdf %}1{% else %}0{% endif %}{% if semester_data.centre_id %}&centre={{ semester_data.centre_id }}{% endif %}" class="btn btn-danger btn-sm">

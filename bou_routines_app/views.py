@@ -2497,6 +2497,15 @@ def _routine_teacher_payload(course, teacher):
     teacher_short_name = teacher.short_name if teacher and teacher.short_name else teacher_name
     return teacher_name, teacher_short_name
 
+
+def _routine_summary_class_count(course, number_of_classes):
+    """Old-curriculum Project/Thesis (CSE4246) has no scheduled class count."""
+    if course and course.code == 'CSE4246':
+        return '-'
+    if not number_of_classes:
+        return ''
+    return str(number_of_classes)
+
 @login_required
 def export_to_excel(request, semester_id):
     """Export the routine to Excel file"""
@@ -3739,14 +3748,10 @@ def export_to_pdf(request, semester_id):
                 else:
                     teacher_full_name = ""
             
-            if(sc.number_of_classes == 0):
-                sc.number_of_classes = ""
-            
-
             summary_data.append([
                 sc.course.code,
                 sc.course.name,
-                str(sc.number_of_classes),
+                _routine_summary_class_count(sc.course, sc.number_of_classes),
                 teacher_full_name
             ])
         summary_col_widths = [0.12 * available_width, 0.38 * available_width, 0.14 * available_width, 0.36 * available_width]

@@ -3736,8 +3736,9 @@ def export_to_pdf(request, semester_id):
             'Course Code', 'Title', 'Number of Class', 'Course Teacher'
         ]]
         for sc in semester_courses:
-            # Hide teacher name if option is enabled
-            if hide_teacher_name_in_pdf:
+            if sc.course.code == 'CSE4246':
+                teacher_full_name = 'Supervisor'
+            elif hide_teacher_name_in_pdf:
                 teacher_full_name = ""
             else:
                 effective_teacher = sc.effective_teacher

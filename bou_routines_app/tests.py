@@ -4,6 +4,9 @@ from django.test import SimpleTestCase
 
 from bou_routines_app.tabulation_views import (
     _excel_tabulation_header_rows,
+    _tabulation_centre_display,
+    _tabulation_centre_sort_key,
+    _tabulation_filename_centre,
     _tabulation_table_col_widths,
     course_percent,
     earned_credits,
@@ -67,3 +70,28 @@ class TabulationGradeScaleTests(SimpleTestCase):
         self.assertIn((0, 2, 0, 5), merges)
         widths = _tabulation_table_col_widths(1, 800)
         self.assertEqual(len(widths), 6)
+
+    def test_all_centres_header_and_filename(self):
+        all_payload = {'all_centres': True, 'centre': None}
+        self.assertEqual(_tabulation_centre_display(all_payload), 'All Centers')
+        self.assertEqual(_tabulation_filename_centre(all_payload), 'All_Centers')
+        one_payload = {
+            'all_centres': False,
+            'centre': SimpleNamespace(name='Dhaka Regional Center', code='DRC'),
+        }
+        self.assertEqual(_tabulation_centre_display(one_payload), 'Dhaka Regional Center (DRC)')
+        self.assertEqual(_tabulation_filename_centre(one_payload), 'DRC')
+
+    def test_all_centres_student_order_drc_then_duet(self):
+        self.assertEqual(_tabulation_centre_sort_key('DRC'), 0)
+        self.assertEqual(_tabulation_centre_sort_key('DUET'), 1)
+        self.assertLess(_tabulation_centre_sort_key('DRC'), _tabulation_centre_sort_key('DUET'))
+        students = [
+            SimpleNamespace(centre=SimpleNamespace(code='DUET')),
+            SimpleNamespace(centre=SimpleNamespace(code='DRC')),
+            SimpleNamespace(centre=SimpleNamespace(code='DUET')),
+            SimpleNamespace(centre=None),
+        ]
+        students.sort(key=lambda s: _tabulation_centre_sort_key(s.centre.code if s.centre else None))
+        codes = [s.centre.code if s.centre else None for s in students]
+        self.assertEqual(codes, ['DRC', 'DUET', 'DUET', None])

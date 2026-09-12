@@ -170,6 +170,18 @@ def _centre_label(centre):
     return name or code
 
 
+def _tabulation_centre_display(payload):
+    if payload.get('all_centres') or not payload.get('centre'):
+        return 'All Centers'
+    return _centre_label(payload['centre'])
+
+
+def _tabulation_filename_centre(payload):
+    if payload.get('all_centres') or not payload.get('centre'):
+        return 'All_Centers'
+    return (payload['centre'].code or 'Centre').strip() or 'Centre'
+
+
 def _semester_year_label(semester):
     return (semester.semester_full_name or semester.name or '').strip()
 
@@ -188,8 +200,20 @@ def _ordered_semester_courses(semester, centre):
     return courses
 
 
+def _tabulation_centre_sort_key(centre_code):
+    """DRC first, then DUET, then any other centre, then students with no centre."""
+    code = (centre_code or '').strip().upper()
+    if code == 'DRC':
+        return 0
+    if code == 'DUET':
+        return 1
+    if not code:
+        return 9
+    return 2
+
+
 def _tabulation_students(semester, centre_id, session):
-    students = Student.objects.filter(semesters=semester).extra(
+    students = Student.objects.filter(semesters=semester).select_related('centre').extra(
         select={
             'first_two_digits': "CAST(SUBSTR(bou_routines_app_student.id, 1, 2) AS INTEGER)",
             'last_three_digits': "CAST(SUBSTR(bou_routines_app_student.id, -3) AS INTEGER)",
@@ -198,7 +222,12 @@ def _tabulation_students(semester, centre_id, session):
     students = filter_students_queryset_by_centre(students, centre_id)
     if (session or '').strip():
         students = students.filter(session=session.strip())
-    return list(students)
+    student_list = list(students)
+    if not centre_id:
+        student_list.sort(
+            key=lambda s: _tabulation_centre_sort_key(s.centre.code if s.centre else None)
+        )
+    return student_list
 
 
 def _sf_ceil_int(final_mark):
@@ -300,6 +329,7 @@ def build_tabulation_payload(semester, centre, session):
     return {
         'semester': semester,
         'centre': centre,
+        'all_centres': centre is None,
         'session_label': (session or '').strip() or 'ALL',
         'courses': courses,
         'students': students,
@@ -320,6 +350,7 @@ def _load_tabulation_context(request):
     semester_id = request.GET.get('semester')
     centre_id = request.GET.get('centre')
     session = (request.GET.get('session') or '').strip()
+    all_centres = str(request.GET.get('all_centres') or '').lower() in ('1', 'true', 'yes')
 
     if not semester_id:
         messages.error(request, 'Please select a semester to export the Tabulation Sheet.')
@@ -332,21 +363,23 @@ def _load_tabulation_context(request):
         return None
 
     centre = None
-    if centre_id:
-        try:
-            centre = Centre.objects.get(id=int(centre_id))
-        except (Centre.DoesNotExist, ValueError, TypeError):
-            centre = None
-
-    if not centre:
-        messages.error(request, 'Please select a study centre to export the Tabulation Sheet.')
-        return None
+    if not all_centres:
+        if centre_id:
+            try:
+                centre = Centre.objects.get(id=int(centre_id))
+            except (Centre.DoesNotExist, ValueError, TypeError):
+                centre = None
+        if not centre:
+            messages.error(request, 'Please select a study centre to export the Tabulation Sheet.')
+            return None
 
     payload = build_tabulation_payload(semester, centre, session)
+    payload['all_centres'] = all_centres or centre is None
     if not payload['courses']:
         messages.error(
             request,
-            'No courses are assigned to this semester and study centre.',
+            'No courses are assigned to this semester'
+            + ('.' if payload['all_centres'] else ' and study centre.'),
         )
         return None
     return payload
@@ -458,7 +491,7 @@ def _tabulation_header_flowables(payload, available_width):
     )
 
     semester = payload['semester']
-    centre_text = _centre_label(payload['centre'])
+    centre_text = _tabulation_centre_display(payload)
 
     def kv_pair(label, value):
         return (
@@ -715,9 +748,8 @@ def export_tabulation_pdf(request):
         doc.build(elements, canvasmaker=canvas_cls)
 
         semester = payload['semester']
-        centre = payload['centre']
         response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
-        fname = f'Tabulation_Sheet_{semester.name}_{centre.code}.pdf'
+        fname = f'Tabulation_Sheet_{semester.name}_{_tabulation_filename_centre(payload)}.pdf'
         response['Content-Disposition'] = f'attachment; filename="{fname}"'
         return response
     except Exception as e:
@@ -755,7 +787,6 @@ def export_tabulation_excel(request):
             return _tabulation_query_redirect()
 
         semester = payload['semester']
-        centre = payload['centre']
         courses = payload['courses']
         n_cols = 2 + len(courses) * 4
         last_col = n_cols - 1
@@ -865,7 +896,7 @@ def export_tabulation_excel(request):
             worksheet.write(legend_row, legend_col, f'{code} = {meaning}', legend_format)
 
         row = max(row + 2, len(TABULATION_ABBREVIATIONS) + 1)
-        centre_text = _centre_label(centre)
+        centre_text = _tabulation_centre_display(payload)
         info_left_last = max(1, last_col // 2)
         info_right_first = info_left_last + 1
         left_lines = [
@@ -977,7 +1008,7 @@ def export_tabulation_excel(request):
             output.read(),
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         )
-        fname = f'Tabulation_Sheet_{semester.name}_{centre.code}.xlsx'
+        fname = f'Tabulation_Sheet_{semester.name}_{_tabulation_filename_centre(payload)}.xlsx'
         response['Content-Disposition'] = f'attachment; filename="{fname}"'
         return response
     except Exception as e:
